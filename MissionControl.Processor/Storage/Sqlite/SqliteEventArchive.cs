@@ -15,7 +15,7 @@ public sealed class SqliteEventArchive(SqliteEventArchiveConnection database) : 
 
         command.CommandText =
             """
-            INSERT OR IGNORE INTO IntegrationEvents
+            INSERT INTO IntegrationEvents
             (
                 EventId,
                 EventType,
@@ -40,7 +40,8 @@ public sealed class SqliteEventArchive(SqliteEventArchiveConnection database) : 
                 $causationId,
                 $payloadJson,
                 $storedAt
-            );
+            )
+            ON CONFLICT(EventId) DO NOTHING;
             """;
 
         command.Parameters.AddWithValue(
