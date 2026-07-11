@@ -4,14 +4,14 @@
  * Licensed under the MIT License
  */
 
-using System.Text.Json;
-using System.Threading.Channels;
+// TODO: Should we move this to JoyfulReaperLibrary?
+
 using Microsoft.Extensions.Options;
 using MissionControl.Contracts;
-using MissionControl.Gateway.Messaging;
 using RabbitMQ.Client;
+using System.Text.Json;
 
-namespace Kgivler.MissionControl.Gateway.Messaging.RabbitMq;
+namespace MissionControl.Gateway.Messaging.RabbitMq;
 
 public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
 {
@@ -34,7 +34,7 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
 
     private async ValueTask DisposeRabbitMqResourcesAsync()
     {
-        if(_channel is not null)
+        if (_channel is not null)
         {
             try
             {
@@ -47,7 +47,7 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
             _channel = null;
         }
 
-        if(_connection is not null)
+        if (_connection is not null)
         {
             try
             {
@@ -63,16 +63,16 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        if(_disposed)
+        if (_disposed)
             return;
 
-         await _gate.WaitAsync();
+        await _gate.WaitAsync();
 
-         try
+        try
         {
-            if(_disposed)
+            if (_disposed)
                 return;
-            
+
             _disposed = true;
             await DisposeRabbitMqResourcesAsync();
         }
@@ -86,7 +86,7 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
     }
 
     public async Task PublishAsync(
-        IntegrationEventEnvelope integrationEvent, 
+        IntegrationEventEnvelope integrationEvent,
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

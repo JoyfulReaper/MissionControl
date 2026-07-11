@@ -4,9 +4,9 @@
  * Licensed under the MIT License
  */
 
-using Kgivler.MissionControl.Gateway.Messaging.RabbitMq;
 using MissionControl.Contracts;
 using MissionControl.Gateway.Messaging;
+using MissionControl.Gateway.Messaging.RabbitMq;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);

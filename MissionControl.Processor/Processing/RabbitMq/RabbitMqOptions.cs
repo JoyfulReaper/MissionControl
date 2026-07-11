@@ -4,7 +4,7 @@
  * Licensed under the MIT License
  */
 
-namespace MissionControl.Gateway.Messaging.RabbitMq;
+namespace MissionControl.Processor.Processing.RabbitMq;
 
 public sealed class RabbitMqOptions
 {
