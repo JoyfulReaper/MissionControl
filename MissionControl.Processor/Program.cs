@@ -7,6 +7,15 @@ builder.Services
     .AddOptions<RabbitMqOptions>()
     .Bind(builder.Configuration.GetSection(
         RabbitMqOptions.SectionName))
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.UserName),
+        "RabbitMQ username is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.Password),
+        "RabbitMQ password is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.VirtualHost),
+        "RabbitMQ virtual host is required.")
     .ValidateOnStart();
 
 builder.Services.AddSingleton<
