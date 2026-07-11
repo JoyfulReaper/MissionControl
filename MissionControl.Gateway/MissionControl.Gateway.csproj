@@ -11,4 +11,8 @@
     <PackageReference Include="Microsoft.OpenApi" Version="2.10.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
+  </ItemGroup>
+
 </Project>
