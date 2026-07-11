@@ -4,6 +4,7 @@
  * Licensed under the MIT License
  */
 
+using Kgivler.MissionControl.Gateway.Messaging.RabbitMq;
 using MissionControl.Contracts;
 using MissionControl.Gateway.Messaging;
 using System.Text.Json;
@@ -14,7 +15,28 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-builder.Services.AddSingleton<IEventPublisher, LoggingEventPublisher>();
+builder.Services
+    .AddOptions<RabbitMqOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            RabbitMqOptions.SectionName))
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.HostName),
+        "RabbitMQ hostname is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.UserName),
+        "RabbitMQ username is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.Password),
+        "RabbitMQ password is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.VirtualHost),
+        "RabbitMQ virtual host is required.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<
+    IEventPublisher,
+    RabbitMqEventPublisher>();
 
 var app = builder.Build();
 
