@@ -1,4 +1,11 @@
+/*
+ * Mission Control
+ * Copyright 2026 Kyle Givler
+ * Licensed under the MIT License
+ */
+
 using MissionControl.Contracts;
+using MissionControl.Gateway.Messaging;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,6 +13,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+builder.Services.AddSingleton<IEventPublisher, LoggingEventPublisher>();
 
 var app = builder.Build();
 
@@ -16,9 +25,10 @@ if (app.Environment.IsDevelopment())
 }
 
 
-app.MapPost("/api/events", (
+app.MapPost("/api/events", async (
     PublishEventRequest request,
-    ILogger<Program> logger) =>
+    ILogger<Program> logger,
+    IEventPublisher publisher) =>
     {
         var errors = new Dictionary<string, string[]>();
         if (request.EventId == Guid.Empty)
@@ -55,12 +65,18 @@ app.MapPost("/api/events", (
             return Results.ValidationProblem(errors);
         }
 
-        logger.LogDebug(
-            "Received event {EventType} with ID {EventId}, version {SchemaVersion}, occurring at {OccurredAt}",
-            request.EventType,
+        var envelope = new IntegrationEventEnvelope(
             request.EventId,
+            request.EventType,
+            Source: "happy-gopher-development",
             request.SchemaVersion,
-            request.OccurredAt);
+            request.OccurredAt,
+            ReceivedAt: DateTimeOffset.UtcNow,
+            request.CorrelationId,
+            null,
+            request.Payload);
+
+        await publisher.PublishAsync(envelope);
 
         return Results.Accepted(value: new PublishEventAcceptedResponse(request.EventId));
     }
