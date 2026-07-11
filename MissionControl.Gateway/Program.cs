@@ -50,7 +50,8 @@ if (app.Environment.IsDevelopment())
 app.MapPost("/api/events", async (
     PublishEventRequest request,
     ILogger<Program> logger,
-    IEventPublisher publisher) =>
+    IEventPublisher publisher,
+    CancellationToken cancellation) =>
     {
         var errors = new Dictionary<string, string[]>();
         if (request.EventId == Guid.Empty)
@@ -98,7 +99,7 @@ app.MapPost("/api/events", async (
             null,
             request.Payload);
 
-        await publisher.PublishAsync(envelope);
+        await publisher.PublishAsync(envelope, cancellationToken: cancellation);
 
         return Results.Accepted(value: new PublishEventAcceptedResponse(request.EventId));
     }

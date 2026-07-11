@@ -1,9 +1,8 @@
+using Microsoft.Extensions.Options;
+using MissionControl.Contracts;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using Microsoft.Extensions.Options;
 using System.Text.Json;
-using MissionControl.Contracts;
-using System.Text.Json.Nodes;
 
 namespace MissionControl.Processor.Processing.RabbitMq;
 
@@ -85,6 +84,18 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
                 "Acknowledged event {EventId}",
                 integrationEvent.EventId);
         }
+        catch (JsonException exception)
+        {
+            _logger.LogError(
+                exception,
+                "Rejected malformed RabbitMQ message with delivery tag {DeliveryTag}",
+                delivery.DeliveryTag);
+
+            await _channel!.BasicRejectAsync(
+                deliveryTag: delivery.DeliveryTag,
+                requeue: false,
+                cancellationToken: CancellationToken.None);
+        }
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
             _logger.LogError(
@@ -92,13 +103,21 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
                 "Failed to process RabbitMQ message with delivery tag {DeliveryTag}",
                 delivery.DeliveryTag);
         }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                "Failed to process RabbitMQ message with delivery tag {DeliveryTag}",
+                delivery.DeliveryTag);
 
-        await _channel!.BasicNackAsync(
-            deliveryTag: delivery.DeliveryTag,
-            multiple: false,
-            requeue: false,
-            cancellationToken: cancellationToken
-        );
+            // Temporary retry policy:
+            // retry once, then discard until we add a dead-letter queue.
+            await _channel!.BasicNackAsync(
+                deliveryTag: delivery.DeliveryTag,
+                multiple: false,
+                requeue: !delivery.Redelivered,
+                cancellationToken: CancellationToken.None);
+        }
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
@@ -106,7 +125,8 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
         _logger.LogInformation(
                 "Stopping RabbitMQ event consumer");
 
-        if (_channel?.IsOpen == true && !string.IsNullOrWhiteSpace(_consumerTag))
+        if (_channel?.IsOpen == true &&
+            !string.IsNullOrWhiteSpace(_consumerTag))
         {
             try
             {
@@ -119,6 +139,9 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
                     "Error cancelling RabbitMQ consumer");
             }
         }
+
+        await DisposeRabbitMqResourcesAsync();
+        await base.StopAsync(cancellationToken);
     }
 
     private async Task EnsureConnectedAsync(CancellationToken cancellationToken)
