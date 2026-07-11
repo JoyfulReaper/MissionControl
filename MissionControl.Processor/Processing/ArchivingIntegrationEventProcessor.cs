@@ -26,7 +26,7 @@ public sealed class ArchivingIntegrationEventProcessor(
         }
         else
         {
-            logger.LogWarning(
+            logger.LogInformation(
                 "Ignored duplicate event {EventId}",
                 integrationEvent.EventId);
         }

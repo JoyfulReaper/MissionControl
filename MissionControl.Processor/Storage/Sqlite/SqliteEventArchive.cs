@@ -62,11 +62,15 @@ public sealed class SqliteEventArchive(SqliteEventArchiveConnection database) : 
 
         command.Parameters.AddWithValue(
             "$occurredAt",
-            integrationEvent.OccurredAt.ToString("O"));
+            integrationEvent.OccurredAt
+                .ToUniversalTime()
+                .ToString("O"));
 
         command.Parameters.AddWithValue(
             "$receivedAt",
-            integrationEvent.ReceivedAt.ToString("O"));
+            integrationEvent.ReceivedAt
+                .ToUniversalTime()
+                .ToString("O"));
 
         command.Parameters.AddWithValue(
             "$correlationId",
