@@ -1,12 +1,13 @@
 using Microsoft.Extensions.Options;
 using MissionControl.Contracts;
+using MissionControl.Observability.RabbitMq;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text.Json;
 
 namespace MissionControl.Archive.Processing.RabbitMq;
 
-public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
+public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable, IRabbitMqConnectionStatus
 {
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web);
@@ -219,6 +220,16 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
             await connection.DisposeAsync();
             throw;
         }
+    }
+
+    public RabbitMqConnectionSnapshot GetSnapshot()
+    {
+        var connection = _connection;
+        var channel = _channel;
+
+        return new RabbitMqConnectionSnapshot(
+            ConnectionOpen: connection?.IsOpen == true,
+            ChannelOpen: channel?.IsOpen == true);
     }
 
     public async ValueTask DisposeAsync()

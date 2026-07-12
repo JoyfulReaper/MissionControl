@@ -4,16 +4,17 @@
  * Licensed under the MIT License
  */
 
-// TODO: Should we move this to JoyfulReaperLibrary?
+// TODO: Should we move some of these into to JoyfulReaperLibrary?
 
 using Microsoft.Extensions.Options;
 using MissionControl.Contracts;
+using MissionControl.Observability.RabbitMq;
 using RabbitMQ.Client;
 using System.Text.Json;
 
 namespace MissionControl.Gateway.Messaging.RabbitMq;
 
-public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
+public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable, IRabbitMqConnectionStatus
 {
     private readonly RabbitMqOptions _options;
     private readonly ILogger<RabbitMqEventPublisher> _logger;
@@ -130,6 +131,23 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
         }
     }
 
+    public async Task ConnectAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken);
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            await EnsureConnectedAsync(cancellationToken);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     private async Task EnsureConnectedAsync(CancellationToken cancellationToken)
     {
         if (_connection?.IsOpen == true && _channel?.IsOpen == true)
@@ -186,5 +204,15 @@ public sealed class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
             await connection.DisposeAsync();
             throw;
         }
+    }
+
+    public RabbitMqConnectionSnapshot GetSnapshot()
+    {
+        var connection = _connection;
+        var channel = _channel;
+
+        return new RabbitMqConnectionSnapshot(
+            ConnectionOpen: connection?.IsOpen == true,
+            ChannelOpen: channel?.IsOpen == true);
     }
 }

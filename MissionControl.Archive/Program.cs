@@ -5,6 +5,7 @@ using MissionControl.Archive.Processing;
 using MissionControl.Archive.Processing.RabbitMq;
 using MissionControl.Archive.Storage;
 using MissionControl.Archive.Storage.Sqlite;
+using MissionControl.Observability.RabbitMq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,12 +49,23 @@ builder.Services.AddSingleton<
 
 builder.Services.AddSingleton<IIntegrationEventQuery, SqliteEventQuery>();
 
-builder.Services.AddHostedService<RabbitMqEventConsumer>();
+builder.Services.AddSingleton<RabbitMqEventConsumer>();
+
+builder.Services.AddSingleton<IRabbitMqConnectionStatus>(
+    services =>
+        services.GetRequiredService<RabbitMqEventConsumer>());
+
+builder.Services.AddHostedService(
+    services =>
+        services.GetRequiredService<RabbitMqEventConsumer>());
 
 builder.Services
     .AddHealthChecks()
     .AddCheck<SqliteArchiveHealthCheck>(
         "sqlite",
+        tags: ["ready"])
+    .AddCheck<RabbitMqConnectionHealthCheck>(
+        "rabbitmq",
         tags: ["ready"]);
 
 var app = builder.Build();

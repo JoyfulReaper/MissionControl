@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using MissionControl.Contracts;
 using MissionControl.Gateway.Messaging;
 using MissionControl.Gateway.Messaging.RabbitMq;
+using MissionControl.Observability.RabbitMq;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -37,9 +38,24 @@ builder.Services
 
 builder.Services.AddHealthChecks();
 
-builder.Services.AddSingleton<
-    IEventPublisher,
-    RabbitMqEventPublisher>();
+builder.Services.AddSingleton<RabbitMqEventPublisher>();
+
+builder.Services.AddSingleton<IEventPublisher>(
+    services =>
+        services.GetRequiredService<RabbitMqEventPublisher>());
+
+builder.Services.AddSingleton<IRabbitMqConnectionStatus>(
+    services =>
+        services.GetRequiredService<RabbitMqEventPublisher>());
+
+builder.Services.AddHostedService<
+    RabbitMqPublisherConnectionWorker>();
+
+builder.Services
+    .AddHealthChecks()
+    .AddCheck<RabbitMqConnectionHealthCheck>(
+        "rabbitmq",
+        tags: ["ready"]);
 
 var app = builder.Build();
 
@@ -118,6 +134,14 @@ app.MapHealthChecks(
     new HealthCheckOptions
     {
         Predicate = _ => false
+    });
+
+app.MapHealthChecks(
+    "/health/ready",
+    new HealthCheckOptions
+    {
+        Predicate = registration =>
+            registration.Tags.Contains("ready")
     });
 
 app.Run();
