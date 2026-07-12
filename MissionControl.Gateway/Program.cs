@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using MissionControl.Contracts;
 using MissionControl.Gateway.Messaging;
 using MissionControl.Gateway.Messaging.RabbitMq;
+using MissionControl.Gateway.Security;
 using MissionControl.Observability.RabbitMq;
 using System.Text.Json;
 
@@ -52,6 +53,46 @@ builder.Services.AddHostedService<
     RabbitMqPublisherConnectionWorker>();
 
 builder.Services
+    .AddOptions<EventSourceOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            EventSourceOptions.SectionName))
+    .Validate(
+        options => options.Sources.Count > 0,
+        "At least one event source must be configured.")
+    .Validate(
+        options => options.Sources.All(source =>
+            !string.IsNullOrWhiteSpace(source.Name)),
+        "Every event source must have a name.")
+    .Validate(
+        options => options.Sources.All(source =>
+            !string.IsNullOrWhiteSpace(source.ApiKey)),
+        "Every event source must have an API key.")
+    .Validate(
+        options => options.Sources.All(source =>
+            source.ApiKey.Length >= 32),
+        "Every event source API key must contain at least 32 characters.")
+    .Validate(
+        options =>
+            options.Sources
+                .Select(source => source.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count() == options.Sources.Count,
+        "Event source names must be unique.")
+    .Validate(
+        options =>
+            options.Sources
+                .Select(source => source.ApiKey)
+                .Distinct(StringComparer.Ordinal)
+                .Count() == options.Sources.Count,
+        "Event source API keys must be unique.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<
+    IEventSourceResolver,
+    ApiKeyEventSourceResolver>();
+
+builder.Services
     .AddHealthChecks()
     .AddCheck<RabbitMqConnectionHealthCheck>(
         "rabbitmq",
@@ -68,11 +109,25 @@ if (app.Environment.IsDevelopment())
 
 app.MapPost("/api/events", async (
     PublishEventRequest request,
+    HttpRequest httpRequest,
+    IEventSourceResolver sourceResolver,
     ILogger<Program> logger,
     IEventPublisher publisher,
     CancellationToken cancellation) =>
     {
+        if (!httpRequest.Headers.TryGetValue(
+            EventSourceOptions.ApiKeyHeaderName,
+            out var apiKeyValues) ||
+            apiKeyValues.Count != 1 ||
+            !sourceResolver.TryResolve(
+                apiKeyValues[0],
+                out var source))
+        {
+            return Results.Unauthorized();
+        }
+
         var errors = new Dictionary<string, string[]>();
+
         if (request.EventId == Guid.Empty)
         {
             errors[nameof(request.EventId)] = ["EventId must not be empty"];
@@ -110,7 +165,7 @@ app.MapPost("/api/events", async (
         var envelope = new IntegrationEventEnvelope(
             request.EventId,
             request.EventType,
-            Source: "happy-gopher-development",
+            Source: source,
             request.SchemaVersion,
             request.OccurredAt,
             ReceivedAt: DateTimeOffset.UtcNow,
@@ -127,7 +182,8 @@ app.MapPost("/api/events", async (
 .WithTags("Events")
 .Produces<PublishEventAcceptedResponse>(
         StatusCodes.Status202Accepted)
-    .ProducesValidationProblem();
+    .ProducesValidationProblem()
+    .Produces(StatusCodes.Status401Unauthorized);
 
 app.MapHealthChecks(
     "/health/live",
