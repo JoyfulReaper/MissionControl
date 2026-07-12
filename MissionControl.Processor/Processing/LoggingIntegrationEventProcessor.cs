@@ -1,6 +1,6 @@
 using MissionControl.Contracts;
 
-namespace MissionControl.Processor.Processing;
+namespace MissionControl.Archive.Processing;
 
 public sealed class LoggingIntegrationEventProcessor(
     ILogger<LoggingIntegrationEventProcessor> logger)

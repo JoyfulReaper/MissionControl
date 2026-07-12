@@ -1,7 +1,7 @@
-﻿using MissionControl.Contracts;
-using MissionControl.Processor.Storage;
+﻿using MissionControl.Archive.Storage;
+using MissionControl.Contracts;
 
-namespace MissionControl.Processor.Processing;
+namespace MissionControl.Archive.Processing;
 
 public sealed class ArchivingIntegrationEventProcessor(
     IIntegrationEventArchive archive,

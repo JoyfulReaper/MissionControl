@@ -1,6 +1,6 @@
 ﻿using MissionControl.Contracts;
 
-namespace MissionControl.Processor.Storage;
+namespace MissionControl.Archive.Storage;
 
 public interface IIntegrationEventArchive
 {

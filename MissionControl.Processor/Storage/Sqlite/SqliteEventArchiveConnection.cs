@@ -1,4 +1,4 @@
-﻿namespace MissionControl.Processor.Storage.Sqlite;
+﻿namespace MissionControl.Archive.Storage.Sqlite;
 
 public sealed record SqliteEventArchiveConnection(
     string ConnectionString);

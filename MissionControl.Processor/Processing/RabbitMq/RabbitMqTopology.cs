@@ -4,7 +4,7 @@
  * Licensed under the MIT License
  */
 
-namespace MissionControl.Processor.Processing.RabbitMq;
+namespace MissionControl.Archive.Processing.RabbitMq;
 
 internal static class RabbitMqTopology
 {

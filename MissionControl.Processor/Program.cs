@@ -1,10 +1,10 @@
 using JoyfulReaperLib.Sqlite;
-using MissionControl.Processor.Processing;
-using MissionControl.Processor.Processing.RabbitMq;
-using MissionControl.Processor.Storage;
-using MissionControl.Processor.Storage.Sqlite;
+using MissionControl.Archive.Processing;
+using MissionControl.Archive.Processing.RabbitMq;
+using MissionControl.Archive.Storage;
+using MissionControl.Archive.Storage.Sqlite;
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 var archiveOptions =
     builder.Configuration
@@ -44,7 +44,30 @@ builder.Services.AddSingleton<
     IIntegrationEventProcessor,
     ArchivingIntegrationEventProcessor>();
 
+builder.Services.AddSingleton<IIntegrationEventQuery, SqliteEventQuery>();
+
 builder.Services.AddHostedService<RabbitMqEventConsumer>();
 
-var host = builder.Build();
-host.Run();
+var app = builder.Build();
+
+app.MapGet("/api/events",
+    async (int? limit,
+    string? source,
+    string? eventType,
+    DateTimeOffset? before,
+    IIntegrationEventQuery query,
+    CancellationToken cancellationToken) =>
+    {
+        var effectiveLimit = Math.Clamp(limit ?? 50, 1, 200);
+        var events = await query.GetRecentAsync(
+            effectiveLimit,
+            source,
+            eventType,
+            before,
+            cancellationToken);
+
+        return Results.Ok(events);
+    }).WithName("GetRecentEvents")
+    .WithTags("Events");
+
+app.Run();

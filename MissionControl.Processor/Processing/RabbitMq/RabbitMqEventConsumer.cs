@@ -4,7 +4,7 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text.Json;
 
-namespace MissionControl.Processor.Processing.RabbitMq;
+namespace MissionControl.Archive.Processing.RabbitMq;
 
 public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
 {

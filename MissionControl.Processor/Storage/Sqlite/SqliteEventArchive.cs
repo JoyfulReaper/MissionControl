@@ -1,7 +1,7 @@
 ﻿using Microsoft.Data.Sqlite;
 using MissionControl.Contracts;
 
-namespace MissionControl.Processor.Storage.Sqlite;
+namespace MissionControl.Archive.Storage.Sqlite;
 
 public sealed class SqliteEventArchive(SqliteEventArchiveConnection database) : IIntegrationEventArchive
 {

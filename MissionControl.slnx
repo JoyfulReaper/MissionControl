@@ -1,5 +1,5 @@
 <Solution>
   <Project Path="MissionControl.Contracts/MissionControl.Contracts.csproj" />
   <Project Path="MissionControl.Gateway/MissionControl.Gateway.csproj" />
-  <Project Path="MissionControl.Processor/MissionControl.Processor.csproj" />
+  <Project Path="MissionControl.Processor/MissionControl.Archive.csproj" />
 </Solution>

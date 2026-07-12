@@ -1,6 +1,6 @@
 using MissionControl.Contracts;
 
-namespace MissionControl.Processor.Processing;
+namespace MissionControl.Archive.Processing;
 
 public interface IIntegrationEventProcessor
 {
