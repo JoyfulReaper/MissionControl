@@ -39,7 +39,7 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
             HandleMessageAsync(delivery, stoppingToken);
 
         _consumerTag = await _channel!.BasicConsumeAsync(
-            queue: RabbitMqTopology.ProcessorQueue,
+            queue: RabbitMqTopology.ArchiveQueue,
             autoAck: false,
             consumer: consumer,
             cancellationToken: stoppingToken
@@ -47,7 +47,7 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
 
         _logger.LogInformation(
             "Consuming events from queue {Queue}",
-            RabbitMqTopology.ProcessorQueue);
+            RabbitMqTopology.ArchiveQueue);
 
         try
         {
@@ -186,7 +186,7 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
                 cancellationToken: cancellationToken);
 
             await channel.QueueDeclareAsync(
-                queue: RabbitMqTopology.ProcessorQueue,
+                queue: RabbitMqTopology.ArchiveQueue,
                 durable: true,
                 exclusive: false,
                 autoDelete: false,
@@ -194,7 +194,7 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable
                 cancellationToken: cancellationToken);
 
             await channel.QueueBindAsync(
-                queue: RabbitMqTopology.ProcessorQueue,
+                queue: RabbitMqTopology.ArchiveQueue,
                 exchange: RabbitMqTopology.EventsExchange,
                 routingKey: RabbitMqTopology.AllEventsRoutingKey,
                 arguments: null,

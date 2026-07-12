@@ -4,6 +4,7 @@
  * Licensed under the MIT License
  */
 
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using MissionControl.Contracts;
 using MissionControl.Gateway.Messaging;
 using MissionControl.Gateway.Messaging.RabbitMq;
@@ -33,6 +34,8 @@ builder.Services
         options => !string.IsNullOrWhiteSpace(options.VirtualHost),
         "RabbitMQ virtual host is required.")
     .ValidateOnStart();
+
+builder.Services.AddHealthChecks();
 
 builder.Services.AddSingleton<
     IEventPublisher,
@@ -109,5 +112,12 @@ app.MapPost("/api/events", async (
 .Produces<PublishEventAcceptedResponse>(
         StatusCodes.Status202Accepted)
     .ProducesValidationProblem();
+
+app.MapHealthChecks(
+    "/health/live",
+    new HealthCheckOptions
+    {
+        Predicate = _ => false
+    });
 
 app.Run();

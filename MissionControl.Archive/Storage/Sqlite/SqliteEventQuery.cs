@@ -44,9 +44,9 @@ public sealed class SqliteEventQuery(
             WHERE 1 = 1
             """);
 
-        if (!string.IsNullOrEmpty(source))
+        if (!string.IsNullOrWhiteSpace(source))
         {
-            sql.Append(" AND Source = @Source ");
+            sql.AppendLine("AND Source = $source");
             command.Parameters.AddWithValue("$source", source);
         }
 

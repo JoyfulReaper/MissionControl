@@ -1,4 +1,6 @@
 using JoyfulReaperLib.Sqlite;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using MissionControl.Archive.Health;
 using MissionControl.Archive.Processing;
 using MissionControl.Archive.Processing.RabbitMq;
 using MissionControl.Archive.Storage;
@@ -48,6 +50,12 @@ builder.Services.AddSingleton<IIntegrationEventQuery, SqliteEventQuery>();
 
 builder.Services.AddHostedService<RabbitMqEventConsumer>();
 
+builder.Services
+    .AddHealthChecks()
+    .AddCheck<SqliteArchiveHealthCheck>(
+        "sqlite",
+        tags: ["ready"]);
+
 var app = builder.Build();
 
 app.MapGet("/api/events",
@@ -69,5 +77,20 @@ app.MapGet("/api/events",
         return Results.Ok(events);
     }).WithName("GetRecentEvents")
     .WithTags("Events");
+
+app.MapHealthChecks(
+    "/health/live",
+    new HealthCheckOptions
+    {
+        Predicate = _ => false
+    });
+
+app.MapHealthChecks(
+    "/health/ready",
+    new HealthCheckOptions
+    {
+        Predicate = registration =>
+            registration.Tags.Contains("ready")
+    });
 
 app.Run();

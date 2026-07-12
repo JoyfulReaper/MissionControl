@@ -9,6 +9,6 @@ namespace MissionControl.Archive.Processing.RabbitMq;
 internal static class RabbitMqTopology
 {
     internal const string EventsExchange = "kgivler.events";
-    internal const string ProcessorQueue = "mission-control.processor";
+    internal const string ArchiveQueue = "mission-control.archive";
     internal const string AllEventsRoutingKey = "#";
 }
