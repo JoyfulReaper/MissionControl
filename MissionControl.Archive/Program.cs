@@ -35,6 +35,11 @@ builder.Services
         "RabbitMQ virtual host is required.")
     .ValidateOnStart();
 
+builder.Services.AddWindowsService(options =>
+{
+    options.ServiceName = "Mission Control Archive";
+});
+
 builder.Services.AddSingleton(
     new SqliteEventArchiveConnection(
         archiveConnectionString));

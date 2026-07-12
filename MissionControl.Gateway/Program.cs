@@ -37,6 +37,11 @@ builder.Services
         "RabbitMQ virtual host is required.")
     .ValidateOnStart();
 
+builder.Services.AddWindowsService(options =>
+{
+    options.ServiceName = "Mission Control Gateway";
+});
+
 builder.Services.AddHealthChecks();
 
 builder.Services.AddSingleton<RabbitMqEventPublisher>();
