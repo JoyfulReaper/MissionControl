@@ -6,6 +6,7 @@
 
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using MissionControl.Contracts;
+using MissionControl.Gateway.Integrations.GitHub;
 using MissionControl.Gateway.Messaging;
 using MissionControl.Gateway.Messaging.RabbitMq;
 using MissionControl.Gateway.Security;
@@ -93,6 +94,30 @@ builder.Services
         "Event source API keys must be unique.")
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<GitHubWebhookOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            GitHubWebhookOptions.SectionName))
+    .Validate(
+        options =>
+            !options.Enabled ||
+            !string.IsNullOrWhiteSpace(options.Secret),
+        "GitHubWebhook:Secret is required when the webhook is enabled.")
+    .Validate(
+        options =>
+            !options.Enabled ||
+            !string.IsNullOrWhiteSpace(options.AllowedOwner),
+        "GitHubWebhook:AllowedOwner is required when the webhook is enabled.")
+    .Validate(
+        options =>
+            options.MaxPayloadBytes is > 0 and <= 25 * 1024 * 1024,
+        "GitHubWebhook:MaxPayloadBytes must be between 1 byte and 25 MB.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<
+    GitHubWebhookSignatureValidator>();
+
 builder.Services.AddSingleton<
     IEventSourceResolver,
     ApiKeyEventSourceResolver>();
@@ -111,6 +136,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.MapGitHubWebhook();
 
 app.MapPost("/api/events", async (
     PublishEventRequest request,
