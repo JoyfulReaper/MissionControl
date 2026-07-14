@@ -5,6 +5,7 @@
  */
 
 using JoyfulReaperLib.Sqlite;
+using MissionControl.GitActivity.Health;
 using MissionControl.GitActivity.Processing;
 using MissionControl.GitActivity.Storage;
 using MissionControl.GitActivity.Storage.Sqlite;
@@ -54,6 +55,9 @@ public static class GitActivityServiceCollectionExtensions
 
         services
             .AddHealthChecks()
+            .AddCheck<SqliteGitActivityHealthCheck>(
+                "sqlite",
+                tags: ["ready"])
             .AddCheck<RabbitMqConnectionHealthCheck>(
                 "rabbitmq",
                 tags: ["ready"]);
