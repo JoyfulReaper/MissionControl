@@ -1,7 +1,8 @@
 <Solution>
+  <Project Path="MissionControl.Archive/MissionControl.Archive.csproj" />
   <Project Path="MissionControl.Contracts/MissionControl.Contracts.csproj" />
   <Project Path="MissionControl.Gateway/MissionControl.Gateway.csproj" />
-  <Project Path="MissionControl.Archive/MissionControl.Archive.csproj" />
+  <Project Path="MissionControl.GitActivity/MissionControl.GitActivity.csproj" Id="d38b3f82-93f6-4872-9484-c1bf74efd075" />
   <Project Path="MissionControl.Observability/MissionControl.Observability.csproj" Id="ef5f5617-b718-4e7a-a8ab-a2bca7c4f4f0" />
   <Project Path="MissionControl.Tests/MissionControl.Tests.csproj" />
 </Solution>
