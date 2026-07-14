@@ -65,7 +65,7 @@ public sealed class GitActivityEventProcessor
                 GitHubPushEventType,
                 StringComparison.Ordinal))
         {
-            _logger.LogInformation(
+            _logger.LogWarning(
                 "Ignoring unexpected event type {EventType} with ID {EventId}.",
                 integrationEvent.EventType,
                 integrationEvent.EventId);
