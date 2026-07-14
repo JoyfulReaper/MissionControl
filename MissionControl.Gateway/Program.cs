@@ -4,7 +4,11 @@
  * Licensed under the MIT License
  */
 
+// TODO: Clean up this file
+
+using Kgivler.Api.GitActivity;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using MissionControl.Contracts;
 using MissionControl.Gateway.Integrations.GitHub;
 using MissionControl.Gateway.Messaging;
@@ -120,12 +124,46 @@ builder.Services
         "GitHubWebhook:MaxPayloadBytes must be between 1 byte and 25 MB.")
     .ValidateOnStart();
 
-builder.Services.AddSingleton<
-    GitHubWebhookSignatureValidator>();
+builder.Services.AddSingleton<GitHubWebhookSignatureValidator>();
+builder.Services.AddSingleton<IEventSourceResolver, ApiKeyEventSourceResolver>();
 
-builder.Services.AddSingleton<
-    IEventSourceResolver,
-    ApiKeyEventSourceResolver>();
+builder.Services
+    .AddOptions<GitActivityOptions>()
+    .BindConfiguration(GitActivityOptions.SectionName)
+    .Validate(
+        options =>
+            Uri.TryCreate(
+                options.ArchiveBaseUrl,
+                UriKind.Absolute,
+                out _),
+        "GitActivity:ArchiveBaseUrl must be an absolute URL.")
+    .Validate(
+        options => options.CacheSeconds > 0,
+        "GitActivity:CacheSeconds must be greater than zero.")
+    .Validate(
+        options => options.ArchiveQueryLimit is > 0 and <= 100,
+        "GitActivity:ArchiveQueryLimit must be between 1 and 100.")
+    .Validate(
+        options => options.PublicResultLimit is > 0 and <= 50,
+        "GitActivity:PublicResultLimit must be between 1 and 50.")
+    .Validate(
+        options => options.AllowedRepositories.Length > 0,
+        "GitActivity:AllowedRepositories must contain at least one repository.")
+    .Validate(
+        options => options.AllowedBranches.Length > 0,
+        "GitActivity:AllowedBranches must contain at least one branch.")
+    .ValidateOnStart();
+
+builder.Services.AddHttpClient<ArchiveClient>(
+    (services, client) =>
+    {
+        var options = services
+            .GetRequiredService<IOptions<GitActivityOptions>>()
+            .Value;
+
+        client.BaseAddress = new Uri(options.ArchiveBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(5);
+    });
 
 builder.Services
     .AddHealthChecks()
@@ -234,6 +272,18 @@ app.MapPost("/api/events", async (
     .Produces(StatusCodes.Status401Unauthorized)
     .Produces(StatusCodes.Status503ServiceUnavailable);
 
+app.MapGet(
+    "/api/github/activity/debug",
+    async (
+        ArchiveClient archive,
+        CancellationToken cancellationToken) =>
+    {
+        var events = await archive.GetRecentGitPushesAsync(
+            cancellationToken: cancellationToken);
+
+        return Results.Ok(events);
+    });
+
 app.MapHealthChecks(
     "/health/live",
     new HealthCheckOptions
@@ -250,5 +300,3 @@ app.MapHealthChecks(
     });
 
 app.Run();
-
-public partial class Program;
