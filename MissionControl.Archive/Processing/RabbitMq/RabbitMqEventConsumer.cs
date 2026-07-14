@@ -20,6 +20,8 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable,
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly IIntegrationEventProcessor _processor;
     private string? _consumerTag;
+    private static readonly TimeSpan RetryDelay =
+        TimeSpan.FromSeconds(5);
 
     public RabbitMqEventConsumer(
             IOptions<RabbitMqOptions> options,
@@ -31,33 +33,64 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable,
         _logger = logger;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(
+        CancellationToken stoppingToken)
     {
-        await EnsureConnectedAsync(stoppingToken);
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await StartConsumingAsync(stoppingToken);
+                break;
+            }
+            catch (OperationCanceledException)
+                when (stoppingToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "RabbitMQ consumer startup failed. Retrying in {RetryDelay}.",
+                    RetryDelay);
+
+                await Task.Delay(RetryDelay, stoppingToken);
+            }
+        }
+
+        try
+        {
+            await Task.Delay(
+                Timeout.InfiniteTimeSpan,
+                stoppingToken);
+        }
+        catch (OperationCanceledException)
+            when (stoppingToken.IsCancellationRequested)
+        {
+            // Normal shutdown.
+        }
+    }
+
+    private async Task StartConsumingAsync(
+        CancellationToken cancellationToken)
+    {
+        await EnsureConnectedAsync(cancellationToken);
+
         var consumer = new AsyncEventingBasicConsumer(_channel!);
 
         consumer.ReceivedAsync += (_, delivery) =>
-            HandleMessageAsync(delivery, stoppingToken);
+            HandleMessageAsync(delivery, cancellationToken);
 
         _consumerTag = await _channel!.BasicConsumeAsync(
             queue: RabbitMqTopology.ArchiveQueue,
             autoAck: false,
             consumer: consumer,
-            cancellationToken: stoppingToken
-        );
+            cancellationToken: cancellationToken);
 
         _logger.LogInformation(
             "Consuming events from queue {Queue}",
             RabbitMqTopology.ArchiveQueue);
-
-        try
-        {
-            await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-            // Normal Application shutdown
-        }
     }
 
     private async Task HandleMessageAsync(

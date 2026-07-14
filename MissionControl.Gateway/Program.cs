@@ -6,8 +6,10 @@
 
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using MissionControl.Contracts;
+using MissionControl.Gateway.Integrations.GitHub;
 using MissionControl.Gateway.Messaging;
 using MissionControl.Gateway.Messaging.RabbitMq;
+using MissionControl.Gateway.Security;
 using MissionControl.Observability.RabbitMq;
 using System.Text.Json;
 
@@ -36,6 +38,11 @@ builder.Services
         "RabbitMQ virtual host is required.")
     .ValidateOnStart();
 
+builder.Services.AddWindowsService(options =>
+{
+    options.ServiceName = "Mission Control Gateway";
+});
+
 builder.Services.AddHealthChecks();
 
 builder.Services.AddSingleton<RabbitMqEventPublisher>();
@@ -52,6 +59,75 @@ builder.Services.AddHostedService<
     RabbitMqPublisherConnectionWorker>();
 
 builder.Services
+    .AddOptions<EventSourceOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            EventSourceOptions.SectionName))
+    .Validate(
+        options => options.Sources.Count > 0,
+        "At least one event source must be configured.")
+    .Validate(
+        options => options.Sources.All(source =>
+            !string.IsNullOrWhiteSpace(source.Name)),
+        "Every event source must have a name.")
+    .Validate(
+        options => options.Sources.All(source =>
+            !string.IsNullOrWhiteSpace(source.ApiKey)),
+        "Every event source must have an API key.")
+    .Validate(
+        options => options.Sources.All(source =>
+            source.ApiKey.Length >= 32),
+        "Every event source API key must contain at least 32 characters.")
+    .Validate(
+        options =>
+            options.Sources
+                .Select(source => source.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count() == options.Sources.Count,
+        "Event source names must be unique.")
+    .Validate(
+        options =>
+            options.Sources
+                .Select(source => source.ApiKey)
+                .Distinct(StringComparer.Ordinal)
+                .Count() == options.Sources.Count,
+        "Event source API keys must be unique.")
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<GitHubWebhookOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            GitHubWebhookOptions.SectionName))
+    .Validate(
+        options =>
+            !options.Enabled ||
+            !string.IsNullOrWhiteSpace(options.Secret),
+        "GitHubWebhook:Secret is required when the webhook is enabled.")
+    .Validate(
+        options =>
+            !options.Enabled ||
+            options.Secret.Length >= 32,
+        "GitHubWebhook:Secret must contain at least 32 characters when the webhook is enabled.")
+    .Validate(
+        options =>
+            !options.Enabled ||
+            !string.IsNullOrWhiteSpace(options.AllowedOwner),
+        "GitHubWebhook:AllowedOwner is required when the webhook is enabled.")
+    .Validate(
+        options =>
+            options.MaxPayloadBytes is > 0 and <= 25 * 1024 * 1024,
+        "GitHubWebhook:MaxPayloadBytes must be between 1 byte and 25 MB.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<
+    GitHubWebhookSignatureValidator>();
+
+builder.Services.AddSingleton<
+    IEventSourceResolver,
+    ApiKeyEventSourceResolver>();
+
+builder.Services
     .AddHealthChecks()
     .AddCheck<RabbitMqConnectionHealthCheck>(
         "rabbitmq",
@@ -65,14 +141,28 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.MapGitHubWebhook();
 
 app.MapPost("/api/events", async (
     PublishEventRequest request,
-    ILogger<Program> logger,
+    HttpRequest httpRequest,
+    IEventSourceResolver sourceResolver,
     IEventPublisher publisher,
     CancellationToken cancellation) =>
     {
+        if (!httpRequest.Headers.TryGetValue(
+            EventSourceOptions.ApiKeyHeaderName,
+            out var apiKeyValues) ||
+            apiKeyValues.Count != 1 ||
+            !sourceResolver.TryResolve(
+                apiKeyValues[0],
+                out var source))
+        {
+            return Results.Unauthorized();
+        }
+
         var errors = new Dictionary<string, string[]>();
+
         if (request.EventId == Guid.Empty)
         {
             errors[nameof(request.EventId)] = ["EventId must not be empty"];
@@ -110,7 +200,7 @@ app.MapPost("/api/events", async (
         var envelope = new IntegrationEventEnvelope(
             request.EventId,
             request.EventType,
-            Source: "happy-gopher-development",
+            Source: source,
             request.SchemaVersion,
             request.OccurredAt,
             ReceivedAt: DateTimeOffset.UtcNow,
@@ -118,16 +208,31 @@ app.MapPost("/api/events", async (
             null,
             request.Payload);
 
-        await publisher.PublishAsync(envelope, cancellationToken: cancellation);
+        try
+        {
+            await publisher.PublishAsync(envelope, cancellationToken: cancellation);
+        }
+        catch (OperationCanceledException)
+            when (cancellation.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return Results.StatusCode(
+                StatusCodes.Status503ServiceUnavailable);
+        }
 
         return Results.Accepted(value: new PublishEventAcceptedResponse(request.EventId));
     }
 )
 .WithName("PublishEvent")
 .WithTags("Events")
-.Produces<PublishEventAcceptedResponse>(
+    .Produces<PublishEventAcceptedResponse>(
         StatusCodes.Status202Accepted)
-    .ProducesValidationProblem();
+    .ProducesValidationProblem()
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status503ServiceUnavailable);
 
 app.MapHealthChecks(
     "/health/live",
@@ -145,3 +250,5 @@ app.MapHealthChecks(
     });
 
 app.Run();
+
+public partial class Program;
