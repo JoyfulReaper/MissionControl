@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using MissionControl.Contracts;
+using MissionControl.Messaging.RabbitMq;
 using MissionControl.Observability.RabbitMq;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;

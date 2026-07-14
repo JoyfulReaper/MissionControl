@@ -5,6 +5,7 @@ using MissionControl.Archive.Processing;
 using MissionControl.Archive.Processing.RabbitMq;
 using MissionControl.Archive.Storage;
 using MissionControl.Archive.Storage.Sqlite;
+using MissionControl.Messaging.RabbitMq;
 using MissionControl.Observability.RabbitMq;
 
 var builder = WebApplication.CreateBuilder(args);

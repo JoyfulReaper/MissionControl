@@ -4,6 +4,7 @@ using MissionControl.GitActivity.Messaging.RabbitMq;
 using MissionControl.GitActivity.Processing;
 using MissionControl.GitActivity.Storage;
 using MissionControl.GitActivity.Storage.Sqlite;
+using MissionControl.Messaging.RabbitMq;
 
 var builder = WebApplication.CreateBuilder(args);
 

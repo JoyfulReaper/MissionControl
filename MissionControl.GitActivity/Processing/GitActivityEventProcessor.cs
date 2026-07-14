@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using MissionControl.Contracts;
 using MissionControl.Contracts.GitHub;
 using MissionControl.GitActivity.Storage;
+using MissionControl.Messaging.RabbitMq;
 using System.Text.Json;
 
 namespace MissionControl.GitActivity.Processing;

@@ -1,4 +1,5 @@
 using MissionControl.Contracts;
+using MissionControl.Messaging.RabbitMq;
 
 namespace MissionControl.Archive.Processing;
 
