@@ -1,6 +1,7 @@
 using JoyfulReaperLib.Sqlite;
 using MissionControl.GitActivity;
 using MissionControl.GitActivity.Messaging.RabbitMq;
+using MissionControl.GitActivity.Processing;
 using MissionControl.GitActivity.Storage;
 using MissionControl.GitActivity.Storage.Sqlite;
 
@@ -29,6 +30,10 @@ builder.Services.AddSingleton(
 builder.Services.AddSingleton<
     IGitActivityRepository,
     SqliteGitActivityRepository>();
+
+builder.Services.AddSingleton<
+    IIntegrationEventProcessor,
+    GitActivityEventProcessor>();
 
 builder.Services
     .AddOptions<GitActivityOptions>()
