@@ -1,4 +1,5 @@
 using MissionControl.GitActivity.DependencyInjection;
+using MissionControl.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapGet("/", () => "Mission Control Git Activity");
+app.MapMissionControlHealthChecks();
 
 app.Run();
 

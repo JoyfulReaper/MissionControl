@@ -5,12 +5,11 @@
  */
 
 using JoyfulReaperLib.Sqlite;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using MissionControl.GitActivity.Processing;
 using MissionControl.GitActivity.Storage;
 using MissionControl.GitActivity.Storage.Sqlite;
 using MissionControl.Messaging.RabbitMq;
+using MissionControl.Observability.RabbitMq;
 
 namespace MissionControl.GitActivity.DependencyInjection;
 
@@ -45,7 +44,14 @@ public static class GitActivityServiceCollectionExtensions
                 GitActivityEventProcessor>()
             .AddRabbitMqConsumerOptions(configuration)
             .AddGitActivityOptions(configuration)
-            .AddRabbitMqConnectionOptions(configuration);
+            .AddRabbitMqConnectionOptions(configuration)
+            .AddRabbitMqEventConsumer();
+
+        services
+            .AddHealthChecks()
+            .AddCheck<RabbitMqConnectionHealthCheck>(
+                "rabbitmq",
+                tags: ["ready"]);
 
         return services;
     }
