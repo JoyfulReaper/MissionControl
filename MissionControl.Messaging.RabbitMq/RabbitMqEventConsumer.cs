@@ -1,12 +1,13 @@
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MissionControl.Contracts;
-using MissionControl.Messaging.RabbitMq;
 using MissionControl.Observability.RabbitMq;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text.Json;
 
-namespace MissionControl.Archive.Processing.RabbitMq;
+namespace MissionControl.Messaging.RabbitMq;
 
 public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable, IRabbitMqConnectionStatus
 {
@@ -26,10 +27,10 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable,
         TimeSpan.FromSeconds(5);
 
     public RabbitMqEventConsumer(
-            IOptions<RabbitMqOptions> connectionOptions,
-            IOptions<RabbitMqConsumerOptions> consumerOptions,
-            IIntegrationEventProcessor processor,
-            ILogger<RabbitMqEventConsumer> logger)
+        IOptions<RabbitMqOptions> connectionOptions,
+        IOptions<RabbitMqConsumerOptions> consumerOptions,
+        IIntegrationEventProcessor processor,
+        ILogger<RabbitMqEventConsumer> logger)
     {
         _connectionOptions = connectionOptions.Value;
         _consumerOptions = consumerOptions.Value;

@@ -10,11 +10,14 @@
   <ItemGroup>
     <PackageReference Include="JoyfulReaperLib.Sqlite" Version="0.0.9" />
     <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.9" />
-    <PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
     <ProjectReference Include="..\MissionControl.Messaging.RabbitMq\MissionControl.Messaging.RabbitMq.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Processing\RabbitMq\" />
   </ItemGroup>
 </Project>

@@ -7,11 +7,30 @@
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MissionControl.Observability.RabbitMq;
 
 namespace MissionControl.Messaging.RabbitMq;
 
 public static class RabbitMqServiceCollectionExtensions
 {
+    public static IServiceCollection AddRabbitMqEventConsumer(
+    this IServiceCollection services)
+    {
+        services.AddSingleton<RabbitMqEventConsumer>();
+
+        services.AddSingleton<IRabbitMqConnectionStatus>(
+            serviceProvider =>
+                serviceProvider.GetRequiredService<
+                    RabbitMqEventConsumer>());
+
+        services.AddHostedService(
+            serviceProvider =>
+                serviceProvider.GetRequiredService<
+                    RabbitMqEventConsumer>());
+
+        return services;
+    }
+
     public static IServiceCollection AddRabbitMqConnectionOptions(
         this IServiceCollection services,
         IConfiguration configuration)

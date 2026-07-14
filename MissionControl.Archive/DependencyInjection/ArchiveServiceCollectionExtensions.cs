@@ -5,11 +5,8 @@
  */
 
 using JoyfulReaperLib.Sqlite;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using MissionControl.Archive.Health;
 using MissionControl.Archive.Processing;
-using MissionControl.Archive.Processing.RabbitMq;
 using MissionControl.Archive.Storage;
 using MissionControl.Archive.Storage.Sqlite;
 using MissionControl.Messaging.RabbitMq;
@@ -23,16 +20,16 @@ public static class ArchiveServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var archiveOptions =
-            configuration
-                .GetSection(SqliteEventArchiveOptions.SectionName)
-                .Get<SqliteEventArchiveOptions>()
+        var archiveOptions = configuration
+            .GetSection(SqliteEventArchiveOptions.SectionName)
+            .Get<SqliteEventArchiveOptions>()
             ?? new SqliteEventArchiveOptions();
 
-        var archiveConnectionString = SqliteDatabaseInitializer.Initialize(
-            archiveOptions.DatabaseFileName,
-            SqliteEventArchiveSchema.Sql,
-            archiveOptions.BasePath);
+        var archiveConnectionString =
+            SqliteDatabaseInitializer.Initialize(
+                archiveOptions.DatabaseFileName,
+                SqliteEventArchiveSchema.Sql,
+                archiveOptions.BasePath);
 
         services
             .AddWindowsService(options =>
@@ -53,15 +50,7 @@ public static class ArchiveServiceCollectionExtensions
             .AddSingleton<
                 IIntegrationEventQuery,
                 SqliteEventQuery>()
-            .AddSingleton<RabbitMqEventConsumer>()
-            .AddSingleton<IRabbitMqConnectionStatus>(
-                serviceProvider =>
-                    serviceProvider.GetRequiredService<
-                        RabbitMqEventConsumer>())
-            .AddHostedService(
-                serviceProvider =>
-                    serviceProvider.GetRequiredService<
-                        RabbitMqEventConsumer>());
+            .AddRabbitMqEventConsumer();
 
         services
             .AddHealthChecks()
