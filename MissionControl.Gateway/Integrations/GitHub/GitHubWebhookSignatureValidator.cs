@@ -1,7 +1,8 @@
-﻿using Microsoft.Extensions.Options;
-using MissionControl.Gateway.Integrations.GitHub;
+using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 using System.Text;
+
+namespace MissionControl.Gateway.Integrations.GitHub;
 
 public sealed class GitHubWebhookSignatureValidator(
     IOptions<GitHubWebhookOptions> options)

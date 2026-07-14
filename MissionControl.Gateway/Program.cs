@@ -107,6 +107,11 @@ builder.Services
     .Validate(
         options =>
             !options.Enabled ||
+            options.Secret.Length >= 32,
+        "GitHubWebhook:Secret must contain at least 32 characters when the webhook is enabled.")
+    .Validate(
+        options =>
+            !options.Enabled ||
             !string.IsNullOrWhiteSpace(options.AllowedOwner),
         "GitHubWebhook:AllowedOwner is required when the webhook is enabled.")
     .Validate(
@@ -142,7 +147,6 @@ app.MapPost("/api/events", async (
     PublishEventRequest request,
     HttpRequest httpRequest,
     IEventSourceResolver sourceResolver,
-    ILogger<Program> logger,
     IEventPublisher publisher,
     CancellationToken cancellation) =>
     {
@@ -204,17 +208,31 @@ app.MapPost("/api/events", async (
             null,
             request.Payload);
 
-        await publisher.PublishAsync(envelope, cancellationToken: cancellation);
+        try
+        {
+            await publisher.PublishAsync(envelope, cancellationToken: cancellation);
+        }
+        catch (OperationCanceledException)
+            when (cancellation.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            return Results.StatusCode(
+                StatusCodes.Status503ServiceUnavailable);
+        }
 
         return Results.Accepted(value: new PublishEventAcceptedResponse(request.EventId));
     }
 )
 .WithName("PublishEvent")
 .WithTags("Events")
-.Produces<PublishEventAcceptedResponse>(
+    .Produces<PublishEventAcceptedResponse>(
         StatusCodes.Status202Accepted)
     .ProducesValidationProblem()
-    .Produces(StatusCodes.Status401Unauthorized);
+    .Produces(StatusCodes.Status401Unauthorized)
+    .Produces(StatusCodes.Status503ServiceUnavailable);
 
 app.MapHealthChecks(
     "/health/live",
@@ -232,3 +250,5 @@ app.MapHealthChecks(
     });
 
 app.Run();
+
+public partial class Program;

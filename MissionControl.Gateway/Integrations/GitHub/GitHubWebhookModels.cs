@@ -4,13 +4,13 @@ namespace MissionControl.Gateway.Integrations.GitHub;
 
 public sealed record GitHubPushWebhook(
     [property: JsonPropertyName("ref")]
-    string Ref,
+    string? Ref,
 
     [property: JsonPropertyName("before")]
-    string Before,
+    string? Before,
 
     [property: JsonPropertyName("after")]
-    string After,
+    string? After,
 
     [property: JsonPropertyName("created")]
     bool Created,
@@ -25,36 +25,36 @@ public sealed record GitHubPushWebhook(
     string? CompareUrl,
 
     [property: JsonPropertyName("repository")]
-    GitHubWebhookRepository Repository,
+    GitHubWebhookRepository? Repository,
 
     [property: JsonPropertyName("pusher")]
-    GitHubWebhookPusher Pusher,
+    GitHubWebhookPusher? Pusher,
 
     [property: JsonPropertyName("sender")]
-    GitHubWebhookSender Sender,
+    GitHubWebhookSender? Sender,
 
     [property: JsonPropertyName("commits")]
-    IReadOnlyList<GitHubWebhookCommit> Commits,
+    IReadOnlyList<GitHubWebhookCommit?>? Commits,
 
     [property: JsonPropertyName("head_commit")]
     GitHubWebhookCommit? HeadCommit);
 
 public sealed record GitHubWebhookRepository(
     [property: JsonPropertyName("id")]
-    long Id,
+    long? Id,
 
     [property: JsonPropertyName("full_name")]
-    string FullName,
+    string? FullName,
 
     [property: JsonPropertyName("html_url")]
-    string HtmlUrl,
+    string? HtmlUrl,
 
     [property: JsonPropertyName("owner")]
-    GitHubWebhookOwner Owner);
+    GitHubWebhookOwner? Owner);
 
 public sealed record GitHubWebhookOwner(
     [property: JsonPropertyName("login")]
-    string Login);
+    string? Login);
 
 public sealed record GitHubWebhookPusher(
     [property: JsonPropertyName("name")]
@@ -62,20 +62,20 @@ public sealed record GitHubWebhookPusher(
 
 public sealed record GitHubWebhookSender(
     [property: JsonPropertyName("login")]
-    string Login);
+    string? Login);
 
 public sealed record GitHubWebhookCommit(
     [property: JsonPropertyName("id")]
-    string Id,
+    string? Id,
 
     [property: JsonPropertyName("message")]
-    string Message,
+    string? Message,
 
     [property: JsonPropertyName("timestamp")]
-    DateTimeOffset Timestamp,
+    DateTimeOffset? Timestamp,
 
     [property: JsonPropertyName("url")]
-    string Url,
+    string? Url,
 
     [property: JsonPropertyName("author")]
     GitHubWebhookCommitAuthor? Author);

@@ -73,7 +73,7 @@ public static class GitHubWebhookEndpoint
                 requestBody,
                 signature))
         {
-            logger.LogWarning(
+            logger.LogDebug(
                 "Rejected GitHub webhook with an invalid signature.");
 
             return Results.Unauthorized();
@@ -140,69 +140,73 @@ public static class GitHubWebhookEndpoint
                 new { error = "Invalid GitHub push payload." });
         }
 
-        if (push is null ||
-            push.Repository is null ||
-            push.Repository.Owner is null)
+        if (!IsValidPushPayload(push))
         {
             return Results.BadRequest(
                 new { error = "Incomplete GitHub push payload." });
         }
 
+        var validPush = push!;
+        var repository = validPush.Repository!;
+        string ownerLogin = repository.Owner!.Login!;
+        string pushRef = validPush.Ref!;
+        var pushCommits = validPush.Commits!;
+        string senderLogin = validPush.Sender!.Login!;
+
         if (!string.Equals(
-                push.Repository.Owner.Login,
+                ownerLogin,
                 options.AllowedOwner,
                 StringComparison.OrdinalIgnoreCase))
         {
             logger.LogWarning(
                 "Rejected GitHub delivery {DeliveryId} for repository {Repository}.",
                 deliveryId,
-                push.Repository.FullName);
+                repository.FullName);
 
             return Results.StatusCode(
                 StatusCodes.Status403Forbidden);
         }
 
         // Ignore tags, deleted branches and pushes containing no commits.
-        if (push.Deleted ||
-            !push.Ref.StartsWith(
+        if (validPush.Deleted ||
+            !pushRef.StartsWith(
                 BranchRefPrefix,
                 StringComparison.Ordinal) ||
-            push.Commits is null ||
-            push.Commits.Count == 0)
+            pushCommits.Count == 0)
         {
             return Results.NoContent();
         }
 
         string branch =
-            push.Ref[BranchRefPrefix.Length..];
+            pushRef[BranchRefPrefix.Length..];
 
         GitHubCommitSummary[] commits =
-            push.Commits
+            pushCommits
                 .Select(
                     commit =>
                         new GitHubCommitSummary(
-                            commit.Id,
-                            FirstLine(commit.Message),
+                            commit!.Id!,
+                            FirstLine(commit.Message!),
                             commit.Author?.Name,
                             commit.Author?.Username,
-                            commit.Timestamp,
-                            commit.Url))
+                            commit.Timestamp!.Value,
+                            commit.Url!))
                 .ToArray();
 
         var eventPayload =
             new GitHubPushReceivedEvent(
-                push.Repository.FullName,
-                push.Repository.Id,
-                push.Repository.HtmlUrl,
+                repository.FullName!,
+                repository.Id!.Value,
+                repository.HtmlUrl!,
                 branch,
-                push.Ref,
-                push.Before,
-                push.After,
-                push.Created,
-                push.Forced,
-                push.Pusher?.Name,
-                push.Sender.Login,
-                push.CompareUrl,
+                pushRef,
+                validPush.Before!,
+                validPush.After!,
+                validPush.Created,
+                validPush.Forced,
+                validPush.Pusher?.Name,
+                senderLogin,
+                validPush.CompareUrl,
                 commits.Length,
                 commits);
 
@@ -210,7 +214,7 @@ public static class GitHubWebhookEndpoint
             DateTimeOffset.UtcNow;
 
         DateTimeOffset occurredAt =
-            push.HeadCommit?.Timestamp ??
+            validPush.HeadCommit?.Timestamp ??
             commits[^1].Timestamp;
 
         var envelope =
@@ -252,7 +256,7 @@ public static class GitHubWebhookEndpoint
         logger.LogInformation(
             "Published GitHub push {DeliveryId} for {Repository}/{Branch} containing {CommitCount} commits.",
             deliveryId,
-            push.Repository.FullName,
+            repository.FullName,
             branch,
             commits.Length);
 
@@ -327,6 +331,42 @@ public static class GitHubWebhookEndpoint
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }
+    }
+
+    private static bool IsValidPushPayload(
+        GitHubPushWebhook? push)
+    {
+        if (push is null ||
+            string.IsNullOrWhiteSpace(push.Ref) ||
+            string.IsNullOrWhiteSpace(push.Before) ||
+            string.IsNullOrWhiteSpace(push.After) ||
+            push.Repository is null ||
+            push.Repository.Id is null or <= 0 ||
+            string.IsNullOrWhiteSpace(push.Repository.FullName) ||
+            string.IsNullOrWhiteSpace(push.Repository.HtmlUrl) ||
+            push.Repository.Owner is null ||
+            string.IsNullOrWhiteSpace(push.Repository.Owner.Login) ||
+            push.Sender is null ||
+            string.IsNullOrWhiteSpace(push.Sender.Login) ||
+            push.Commits is null)
+        {
+            return false;
+        }
+
+        return push.Commits.All(IsValidCommit) &&
+            (push.HeadCommit is null ||
+                IsValidCommit(push.HeadCommit));
+    }
+
+    private static bool IsValidCommit(
+        GitHubWebhookCommit? commit)
+    {
+        return commit is not null &&
+            !string.IsNullOrWhiteSpace(commit.Id) &&
+            !string.IsNullOrWhiteSpace(commit.Message) &&
+            !string.IsNullOrWhiteSpace(commit.Url) &&
+            commit.Timestamp is not null &&
+            commit.Timestamp.Value != default;
     }
 
     private static string FirstLine(string message)

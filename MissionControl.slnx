@@ -3,4 +3,5 @@
   <Project Path="MissionControl.Gateway/MissionControl.Gateway.csproj" />
   <Project Path="MissionControl.Archive/MissionControl.Archive.csproj" />
   <Project Path="MissionControl.Observability/MissionControl.Observability.csproj" Id="ef5f5617-b718-4e7a-a8ab-a2bca7c4f4f0" />
+  <Project Path="MissionControl.Tests/MissionControl.Tests.csproj" />
 </Solution>
