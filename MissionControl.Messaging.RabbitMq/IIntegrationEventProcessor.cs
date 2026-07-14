@@ -1,6 +1,6 @@
-using MissionControl.Contracts;
+﻿using MissionControl.Contracts;
 
-namespace MissionControl.Archive.Processing;
+namespace MissionControl.Messaging.RabbitMq;
 
 public interface IIntegrationEventProcessor
 {

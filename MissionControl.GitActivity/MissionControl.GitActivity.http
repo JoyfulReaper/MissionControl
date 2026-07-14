@@ -1,0 +1,6 @@
+@MissionControl.GitActivity_HostAddress = http://localhost:5242
+
+GET {{MissionControl.GitActivity_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

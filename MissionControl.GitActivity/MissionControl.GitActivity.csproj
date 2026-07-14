@@ -4,20 +4,20 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>dotnet-MissionControl.Processor-bc703520-7552-4126-8ca5-16acff7a49a8</UserSecretsId>
+    <UserSecretsId>5b89cb18-aad8-4a41-b81d-10d4882e8007</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="JoyfulReaperLib.Sqlite" Version="0.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.10" />
+    <PackageReference Include="Microsoft.OpenApi" Version="2.10.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
     <ProjectReference Include="..\MissionControl.Messaging.RabbitMq\MissionControl.Messaging.RabbitMq.csproj" />
+    <ProjectReference Include="..\MissionControl.Observability\MissionControl.Observability.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Processing\RabbitMq\" />
-  </ItemGroup>
 </Project>
