@@ -21,6 +21,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.MapGet("/", () => "Mission Control Gateway");
 app.MapGitHubWebhook();
 app.MapEventPublishingEndpoints();
 app.MapMissionControlHealthChecks();

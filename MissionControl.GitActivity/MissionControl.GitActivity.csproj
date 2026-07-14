@@ -19,8 +19,4 @@
     <ProjectReference Include="..\MissionControl.Observability\MissionControl.Observability.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Messaging\" />
-  </ItemGroup>
-
 </Project>

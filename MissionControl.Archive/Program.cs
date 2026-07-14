@@ -8,6 +8,7 @@ builder.Services.AddMissionControlArchive(builder.Configuration);
 
 var app = builder.Build();
 
+app.MapGet("/", () => "Mission Control Archive");
 app.MapArchiveEndpoints();
 app.MapMissionControlHealthChecks();
 
