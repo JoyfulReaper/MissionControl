@@ -1,122 +1,16 @@
-using JoyfulReaperLib.Sqlite;
-using MissionControl.GitActivity;
-using MissionControl.GitActivity.Processing;
-using MissionControl.GitActivity.Storage;
-using MissionControl.GitActivity.Storage.Sqlite;
-using MissionControl.Messaging.RabbitMq;
+using MissionControl.GitActivity.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-
-var configuredGitActivityOptions = builder.Configuration
-    .GetRequiredSection(GitActivityOptions.SectionName)
-    .Get<GitActivityOptions>()
-    ?? throw new InvalidOperationException(
-        "The GitActivity configuration section is invalid.");
-
-var gitActivityConnectionString =
-    SqliteDatabaseInitializer.Initialize(
-        configuredGitActivityOptions.DatabaseFileName,
-        GitActivitySchema.Sql,
-        configuredGitActivityOptions.BasePath);
-
-builder.Services.AddSingleton(
-    new GitActivityConnection(
-        gitActivityConnectionString));
-
-builder.Services.AddSingleton<
-    IGitActivityRepository,
-    SqliteGitActivityRepository>();
-
-builder.Services.AddSingleton<
-    IIntegrationEventProcessor,
-    GitActivityEventProcessor>();
-
-builder.Services
-    .AddOptions<RabbitMqConsumerOptions>()
-    .BindConfiguration(RabbitMqConsumerOptions.SectionName)
-    .Validate(
-        options =>
-            !string.IsNullOrWhiteSpace(options.ExchangeName),
-        "RabbitMqConsumer:ExchangeName is required.")
-    .Validate(
-        options =>
-            !string.IsNullOrWhiteSpace(options.QueueName),
-        "RabbitMqConsumer:QueueName is required.")
-    .Validate(
-        options =>
-            !string.IsNullOrWhiteSpace(options.RoutingKey),
-        "RabbitMqConsumer:RoutingKey is required.")
-    .Validate(
-        options => options.PrefetchCount > 0,
-        "RabbitMqConsumer:PrefetchCount must be greater than zero.")
-    .ValidateOnStart();
-
-builder.Services
-    .AddOptions<GitActivityOptions>()
-    .BindConfiguration(GitActivityOptions.SectionName)
-    .Validate(
-        options =>
-            !string.IsNullOrWhiteSpace(options.DatabaseFileName),
-        "GitActivity:DatabaseFileName is required.")
-    .Validate(
-        options => options.DefaultResultLimit > 0,
-        "GitActivity:DefaultResultLimit must be greater than zero.")
-    .Validate(
-        options => options.MaxResultLimit > 0,
-        "GitActivity:MaxResultLimit must be greater than zero.")
-    .Validate(
-        options =>
-            options.DefaultResultLimit <= options.MaxResultLimit,
-        "GitActivity:DefaultResultLimit must not exceed MaxResultLimit.")
-    .Validate(
-        options =>
-            !string.IsNullOrWhiteSpace(options.ApiKey) &&
-            options.ApiKey.Length >= 32,
-        "GitActivity:ApiKey must contain at least 32 characters.")
-    .Validate(
-        options => options.AllowedRepositories.Length > 0,
-        "GitActivity:AllowedRepositories must contain at least one repository.")
-    .Validate(
-        options => options.AllowedBranches.Length > 0,
-        "GitActivity:AllowedBranches must contain at least one branch.")
-    .ValidateOnStart();
-
-builder.Services
-    .AddOptions<RabbitMqOptions>()
-    .BindConfiguration(RabbitMqOptions.SectionName)
-    .Validate(
-        options => !string.IsNullOrWhiteSpace(options.HostName),
-        "RabbitMq:HostName is required.")
-    .Validate(
-        options => options.Port is > 0 and <= 65535,
-        "RabbitMq:Port must be between 1 and 65535.")
-    .Validate(
-        options => !string.IsNullOrWhiteSpace(options.UserName),
-        "RabbitMq:UserName is required.")
-    .Validate(
-        options => !string.IsNullOrWhiteSpace(options.Password),
-        "RabbitMq:Password is required.")
-    .Validate(
-        options => !string.IsNullOrWhiteSpace(options.VirtualHost),
-        "RabbitMq:VirtualHost is required.")
-    .Validate(
-        options => !string.IsNullOrWhiteSpace(
-            options.ClientProvidedName),
-        "RabbitMq:ClientProvidedName is required.")
-    .ValidateOnStart();
+builder.Services.AddGitActivity(builder.Configuration);
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-
 
 app.MapGet("/", () => "Mission Control Git Activity");
 
