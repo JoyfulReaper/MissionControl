@@ -16,7 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
-    <ProjectReference Include="..\MissionControl.Observability\MissionControl.Observability.csproj" />
+    <ProjectReference Include="..\MissionControl.Messging.RabbitMq\MissionControl.Messging.RabbitMq.csproj" />
   </ItemGroup>
 
 </Project>
