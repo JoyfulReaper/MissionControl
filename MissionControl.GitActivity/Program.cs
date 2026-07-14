@@ -1,4 +1,5 @@
 using MissionControl.GitActivity;
+using MissionControl.GitActivity.Messaging.RabbitMq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,6 +35,30 @@ builder.Services
     .Validate(
         options => options.AllowedBranches.Length > 0,
         "GitActivity:AllowedBranches must contain at least one branch.")
+    .ValidateOnStart();
+
+builder.Services
+    .AddOptions<RabbitMqOptions>()
+    .BindConfiguration(RabbitMqOptions.SectionName)
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.HostName),
+        "RabbitMq:HostName is required.")
+    .Validate(
+        options => options.Port is > 0 and <= 65535,
+        "RabbitMq:Port must be between 1 and 65535.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.UserName),
+        "RabbitMq:UserName is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.Password),
+        "RabbitMq:Password is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.VirtualHost),
+        "RabbitMq:VirtualHost is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(
+            options.ClientProvidedName),
+        "RabbitMq:ClientProvidedName is required.")
     .ValidateOnStart();
 
 var app = builder.Build();

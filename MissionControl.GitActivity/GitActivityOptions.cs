@@ -1,4 +1,11 @@
-﻿namespace MissionControl.GitActivity;
+﻿/*
+ * Mission Control
+ *
+ * Copyright (c) 2026 Kyle Givler
+ * Licensed under the MIT License
+ */
+
+namespace MissionControl.GitActivity;
 
 public sealed class GitActivityOptions
 {
