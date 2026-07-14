@@ -33,6 +33,11 @@ public static class GitActivityServiceCollectionExtensions
                 configuredGitActivityOptions.BasePath);
 
         services
+            .AddWindowsService(options =>
+                {
+                    options.ServiceName =
+                        "Mission Control Git Activity";
+                })
             .AddSingleton(
                 new GitActivityConnection(
                     gitActivityConnectionString))
