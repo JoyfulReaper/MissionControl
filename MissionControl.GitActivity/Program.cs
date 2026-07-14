@@ -1,11 +1,29 @@
+using JoyfulReaperLib.Sqlite;
 using MissionControl.GitActivity;
 using MissionControl.GitActivity.Messaging.RabbitMq;
+using MissionControl.GitActivity.Storage.Sqlite;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+var configuredGitActivityOptions = builder.Configuration
+    .GetRequiredSection(GitActivityOptions.SectionName)
+    .Get<GitActivityOptions>()
+    ?? throw new InvalidOperationException(
+        "The GitActivity configuration section is invalid.");
+
+var gitActivityConnectionString =
+    SqliteDatabaseInitializer.Initialize(
+        configuredGitActivityOptions.DatabaseFileName,
+        GitActivitySchema.Sql,
+        configuredGitActivityOptions.BasePath);
+
+builder.Services.AddSingleton(
+    new GitActivityConnection(
+        gitActivityConnectionString));
 
 builder.Services
     .AddOptions<GitActivityOptions>()
