@@ -36,6 +36,26 @@ builder.Services
         "RabbitMQ virtual host is required.")
     .ValidateOnStart();
 
+builder.Services
+    .AddOptions<RabbitMqConsumerOptions>()
+    .BindConfiguration(RabbitMqConsumerOptions.SectionName)
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(options.ExchangeName),
+        "RabbitMqConsumer:ExchangeName is required.")
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(options.QueueName),
+        "RabbitMqConsumer:QueueName is required.")
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(options.RoutingKey),
+        "RabbitMqConsumer:RoutingKey is required.")
+    .Validate(
+        options => options.PrefetchCount > 0,
+        "RabbitMqConsumer:PrefetchCount must be greater than zero.")
+    .ValidateOnStart();
+
 builder.Services.AddWindowsService(options =>
 {
     options.ServiceName = "Mission Control Archive";

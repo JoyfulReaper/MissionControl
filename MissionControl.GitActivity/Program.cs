@@ -1,6 +1,5 @@
 using JoyfulReaperLib.Sqlite;
 using MissionControl.GitActivity;
-using MissionControl.GitActivity.Messaging.RabbitMq;
 using MissionControl.GitActivity.Processing;
 using MissionControl.GitActivity.Storage;
 using MissionControl.GitActivity.Storage.Sqlite;
@@ -35,6 +34,26 @@ builder.Services.AddSingleton<
 builder.Services.AddSingleton<
     IIntegrationEventProcessor,
     GitActivityEventProcessor>();
+
+builder.Services
+    .AddOptions<RabbitMqConsumerOptions>()
+    .BindConfiguration(RabbitMqConsumerOptions.SectionName)
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(options.ExchangeName),
+        "RabbitMqConsumer:ExchangeName is required.")
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(options.QueueName),
+        "RabbitMqConsumer:QueueName is required.")
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(options.RoutingKey),
+        "RabbitMqConsumer:RoutingKey is required.")
+    .Validate(
+        options => options.PrefetchCount > 0,
+        "RabbitMqConsumer:PrefetchCount must be greater than zero.")
+    .ValidateOnStart();
 
 builder.Services
     .AddOptions<GitActivityOptions>()
