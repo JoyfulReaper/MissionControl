@@ -13,7 +13,8 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable,
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web);
 
-    private readonly RabbitMqOptions _options;
+    private readonly RabbitMqOptions _connectionOptions;
+    private readonly RabbitMqConsumerOptions _consumerOptions;
     private readonly ILogger<RabbitMqEventConsumer> _logger;
     private IConnection? _connection;
     private IChannel? _channel;
@@ -25,11 +26,13 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable,
         TimeSpan.FromSeconds(5);
 
     public RabbitMqEventConsumer(
-            IOptions<RabbitMqOptions> options,
+            IOptions<RabbitMqOptions> connectionOptions,
+            IOptions<RabbitMqConsumerOptions> consumerOptions,
             IIntegrationEventProcessor processor,
             ILogger<RabbitMqEventConsumer> logger)
     {
-        _options = options.Value;
+        _connectionOptions = connectionOptions.Value;
+        _consumerOptions = consumerOptions.Value;
         _processor = processor;
         _logger = logger;
     }
@@ -84,14 +87,14 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable,
             HandleMessageAsync(delivery, cancellationToken);
 
         _consumerTag = await _channel!.BasicConsumeAsync(
-            queue: RabbitMqTopology.ArchiveQueue,
+            queue: _consumerOptions.QueueName,
             autoAck: false,
             consumer: consumer,
             cancellationToken: cancellationToken);
 
         _logger.LogInformation(
             "Consuming events from queue {Queue}",
-            RabbitMqTopology.ArchiveQueue);
+            _consumerOptions.QueueName);
     }
 
     private async Task HandleMessageAsync(
@@ -188,12 +191,13 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable,
 
         var factory = new ConnectionFactory
         {
-            HostName = _options.HostName,
-            Port = _options.Port,
-            UserName = _options.UserName,
-            Password = _options.Password,
-            VirtualHost = _options.VirtualHost,
-            ClientProvidedName = _options.ClientProvidedName,
+            HostName = _connectionOptions.HostName,
+            Port = _connectionOptions.Port,
+            UserName = _connectionOptions.UserName,
+            Password = _connectionOptions.Password,
+            VirtualHost = _connectionOptions.VirtualHost,
+            ClientProvidedName =
+            _connectionOptions.ClientProvidedName,
 
             AutomaticRecoveryEnabled = true,
             TopologyRecoveryEnabled = true,
@@ -202,9 +206,9 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable,
 
         _logger.LogInformation(
             "Connecting to RabbitMQ at {HostName}:{Port}, vhost {VirtualHost}",
-            _options.HostName,
-            _options.Port,
-            _options.VirtualHost);
+            _connectionOptions.HostName,
+            _connectionOptions.Port,
+            _connectionOptions.VirtualHost);
 
         var connection = await factory.CreateConnectionAsync(cancellationToken);
 
@@ -214,14 +218,14 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable,
                 cancellationToken: cancellationToken);
 
             await channel.ExchangeDeclareAsync(
-                exchange: RabbitMqTopology.EventsExchange,
+                exchange: _consumerOptions.ExchangeName,
                 type: ExchangeType.Topic,
                 durable: true,
                 autoDelete: false,
                 cancellationToken: cancellationToken);
 
             await channel.QueueDeclareAsync(
-                queue: RabbitMqTopology.ArchiveQueue,
+                queue: _consumerOptions.QueueName,
                 durable: true,
                 exclusive: false,
                 autoDelete: false,
@@ -229,25 +233,24 @@ public sealed class RabbitMqEventConsumer : BackgroundService, IAsyncDisposable,
                 cancellationToken: cancellationToken);
 
             await channel.QueueBindAsync(
-                queue: RabbitMqTopology.ArchiveQueue,
-                exchange: RabbitMqTopology.EventsExchange,
-                routingKey: RabbitMqTopology.AllEventsRoutingKey,
+                queue: _consumerOptions.QueueName,
+                exchange: _consumerOptions.ExchangeName,
+                routingKey: _consumerOptions.RoutingKey,
                 arguments: null,
                 cancellationToken: cancellationToken);
 
             await channel.BasicQosAsync(
                 prefetchSize: 0,
-                prefetchCount: 10,
+                prefetchCount: _consumerOptions.PrefetchCount,
                 global: false,
-                cancellationToken: cancellationToken
-            );
+                cancellationToken: cancellationToken);
 
             _connection = connection;
             _channel = channel;
 
             _logger.LogInformation(
                 "Connected to RabbitMQ and declared exchange {Exchange}",
-                RabbitMqTopology.EventsExchange);
+                _consumerOptions.ExchangeName);
         }
         catch
         {
