@@ -86,27 +86,3 @@ public sealed record GitHubWebhookCommitAuthor(
 
     [property: JsonPropertyName("username")]
     string? Username);
-
-public sealed record GitHubPushReceivedEvent(
-    string Repository,
-    long RepositoryId,
-    string RepositoryUrl,
-    string Branch,
-    string Ref,
-    string Before,
-    string After,
-    bool Created,
-    bool Forced,
-    string? Pusher,
-    string Sender,
-    string? CompareUrl,
-    int CommitCount,
-    IReadOnlyList<GitHubCommitSummary> Commits);
-
-public sealed record GitHubCommitSummary(
-    string Sha,
-    string Message,
-    string? Author,
-    string? AuthorUsername,
-    DateTimeOffset Timestamp,
-    string Url);
