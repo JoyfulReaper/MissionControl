@@ -9,6 +9,9 @@ builder.Services.AddMissionControlAgent(
 builder.Services.AddAgentSnapshotStorage(
     builder.Configuration);
 
+builder.Services.AddAgentApi(
+    builder.Configuration);
+
 var app = builder.Build();
 
 app.MapGet(
