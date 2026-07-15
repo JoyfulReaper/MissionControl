@@ -86,12 +86,29 @@ internal sealed class AgentWorker(
     {
         try
         {
-            await missionControlClient.TryPublishAsync(
-                eventType: SnapshotEventType,
-                payload: snapshot,
-                occurredAt: snapshot.CapturedAt,
-                correlationId: null,
-                cancellationToken: cancellationToken);
+            bool published =
+                await missionControlClient.TryPublishAsync(
+                    eventType: SnapshotEventType,
+                    payload: snapshot,
+                    occurredAt: snapshot.CapturedAt,
+                    correlationId: null,
+                    cancellationToken: cancellationToken);
+
+            if (published)
+            {
+                logger.LogDebug(
+                    "Published node snapshot for {NodeName} with " +
+                    "{ContainerCount} containers and {ProtocolCount} protocol results.",
+                    snapshot.Node,
+                    snapshot.Containers.Count,
+                    snapshot.Protocols.Count);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "Mission Control rejected or failed to publish the node snapshot for {NodeName}.",
+                    snapshot.Node);
+            }
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
