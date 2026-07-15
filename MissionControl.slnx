@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="MissionControl.Agent/MissionControl.Agent.csproj" Id="be58040c-d4b0-4045-b81b-789092ec34e3" />
   <Project Path="MissionControl.Archive/MissionControl.Archive.csproj" />
   <Project Path="MissionControl.Contracts/MissionControl.Contracts.csproj" />
   <Project Path="MissionControl.Gateway/MissionControl.Gateway.csproj" />
