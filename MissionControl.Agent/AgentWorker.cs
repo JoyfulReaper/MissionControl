@@ -46,9 +46,6 @@ internal sealed class AgentWorker(
                     agentOptions,
                     stoppingToken);
             }
-
-            // Protocol probes will run here later,
-            // regardless of whether Docker metrics are enabled.
         }
         while (await timer.WaitForNextTickAsync(
                    stoppingToken));

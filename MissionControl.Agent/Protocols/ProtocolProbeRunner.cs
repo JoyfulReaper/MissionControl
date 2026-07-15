@@ -1,6 +1,5 @@
-﻿using System.Diagnostics;
-using System.Drawing;
-using MissionControl.Agent.Models;
+﻿using MissionControl.Agent.Models;
+using System.Diagnostics;
 
 
 namespace MissionControl.Agent.Protocols;
@@ -21,7 +20,7 @@ internal sealed class ProtocolProbeRunner
         if (duplicateProbes is not null)
         {
             throw new InvalidOperationException(
-                $"Multiple procol probes are registered for " +
+                $"Multiple protocol probes are registered for " +
                 $"protocol '{duplicateProbes.Key}'. ");
         }
 
