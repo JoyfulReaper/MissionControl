@@ -48,6 +48,7 @@ public static class AgentServiceCollectionExtensions
         services.AddSingleton<IDockerMetricsCollector, DockerMetricsCollector>();
 
         services.AddSingleton<IProtocolProbe, EchoProbe>();
+        services.AddSingleton<IProtocolProbe, QotdProbe>();
         services.AddSingleton<ProtocolProbeRunner>();
 
         services.AddHostedService<AgentWorker>();
