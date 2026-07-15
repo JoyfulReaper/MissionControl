@@ -39,8 +39,9 @@ public static class AgentServiceCollectionExtensions
                             !string.IsNullOrWhiteSpace(probe.Name) &&
                             !string.IsNullOrWhiteSpace(probe.Host) &&
                             !string.IsNullOrWhiteSpace(probe.Protocol) &&
-                            probe.Port is > 0 and <= 65535),
-                "Every Agent probe must have a name, host, protocol, and valid port.")
+                            probe.Port is > 0 and <= 65535 &&
+                            probe.TimeoutMilliseconds > 0),
+                "Every Agent probe must have a name, host, protocol, valid port, and positive timeout.")
             .ValidateOnStart();
 
         services.AddSingleton<IDockerMetricsCollector, DockerMetricsCollector>();

@@ -29,4 +29,5 @@ public sealed class ProbeOptions
     public required string Protocol { get; init; }
 
     public int Port { get; init; }
+    public int TimeoutMilliseconds { get; init; } = 2_000;
 }
