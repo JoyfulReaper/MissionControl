@@ -1,4 +1,5 @@
-﻿using MissionControl.Agent.Docker;
+﻿using JoyfulReaperLib.MissionControl;
+using MissionControl.Agent.Docker;
 using MissionControl.Agent.Protocols;
 
 namespace MissionControl.Agent.DependencyInjection;
@@ -44,6 +45,10 @@ public static class AgentServiceCollectionExtensions
                             probe.TimeoutMilliseconds > 0),
                 "Every Agent probe must have a name, host, protocol, valid port, and positive timeout.")
             .ValidateOnStart();
+
+        services.AddMissionControlClient(
+            configuration.GetSection(
+                MissionControlClientOptions.SectionName));
 
         services.AddSingleton<IDockerMetricsCollector, DockerMetricsCollector>();
 

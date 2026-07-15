@@ -1,3 +1,4 @@
+using JoyfulReaperLib.MissionControl;
 using Microsoft.Extensions.Options;
 using MissionControl.Agent.Docker;
 using MissionControl.Agent.Models;
@@ -8,9 +9,13 @@ namespace MissionControl.Agent;
 internal sealed class AgentWorker(
     ILogger<AgentWorker> logger,
     IDockerMetricsCollector dockerMetricsCollector,
+    IMissionControlClient missionControlClient,
     ProtocolProbeRunner protocolProbeRunner,
     IOptions<AgentOptions> options) : BackgroundService
 {
+    private const string SnapshotEventType =
+        "missioncontrol.agent.node.snapshot";
+
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
@@ -33,27 +38,75 @@ internal sealed class AgentWorker(
 
         do
         {
-            Task<IReadOnlyList<ContainerMetric>> containerTask =
-                agentOptions.DockerEnabled
-                    ? CollectDockerMetricsAsync(stoppingToken)
-                    : Task.FromResult<IReadOnlyList<ContainerMetric>>([]);
+            try
+            {
+                Task<IReadOnlyList<ContainerMetric>> containerTask =
+                    agentOptions.DockerEnabled
+                        ? CollectDockerMetricsAsync(stoppingToken)
+                        : Task.FromResult<IReadOnlyList<ContainerMetric>>([]);
 
-            Task<IReadOnlyList<ProtocolProbeResult>> protocolTask =
-                agentOptions.Probes.Length > 0
-                    ? RunProtocolProbesAsync(
-                        agentOptions,
-                        stoppingToken)
-                    : Task.FromResult<IReadOnlyList<ProtocolProbeResult>>([]);
+                Task<IReadOnlyList<ProtocolProbeResult>> protocolTask =
+                    agentOptions.Probes.Length > 0
+                        ? RunProtocolProbesAsync(
+                            agentOptions,
+                            stoppingToken)
+                        : Task.FromResult<IReadOnlyList<ProtocolProbeResult>>([]);
 
-            await Task.WhenAll(containerTask, protocolTask);
-            var snapshot = new NodeSnapshotEvent(
-                Node: agentOptions.NodeName,
-                CapturedAt: DateTimeOffset.UtcNow,
-                Protocols: await protocolTask,
-                Containers: await containerTask);
+                await Task.WhenAll(containerTask, protocolTask);
+
+                var snapshot = new NodeSnapshotEvent(
+                    Node: agentOptions.NodeName,
+                    CapturedAt: DateTimeOffset.UtcNow,
+                    Protocols: await protocolTask,
+                    Containers: await containerTask);
+
+                await PublishSnapshotAsync(
+                    snapshot,
+                    stoppingToken);
+            }
+            catch (OperationCanceledException)
+                when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(
+                    exception,
+                    "Node snapshot collection failed for {NodeName}.",
+                    agentOptions.NodeName);
+            }
         }
-        while (await timer.WaitForNextTickAsync(
-                   stoppingToken));
+        while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    private async Task PublishSnapshotAsync(
+        NodeSnapshotEvent snapshot,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await missionControlClient.TryPublishAsync(
+                eventType: SnapshotEventType,
+                payload: snapshot,
+                occurredAt: snapshot.CapturedAt,
+                correlationId: null,
+                cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // The client is intended to be best-effort, but this protects
+            // the agent from unexpected custom/client implementation errors.
+            logger.LogWarning(
+                ex,
+                "Failed to publish node snapshot for {NodeName}.",
+                snapshot.Node);
+        }
     }
 
     private async Task<IReadOnlyList<ProtocolProbeResult>> RunProtocolProbesAsync(
