@@ -1,0 +1,23 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+COPY . .
+
+RUN dotnet restore \
+    MissionControl.GitActivity/MissionControl.GitActivity.csproj
+
+RUN dotnet publish \
+    MissionControl.GitActivity/MissionControl.GitActivity.csproj \
+    --configuration Release \
+    --output /app/publish \
+    --no-restore \
+    /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENTRYPOINT ["dotnet", "MissionControl.GitActivity.dll"]

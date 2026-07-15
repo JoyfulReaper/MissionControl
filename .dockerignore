@@ -1,0 +1,15 @@
+.git
+.github
+.vs
+.idea
+
+**/bin
+**/obj
+
+
+**/*.db
+**/*.db-shm
+**/*.db-wal
+
+*.user
+*.suo
