@@ -50,6 +50,7 @@ public static class AgentServiceCollectionExtensions
         services.AddSingleton<IProtocolProbe, EchoProbe>();
         services.AddSingleton<IProtocolProbe, QotdProbe>();
         services.AddSingleton<IProtocolProbe, GopherProbe>();
+        services.AddSingleton<IProtocolProbe, FingerProbe>();
         services.AddSingleton<ProtocolProbeRunner>();
 
         services.AddHostedService<AgentWorker>();

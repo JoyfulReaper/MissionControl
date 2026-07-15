@@ -31,8 +31,7 @@ internal sealed class QotdProbe : IProtocolProbe
             {
                 int bytesRead = await stream.ReadAsync(
                     buffer,
-                    cancellationToken
-                );
+                    cancellationToken);
 
                 if (bytesRead == 0)
                 {
@@ -40,18 +39,18 @@ internal sealed class QotdProbe : IProtocolProbe
                 }
 
                 totalBytesRead += bytesRead;
+
                 if (totalBytesRead > MaximumResponseBytes)
                 {
                     throw new InvalidDataException(
                         $"QOTD response exceeded the " +
                         $"{MaximumResponseBytes}-byte limit.");
                 }
-
-                if (totalBytesRead == 0)
-                {
-                    throw new InvalidDataException(
-                        "The QOTD service returned an empty response.");
-                }
+            }
+            if (totalBytesRead == 0)
+            {
+                throw new InvalidDataException(
+                    "The QOTD service returned an empty response.");
             }
         }
         finally
