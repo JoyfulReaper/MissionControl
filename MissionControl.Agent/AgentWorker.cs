@@ -33,91 +33,44 @@ internal sealed class AgentWorker(
 
         do
         {
-            if (agentOptions.DockerEnabled)
-            {
-                await CollectDockerMetricsAsync(
-                    agentOptions,
-                    stoppingToken);
-            }
+            Task<IReadOnlyList<ContainerMetric>> containerTask =
+                agentOptions.DockerEnabled
+                    ? CollectDockerMetricsAsync(stoppingToken)
+                    : Task.FromResult<IReadOnlyList<ContainerMetric>>([]);
 
-            if (agentOptions.Probes.Length > 0)
-            {
-                await RunProtocolProbesAsync(
-                    agentOptions,
-                    stoppingToken);
-            }
+            Task<IReadOnlyList<ProtocolProbeResult>> protocolTask =
+                agentOptions.Probes.Length > 0
+                    ? RunProtocolProbesAsync(
+                        agentOptions,
+                        stoppingToken)
+                    : Task.FromResult<IReadOnlyList<ProtocolProbeResult>>([]);
+
+            await Task.WhenAll(containerTask, protocolTask);
+            var snapshot = new NodeSnapshotEvent(
+                Node: agentOptions.NodeName,
+                CapturedAt: DateTimeOffset.UtcNow,
+                Protocols: await protocolTask,
+                Containers: await containerTask);
         }
         while (await timer.WaitForNextTickAsync(
                    stoppingToken));
     }
 
-    private async Task RunProtocolProbesAsync(
-    AgentOptions agentOptions,
-    CancellationToken cancellationToken)
-    {
-        IReadOnlyList<ProtocolProbeResult> results =
-            await protocolProbeRunner.RunAsync(
-                agentOptions.Probes,
-                cancellationToken);
-
-        foreach (var result in results)
-        {
-            if (result.Succeeded)
-            {
-                logger.LogInformation(
-                    "{Service} probe to {Endpoint} succeeded in {DurationMilliseconds} ms.",
-                    result.Service,
-                    result.Endpoint,
-                    result.DurationMilliseconds);
-            }
-            else
-            {
-                logger.LogWarning(
-                    "{Service} probe to {Endpoint} failed after {DurationMilliseconds} ms: {Error}",
-                    result.Service,
-                    result.Endpoint,
-                    result.DurationMilliseconds,
-                    result.Error);
-            }
-        }
-    }
-
-    private async Task CollectDockerMetricsAsync(
+    private async Task<IReadOnlyList<ProtocolProbeResult>> RunProtocolProbesAsync(
         AgentOptions agentOptions,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            IReadOnlyList<ContainerMetric> containers =
-                await dockerMetricsCollector.GetMetricsAsync(
-                    cancellationToken);
+        return
+            await protocolProbeRunner.RunAsync(
+                agentOptions.Probes,
+                cancellationToken);
+    }
 
-            logger.LogInformation(
-                "Collected metrics for {ContainerCount} containers on {NodeName}.",
-                containers.Count,
-                agentOptions.NodeName);
-
-            foreach (var container in containers)
-            {
-                logger.LogInformation(
-                    "{Container}: {MemoryUsageBytes} / {MemoryLimitBytes} bytes ({MemoryPercent:F1}%).",
-                    container.Name,
-                    container.MemoryUsageBytes,
-                    container.MemoryLimitBytes,
-                    container.MemoryPercent);
-            }
-        }
-        catch (OperationCanceledException)
-            when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(
-                exception,
-                "Docker metric collection failed on node {NodeName}.",
-                agentOptions.NodeName);
-        }
+    private async Task<IReadOnlyList<ContainerMetric>>
+        CollectDockerMetricsAsync(
+            CancellationToken cancellationToken)
+    {
+        return await dockerMetricsCollector.GetMetricsAsync(
+            cancellationToken);
     }
 }

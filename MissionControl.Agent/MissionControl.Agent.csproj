@@ -10,4 +10,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
+  </ItemGroup>
 </Project>
