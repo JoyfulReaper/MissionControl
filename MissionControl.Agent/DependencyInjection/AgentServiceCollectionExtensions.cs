@@ -12,10 +12,6 @@ public static class AgentServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        IConfigurationSection section =
-            configuration.GetRequiredSection(
-                AgentStorageOptions.SectionName);
-
         services
             .AddOptions<AgentOptions>()
             .Bind(configuration.GetRequiredSection(
@@ -51,6 +47,7 @@ public static class AgentServiceCollectionExtensions
                             probe.TimeoutMilliseconds > 0),
                 "Every Agent probe must have a name, host, protocol, valid port, and positive timeout.")
             .ValidateOnStart();
+
 
         services.AddMissionControlClient(
             configuration.GetSection(
@@ -103,6 +100,13 @@ public static class AgentServiceCollectionExtensions
 
         services.AddSingleton(
             new AgentDatabase(connectionString));
+
+        services.AddSingleton(
+            new AgentDatabase(connectionString));
+
+        services.AddSingleton<
+            INodeSnapshotStore,
+            SqliteNodeSnapshotStore>();
 
         return services;
     }

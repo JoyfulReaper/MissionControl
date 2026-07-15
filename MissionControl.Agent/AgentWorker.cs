@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using MissionControl.Agent.Docker;
 using MissionControl.Agent.Models;
 using MissionControl.Agent.Protocols;
+using MissionControl.Agent.Storage;
 
 namespace MissionControl.Agent;
 
@@ -11,6 +12,7 @@ internal sealed class AgentWorker(
     IDockerMetricsCollector dockerMetricsCollector,
     IMissionControlClient missionControlClient,
     ProtocolProbeRunner protocolProbeRunner,
+    INodeSnapshotStore snapshotStore,
     IOptions<AgentOptions> options) : BackgroundService
 {
     private const string SnapshotEventType =
@@ -60,9 +62,21 @@ internal sealed class AgentWorker(
                     Protocols: await protocolTask,
                     Containers: await containerTask);
 
-                await PublishSnapshotAsync(
+                await snapshotStore.SaveAsync(
                     snapshot,
                     stoppingToken);
+
+                bool published =
+                    await PublishSnapshotAsync(
+                        snapshot,
+                        stoppingToken);
+
+                await snapshotStore.RecordPublishResultAsync(
+                    node: snapshot.Node,
+                    capturedAt: snapshot.CapturedAt,
+                    succeeded: published,
+                    attemptedAt: DateTimeOffset.UtcNow,
+                    cancellationToken: stoppingToken);
             }
             catch (OperationCanceledException)
                 when (stoppingToken.IsCancellationRequested)
@@ -80,7 +94,7 @@ internal sealed class AgentWorker(
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    private async Task PublishSnapshotAsync(
+    private async Task<bool> PublishSnapshotAsync(
         NodeSnapshotEvent snapshot,
         CancellationToken cancellationToken)
     {
@@ -94,35 +108,28 @@ internal sealed class AgentWorker(
                     correlationId: null,
                     cancellationToken: cancellationToken);
 
-            if (published)
-            {
-                logger.LogDebug(
-                    "Published node snapshot for {NodeName} with " +
-                    "{ContainerCount} containers and {ProtocolCount} protocol results.",
-                    snapshot.Node,
-                    snapshot.Containers.Count,
-                    snapshot.Protocols.Count);
-            }
-            else
+            if (!published)
             {
                 logger.LogWarning(
                     "Mission Control rejected or failed to publish the node snapshot for {NodeName}.",
                     snapshot.Node);
             }
+
+            return published;
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            // The client is intended to be best-effort, but this protects
-            // the agent from unexpected custom/client implementation errors.
             logger.LogWarning(
-                ex,
+                exception,
                 "Failed to publish node snapshot for {NodeName}.",
                 snapshot.Node);
+
+            return false;
         }
     }
 
