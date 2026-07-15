@@ -1,6 +1,8 @@
 ﻿using JoyfulReaperLib.MissionControl;
+using JoyfulReaperLib.Sqlite;
 using MissionControl.Agent.Docker;
 using MissionControl.Agent.Protocols;
+using MissionControl.Agent.Storage;
 
 namespace MissionControl.Agent.DependencyInjection;
 
@@ -10,6 +12,10 @@ public static class AgentServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        IConfigurationSection section =
+            configuration.GetRequiredSection(
+                AgentStorageOptions.SectionName);
+
         services
             .AddOptions<AgentOptions>()
             .Bind(configuration.GetRequiredSection(
@@ -59,6 +65,44 @@ public static class AgentServiceCollectionExtensions
         services.AddSingleton<ProtocolProbeRunner>();
 
         services.AddHostedService<AgentWorker>();
+
+        return services;
+    }
+
+    internal static IServiceCollection AddAgentSnapshotStorage(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        IConfigurationSection section =
+            configuration.GetRequiredSection(
+                AgentStorageOptions.SectionName);
+
+        services
+            .AddOptions<AgentStorageOptions>()
+            .Bind(section)
+            .Validate(
+                options =>
+                    !string.IsNullOrWhiteSpace(
+                        options.DatabaseFileName),
+                "AgentStorage:DatabaseFileName is required.")
+            .ValidateOnStart();
+
+        AgentStorageOptions storageOptions =
+            section.Get<AgentStorageOptions>() ??
+            throw new InvalidOperationException(
+                "AgentStorage configuration is invalid.");
+
+        string connectionString =
+            SqliteDatabaseInitializer.Initialize(
+                dbFileName:
+                    storageOptions.DatabaseFileName,
+                schemaSql:
+                    AgentStorageSchema.Sql,
+                basePath:
+                    storageOptions.BasePath);
+
+        services.AddSingleton(
+            new AgentDatabase(connectionString));
 
         return services;
     }

@@ -4,6 +4,7 @@
     "MissionControl.Agent": {
       "commandName": "Project",
       "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:5194",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"
       }
