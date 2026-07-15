@@ -1,4 +1,6 @@
-﻿namespace MissionControl.Agent.DependencyInjection;
+﻿using MissionControl.Agent.Docker;
+
+namespace MissionControl.Agent.DependencyInjection;
 
 public static class AgentServiceCollectionExtensions
 {
@@ -38,6 +40,8 @@ public static class AgentServiceCollectionExtensions
                             probe.Port is > 0 and <= 65535),
                 "Every Agent probe must have a name, host, protocol, and valid port.")
             .ValidateOnStart();
+
+        services.AddSingleton<IDockerMetricsCollector, DockerMetricsCollector>();
 
         services.AddHostedService<AgentWorker>();
 

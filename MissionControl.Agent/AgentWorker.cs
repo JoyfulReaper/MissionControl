@@ -1,9 +1,12 @@
 using Microsoft.Extensions.Options;
+using MissionControl.Agent.Docker;
+using MissionControl.Agent.Models;
 
 namespace MissionControl.Agent;
 
 public sealed class AgentWorker(
     ILogger<AgentWorker> logger,
+    IDockerMetricsCollector dockerMetricsCollector,
     IOptions<AgentOptions> options) : BackgroundService
 {
     protected override async Task ExecuteAsync(
@@ -21,9 +24,24 @@ public sealed class AgentWorker(
 
         do
         {
+            IReadOnlyList<ContainerMetric> containers =
+                await dockerMetricsCollector.GetMetricsAsync(
+                    stoppingToken);
+
             logger.LogInformation(
-                "Collecting agent snapshot for {NodeName}.",
+                "Collected metrics for {ContainerCount} containers on {NodeName}.",
+                containers.Count,
                 agentOptions.NodeName);
+
+            foreach (var container in containers)
+            {
+                logger.LogInformation(
+                    "{Container}: {MemoryUsageBytes} / {MemoryLimitBytes} bytes ({MemoryPercent:F1}%).",
+                    container.Name,
+                    container.MemoryUsageBytes,
+                    container.MemoryLimitBytes,
+                    container.MemoryPercent);
+            }
         }
         while (await timer.WaitForNextTickAsync(
                    stoppingToken));
