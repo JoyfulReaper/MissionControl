@@ -1,16 +1,31 @@
+using Microsoft.Extensions.Options;
+
 namespace MissionControl.Agent;
 
-public class AgentWorker(ILogger<AgentWorker> logger) : BackgroundService
+public sealed class AgentWorker(
+    ILogger<AgentWorker> logger,
+    IOptions<AgentOptions> options) : BackgroundService
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(
+        CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        var agentOptions = options.Value;
+
+        logger.LogInformation(
+            "Mission Control Agent started for node {NodeName}.",
+            agentOptions.NodeName);
+
+        using var timer = new PeriodicTimer(
+            TimeSpan.FromSeconds(
+                agentOptions.IntervalSeconds));
+
+        do
         {
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-            }
-            await Task.Delay(1000, stoppingToken);
+            logger.LogInformation(
+                "Collecting agent snapshot for {NodeName}.",
+                agentOptions.NodeName);
         }
+        while (await timer.WaitForNextTickAsync(
+                   stoppingToken));
     }
 }

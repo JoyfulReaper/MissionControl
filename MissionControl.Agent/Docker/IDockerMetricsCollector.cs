@@ -1,9 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using MissionControl.Agent.Models;
 
 namespace MissionControl.Agent.Docker;
 
-internal interface IDockerMetricsCollector
+public interface IDockerMetricsCollector
 {
+    Task<IReadOnlyList<ContainerMetric>> GetMetricsAsync(
+        CancellationToken cancellationToken = default);
 }
