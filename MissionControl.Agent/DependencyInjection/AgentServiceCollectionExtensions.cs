@@ -1,4 +1,5 @@
 ﻿using MissionControl.Agent.Docker;
+using MissionControl.Agent.Protocols;
 
 namespace MissionControl.Agent.DependencyInjection;
 
@@ -45,6 +46,9 @@ public static class AgentServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddSingleton<IDockerMetricsCollector, DockerMetricsCollector>();
+
+        services.AddSingleton<IProtocolProbe, EchoProbe>();
+        services.AddSingleton<ProtocolProbeRunner>();
 
         services.AddHostedService<AgentWorker>();
 

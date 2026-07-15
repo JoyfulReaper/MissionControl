@@ -1,12 +1,14 @@
 using Microsoft.Extensions.Options;
 using MissionControl.Agent.Docker;
 using MissionControl.Agent.Models;
+using MissionControl.Agent.Protocols;
 
 namespace MissionControl.Agent;
 
-public sealed class AgentWorker(
+internal sealed class AgentWorker(
     ILogger<AgentWorker> logger,
     IDockerMetricsCollector dockerMetricsCollector,
+    ProtocolProbeRunner protocolProbeRunner,
     IOptions<AgentOptions> options) : BackgroundService
 {
     protected override async Task ExecuteAsync(
@@ -38,11 +40,49 @@ public sealed class AgentWorker(
                     stoppingToken);
             }
 
+            if (agentOptions.Probes.Length > 0)
+            {
+                await RunProtocolProbesAsync(
+                    agentOptions,
+                    stoppingToken);
+            }
+
             // Protocol probes will run here later,
             // regardless of whether Docker metrics are enabled.
         }
         while (await timer.WaitForNextTickAsync(
                    stoppingToken));
+    }
+
+    private async Task RunProtocolProbesAsync(
+    AgentOptions agentOptions,
+    CancellationToken cancellationToken)
+    {
+        IReadOnlyList<ProtocolProbeResult> results =
+            await protocolProbeRunner.RunAsync(
+                agentOptions.Probes,
+                cancellationToken);
+
+        foreach (var result in results)
+        {
+            if (result.Succeeded)
+            {
+                logger.LogInformation(
+                    "{Service} probe to {Endpoint} succeeded in {DurationMilliseconds} ms.",
+                    result.Service,
+                    result.Endpoint,
+                    result.DurationMilliseconds);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "{Service} probe to {Endpoint} failed after {DurationMilliseconds} ms: {Error}",
+                    result.Service,
+                    result.Endpoint,
+                    result.DurationMilliseconds,
+                    result.Error);
+            }
+        }
     }
 
     private async Task CollectDockerMetricsAsync(
