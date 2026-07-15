@@ -23,13 +23,15 @@ public static class AgentServiceCollectionExtensions
                 "Agent:IntervalSeconds must be greater than zero.")
             .Validate(
                 options =>
+                    !options.DockerEnabled ||
                     !string.IsNullOrWhiteSpace(
                         options.DockerSocketPath),
-                "Agent:DockerSocketPath is required.")
+                "Agent: DockerSocketPath is required when Docker is enabled.")
             .Validate(
                 options =>
+                    !options.DockerEnabled ||
                     options.DockerTimeoutSeconds > 0,
-                "Agent:DockerTimeoutSeconds must be greater than zero.")
+                "Agent: DockerTimeoutSeconds must be greater than zero when Docker is enabled.")
             .Validate(
                 options =>
                     options.Probes.All(

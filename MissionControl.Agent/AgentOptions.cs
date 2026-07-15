@@ -9,6 +9,9 @@ public sealed class AgentOptions
 
     public int IntervalSeconds { get; init; } = 60;
 
+    public bool DockerEnabled { get; init; } =
+        !OperatingSystem.IsWindows();
+
     public string DockerSocketPath { get; init; } =
         "/var/run/docker.sock";
 

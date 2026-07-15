@@ -18,15 +18,42 @@ public sealed class AgentWorker(
             "Mission Control Agent started for node {NodeName}.",
             agentOptions.NodeName);
 
+        if (!agentOptions.DockerEnabled)
+        {
+            logger.LogWarning(
+                "Docker metric collection is disabled on {OperatingSystem}.",
+                Environment.OSVersion.Platform);
+        }
+
         using var timer = new PeriodicTimer(
             TimeSpan.FromSeconds(
                 agentOptions.IntervalSeconds));
 
         do
         {
+            if (agentOptions.DockerEnabled)
+            {
+                await CollectDockerMetricsAsync(
+                    agentOptions,
+                    stoppingToken);
+            }
+
+            // Protocol probes will run here later,
+            // regardless of whether Docker metrics are enabled.
+        }
+        while (await timer.WaitForNextTickAsync(
+                   stoppingToken));
+    }
+
+    private async Task CollectDockerMetricsAsync(
+        AgentOptions agentOptions,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
             IReadOnlyList<ContainerMetric> containers =
                 await dockerMetricsCollector.GetMetricsAsync(
-                    stoppingToken);
+                    cancellationToken);
 
             logger.LogInformation(
                 "Collected metrics for {ContainerCount} containers on {NodeName}.",
@@ -43,7 +70,17 @@ public sealed class AgentWorker(
                     container.MemoryPercent);
             }
         }
-        while (await timer.WaitForNextTickAsync(
-                   stoppingToken));
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Docker metric collection failed on node {NodeName}.",
+                agentOptions.NodeName);
+        }
     }
 }
