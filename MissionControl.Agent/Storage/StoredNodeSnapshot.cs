@@ -1,4 +1,4 @@
-﻿using MissionControl.Agent.Models;
+using MissionControl.Agent.Models;
 
 namespace MissionControl.Agent.Storage;
 

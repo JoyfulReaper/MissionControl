@@ -39,7 +39,8 @@ internal class SqliteNodeSnapshotStore(AgentDatabase database) : INodeSnapshotSt
                 Payload = excluded.Payload,
                 PublishSucceeded = NULL,
                 LastPublishAttemptAt = NULL,
-                UpdatedAt = excluded.UpdatedAt;
+                UpdatedAt = excluded.UpdatedAt
+            WHERE excluded.CapturedAt >= NodeSnapshots.CapturedAt;
             """;
 
         string capturedAt = snapshot.CapturedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);

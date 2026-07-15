@@ -125,7 +125,7 @@ public sealed class SqliteNodeSnapshotStoreTests
     }
 
     [Fact]
-    public async Task SavingReplacementSnapshotOverwritesCurrentSnapshotAndResetsPublicationMetadata()
+    public async Task SavingNewerSnapshotOverwritesCurrentSnapshotAndResetsPublicationMetadata()
     {
         await using var fixture =
             await AgentSnapshotStoreFixture.CreateAsync();
@@ -133,7 +133,7 @@ public sealed class SqliteNodeSnapshotStoreTests
         NodeSnapshotEvent originalSnapshot = CreateSnapshot();
         NodeSnapshotEvent replacementSnapshot =
             CreateSnapshot(
-                capturedAt: originalSnapshot.CapturedAt.AddMinutes(-5),
+                capturedAt: originalSnapshot.CapturedAt.AddMinutes(5),
                 protocolSuffix: "replacement",
                 containerSuffix: "replacement");
 
@@ -169,7 +169,7 @@ public sealed class SqliteNodeSnapshotStoreTests
     }
 
     [Fact]
-    public async Task StalePublishResultDoesNotUpdateReplacedSnapshot()
+    public async Task StalePublishResultDoesNotUpdateNewerSnapshot()
     {
         await using var fixture =
             await AgentSnapshotStoreFixture.CreateAsync();
@@ -177,7 +177,7 @@ public sealed class SqliteNodeSnapshotStoreTests
         NodeSnapshotEvent snapshotA = CreateSnapshot();
         NodeSnapshotEvent snapshotB =
             CreateSnapshot(
-                capturedAt: snapshotA.CapturedAt.AddMinutes(-10),
+                capturedAt: snapshotA.CapturedAt.AddMinutes(10),
                 protocolSuffix: "snapshot-b",
                 containerSuffix: "snapshot-b");
 
@@ -192,6 +192,112 @@ public sealed class SqliteNodeSnapshotStoreTests
             snapshotA.CapturedAt,
             succeeded: true,
             attemptedAt: snapshotA.CapturedAt.AddMinutes(1),
+            CancellationToken.None);
+
+        StoredNodeSnapshot stored =
+            await GetRequiredSnapshotAsync(
+                fixture.SnapshotStore,
+                snapshotB.Node);
+
+        Assert.Equal(snapshotB.CapturedAt, stored.Snapshot.CapturedAt);
+        AssertProtocolResultsEqual(
+            snapshotB.Protocols,
+            stored.Snapshot.Protocols);
+        AssertContainerMetricsEqual(
+            snapshotB.Containers,
+            stored.Snapshot.Containers);
+        Assert.Null(stored.PublishSucceeded);
+        Assert.Null(stored.LastPublishAttemptAt);
+    }
+
+    [Fact]
+    public async Task SavingOlderSnapshotDoesNotOverwriteCurrentSnapshot()
+    {
+        await using var fixture =
+            await AgentSnapshotStoreFixture.CreateAsync();
+
+        NodeSnapshotEvent olderSnapshot =
+            CreateSnapshot(
+                capturedAt: new DateTimeOffset(
+                    2026,
+                    7,
+                    15,
+                    12,
+                    34,
+                    56,
+                    TimeSpan.Zero),
+                protocolSuffix: "older",
+                containerSuffix: "older");
+        NodeSnapshotEvent newerSnapshot =
+            CreateSnapshot(
+                capturedAt: olderSnapshot.CapturedAt.AddMinutes(10),
+                protocolSuffix: "newer",
+                containerSuffix: "newer");
+        DateTimeOffset attemptedAt =
+            newerSnapshot.CapturedAt.AddMinutes(1);
+
+        await fixture.SnapshotStore.SaveAsync(
+            newerSnapshot,
+            CancellationToken.None);
+        await fixture.SnapshotStore.RecordPublishResultAsync(
+            newerSnapshot.Node,
+            newerSnapshot.CapturedAt,
+            succeeded: true,
+            attemptedAt,
+            CancellationToken.None);
+
+        StoredNodeSnapshot beforeStaleSave =
+            await GetRequiredSnapshotAsync(
+                fixture.SnapshotStore,
+                newerSnapshot.Node);
+
+        await fixture.SnapshotStore.SaveAsync(
+            olderSnapshot,
+            CancellationToken.None);
+
+        StoredNodeSnapshot afterStaleSave =
+            await GetRequiredSnapshotAsync(
+                fixture.SnapshotStore,
+                newerSnapshot.Node);
+
+        Assert.Equal(
+            newerSnapshot.CapturedAt,
+            afterStaleSave.Snapshot.CapturedAt);
+        AssertProtocolResultsEqual(
+            newerSnapshot.Protocols,
+            afterStaleSave.Snapshot.Protocols);
+        AssertContainerMetricsEqual(
+            newerSnapshot.Containers,
+            afterStaleSave.Snapshot.Containers);
+        Assert.True(afterStaleSave.PublishSucceeded);
+        Assert.Equal(attemptedAt, afterStaleSave.LastPublishAttemptAt);
+        Assert.Equal(beforeStaleSave.UpdatedAt, afterStaleSave.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task SavingSnapshotWithSameCapturedAtReplacesPayloadAndResetsPublicationMetadata()
+    {
+        await using var fixture =
+            await AgentSnapshotStoreFixture.CreateAsync();
+
+        NodeSnapshotEvent snapshotA = CreateSnapshot();
+        NodeSnapshotEvent snapshotB =
+            CreateSnapshot(
+                capturedAt: snapshotA.CapturedAt,
+                protocolSuffix: "same-time",
+                containerSuffix: "same-time");
+
+        await fixture.SnapshotStore.SaveAsync(
+            snapshotA,
+            CancellationToken.None);
+        await fixture.SnapshotStore.RecordPublishResultAsync(
+            snapshotA.Node,
+            snapshotA.CapturedAt,
+            succeeded: true,
+            attemptedAt: snapshotA.CapturedAt.AddMinutes(1),
+            CancellationToken.None);
+        await fixture.SnapshotStore.SaveAsync(
+            snapshotB,
             CancellationToken.None);
 
         StoredNodeSnapshot stored =
