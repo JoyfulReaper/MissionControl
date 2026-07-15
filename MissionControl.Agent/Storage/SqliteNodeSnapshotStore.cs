@@ -85,7 +85,7 @@ internal class SqliteNodeSnapshotStore(AgentDatabase database) : INodeSnapshotSt
         var parameters = new
         {
             Node = node,
-            capturedAt = capturedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
+            CapturedAt = capturedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
             PublishSucceeded = succeeded ? 1 : 0,
             LastPublishAttemptAt = attemptedAt
                 .ToUniversalTime()

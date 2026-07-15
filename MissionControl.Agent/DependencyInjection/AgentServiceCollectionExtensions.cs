@@ -101,9 +101,6 @@ public static class AgentServiceCollectionExtensions
         services.AddSingleton(
             new AgentDatabase(connectionString));
 
-        services.AddSingleton(
-            new AgentDatabase(connectionString));
-
         services.AddSingleton<
             INodeSnapshotStore,
             SqliteNodeSnapshotStore>();
