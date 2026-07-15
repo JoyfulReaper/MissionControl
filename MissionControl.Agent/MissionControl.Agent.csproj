@@ -15,8 +15,4 @@
   <ItemGroup>
     <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Publishing\" />
-  </ItemGroup>
 </Project>
