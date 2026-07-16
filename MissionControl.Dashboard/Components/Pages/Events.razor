@@ -40,6 +40,7 @@ else
                 <th>Source</th>
                 <th>Event type</th>
                 <th>Correlation</th>
+                <th></th>
             </tr>
         </thead>
 
@@ -51,6 +52,12 @@ else
                     <td>@item.Source</td>
                     <td>@item.EventType</td>
                     <td>@(item.CorrelationId ?? "—")</td>
+                    <td>
+                        <a class="btn btn-sm btn-outline-primary"
+                           href="@($"events/{item.EventId:D}")">
+                            Details
+                        </a>
+                    </td>
                 </tr>
             }
         </tbody>

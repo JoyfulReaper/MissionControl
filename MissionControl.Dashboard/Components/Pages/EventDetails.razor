@@ -1,0 +1,132 @@
+﻿@page "/events/{EventId:guid}"
+
+@inject IArchiveEventClient ArchiveClient
+
+<PageTitle>Event Details</PageTitle>
+
+<p>
+    <a href="/events">← Back to events</a>
+</p>
+
+@if (_isLoading)
+{
+    <p>Loading event details...</p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">
+        @_error
+    </div>
+}
+else if (_event is null)
+{
+    <div class="alert alert-warning">
+        The requested event was not found.
+    </div>
+}
+else
+{
+    <h1>Event Details</h1>
+
+    <dl class="row">
+        <dt class="col-sm-3">Event ID</dt>
+        <dd class="col-sm-9">
+            <code>@_event.EventId</code>
+        </dd>
+
+        <dt class="col-sm-3">Event type</dt>
+        <dd class="col-sm-9">@_event.EventType</dd>
+
+        <dt class="col-sm-3">Source</dt>
+        <dd class="col-sm-9">@_event.Source</dd>
+
+        <dt class="col-sm-3">Schema version</dt>
+        <dd class="col-sm-9">@_event.SchemaVersion</dd>
+
+        <dt class="col-sm-3">Occurred</dt>
+        <dd class="col-sm-9">
+            @FormatTimestamp(_event.OccurredAt)
+        </dd>
+
+        <dt class="col-sm-3">Received</dt>
+        <dd class="col-sm-9">
+            @FormatTimestamp(_event.ReceivedAt)
+        </dd>
+
+        <dt class="col-sm-3">Correlation ID</dt>
+        <dd class="col-sm-9">
+            <code>@(_event.CorrelationId ?? "—")</code>
+        </dd>
+
+        <dt class="col-sm-3">Causation ID</dt>
+        <dd class="col-sm-9">
+            <code>@(_event.CausationId ?? "—")</code>
+        </dd>
+    </dl>
+
+    <h2 class="h4">Payload</h2>
+
+    <pre class="border rounded p-3 bg-light"><code>@FormatPayload()</code></pre>
+}
+
+@code {
+    [Parameter]
+    public Guid EventId { get; set; }
+
+    private static readonly TimeZoneInfo DashboardTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+
+    private ArchiveEventDetailsItem? _event;
+    private bool _isLoading;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            _event = await ArchiveClient.GetByIdAsync(EventId);
+        }
+        catch (HttpRequestException exception)
+        {
+            _error =
+                $"Mission Control Archive could not be reached: " +
+                exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _error =
+                "The Mission Control Archive request timed out.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private string FormatPayload()
+    {
+        return _event?.Payload.ValueKind is
+            JsonValueKind.Undefined or JsonValueKind.Null
+                ? "null"
+                : JsonSerializer.Serialize(
+                    _event.Payload,
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    });
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        var localTime = TimeZoneInfo.ConvertTime(
+            timestamp,
+            DashboardTimeZone);
+
+        return localTime.ToString(
+            "yyyy-MM-dd HH:mm:ss zzz");
+    }
+}
