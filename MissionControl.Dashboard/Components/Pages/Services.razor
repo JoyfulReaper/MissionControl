@@ -19,6 +19,271 @@
     </p>
 </header>
 
+<section class="service-toolbar">
+    <div>
+        <label for="service-filter"
+               class="form-label">
+            Filter services
+        </label>
+
+        <input id="service-filter"
+               type="search"
+               class="form-control"
+               placeholder="Name, protocol, container, endpoint..."
+               autocomplete="off"
+               @bind="_filter"
+               @bind:event="oninput" />
+    </div>
+
+    <div class="service-result-count">
+        @TheServices.Count(MatchesFilter).ToString("N0")
+        matching services
+    </div>
+</section>
+
+<section class="service-stats"
+         aria-label="Service summary">
+    <div class="service-stat">
+        <span>Configured services</span>
+        <strong>@TheServices.Count.ToString("N0")</strong>
+    </div>
+
+    <div class="service-stat service-stat-accent">
+        <span>Running containers</span>
+        <strong>@RunningContainerCount.ToString("N0")</strong>
+    </div>
+
+    <div class="service-stat">
+        <span>Public services</span>
+        <strong>@PublicServiceCount.ToString("N0")</strong>
+    </div>
+
+    <div class="service-stat">
+        <span>Snapshot containers</span>
+        <strong>
+            @((_snapshot?.Containers.Count ?? 0).ToString("N0"))
+        </strong>
+    </div>
+</section>
+
+<section class="snapshot-panel">
+    <div class="snapshot-copy">
+        <div class="snapshot-heading">
+            <span class="snapshot-indicator
+                @(_snapshot?.Stale == false
+                    ? "snapshot-fresh"
+                    : "snapshot-warning")">
+            </span>
+
+            <div>
+                <div class="snapshot-title">
+                    Agent snapshot
+                </div>
+
+                @if (_isLoading)
+                {
+                    <div class="snapshot-meta">
+                        Loading node status...
+                    </div>
+                }
+                else if (_snapshot is not null)
+                {
+                    <div class="snapshot-meta">
+                        Node <strong>@_snapshot.Node</strong>
+                        · Captured
+                        <strong>
+                            @DateTimeFormatter.Format(
+                                _snapshot.CapturedAt)
+                        </strong>
+                        · Age
+                        <strong>
+                            @_snapshot.AgeSeconds seconds
+                        </strong>
+                    </div>
+                }
+                else
+                {
+                    <div class="snapshot-meta snapshot-error">
+                        @(_snapshotError ??
+                            "No Agent snapshot is available.")
+                    </div>
+                }
+            </div>
+        </div>
+
+        @if (_snapshot?.Stale == true)
+        {
+            <span class="service-chip status-missing">
+                STALE
+            </span>
+        }
+        else if (_snapshot is not null)
+        {
+            <span class="service-chip status-running">
+                FRESH
+            </span>
+        }
+    </div>
+
+    <button type="button"
+            class="btn btn-outline-primary"
+            disabled="@_isLoading"
+            @onclick="RefreshSnapshotAsync">
+        @(_isLoading ? "Refreshing..." : "Refresh")
+    </button>
+</section>
+
+@if (!HasFilteredServices)
+{
+    <div class="alert alert-info">
+        No services matched that filter.
+    </div>
+}
+else
+{
+    @foreach (var group in FilteredGroups)
+    {
+        <section class="service-group">
+            <div class="service-group-heading">
+                <div>
+                    <div class="page-eyebrow">
+                        Service group
+                    </div>
+
+                    <h2>@group.Key</h2>
+                </div>
+
+                <span>
+                    @group.Count().ToString("N0")
+                    services
+                </span>
+            </div>
+
+            <div class="service-list">
+                @foreach (ServiceDefinition service in group)
+                {
+                    AgentContainerStatusItem? container =
+                        FindContainer(service);
+
+                    <details class="service-entry">
+                        <summary>
+                            <div class="service-summary-copy">
+                                <strong>@service.Name</strong>
+                                <span>@service.Summary</span>
+                            </div>
+
+                            <div class="service-chips">
+                                <span class="service-chip
+                                    @GetVisibilityClass(
+                                        service.Visibility)">
+                                    @service.Visibility.ToUpperInvariant()
+                                </span>
+
+                                <span class="service-chip
+                                    @GetContainerStateClass(
+                                        service)">
+                                    @GetContainerState(service)
+                                </span>
+
+                                @if (!string.IsNullOrWhiteSpace(
+                                    service.Protocol))
+                                {
+                                    <span class="service-chip
+                                        chip-protocol">
+                                        @service.Protocol
+                                    </span>
+                                }
+                            </div>
+                        </summary>
+
+                        <div class="service-entry-body">
+                            <div class="service-meta-grid">
+                                <div class="service-meta">
+                                    <span>Container</span>
+                                    <strong>
+                                        @(service.ContainerName ?? "—")
+                                    </strong>
+                                </div>
+
+                                <div class="service-meta">
+                                    <span>Endpoint</span>
+                                    <strong>
+                                        @(service.Endpoint ?? "—")
+                                    </strong>
+                                </div>
+
+                                <div class="service-meta">
+                                    <span>Image</span>
+                                    <strong>
+                                        @(service.Image ?? "—")
+                                    </strong>
+                                </div>
+
+                                <div class="service-meta">
+                                    <span>CPU</span>
+                                    <strong>
+                                        @(container is null
+                                            ? "—"
+                                            : $"{container.CpuPercent:0.##}%")
+                                    </strong>
+                                </div>
+
+                                <div class="service-meta">
+                                    <span>Memory</span>
+                                    <strong>
+                                        @(container is null
+                                            ? "—"
+                                            : FormatBytes(
+                                                container.MemoryUsageBytes))
+                                    </strong>
+                                </div>
+
+                                <div class="service-meta">
+                                    <span>Restarts</span>
+                                    <strong>
+                                        @(container?.RestartCount
+                                            .ToString("N0") ?? "—")
+                                    </strong>
+                                </div>
+                            </div>
+
+                            <p class="service-description">
+                                @service.Description
+                            </p>
+
+                            @if (service.ApplicationUrl is not null ||
+                                 service.SourceUrl is not null)
+                            {
+                                <div class="service-actions">
+                                    @if (service.ApplicationUrl is not null)
+                                    {
+                                        <a class="btn btn-primary"
+                                           href="@service.ApplicationUrl"
+                                           target="_blank"
+                                           rel="noopener noreferrer">
+                                            Open service
+                                        </a>
+                                    }
+
+                                    @if (service.SourceUrl is not null)
+                                    {
+                                        <a class="btn btn-outline-primary"
+                                           href="@service.SourceUrl"
+                                           target="_blank"
+                                           rel="noopener noreferrer">
+                                            View source
+                                        </a>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </details>
+                }
+            </div>
+        </section>
+    }
+}
+
 @code {
     private AgentSnapshotItem? _snapshot;
     private bool _isLoading = true;
@@ -111,5 +376,101 @@
         {
             _isLoading = false;
         }
+    }
+
+    private string GetContainerState(
+        ServiceDefinition service)
+    {
+        AgentContainerStatusItem? container =
+            FindContainer(service);
+
+        if (container is not null)
+        {
+            return container.State.ToUpperInvariant();
+        }
+
+        return _snapshot is null
+            ? "UNKNOWN"
+            : "MISSING";
+    }
+
+    private string GetContainerStateClass(
+        ServiceDefinition service)
+    {
+        return GetContainerState(service) switch
+        {
+            "RUNNING" => "status-running",
+            "MISSING" => "status-missing",
+            "EXITED" or "STOPPED" => "status-stopped",
+            _ => "status-unknown"
+        };
+    }
+
+    private static string GetVisibilityClass(
+        string visibility)
+    {
+        return visibility.ToUpperInvariant() switch
+        {
+            "PUBLIC" => "visibility-public",
+            "PRIVATE" => "visibility-private",
+            _ => "visibility-internal"
+        };
+    }
+
+
+    private IEnumerable<IGrouping<string, ServiceDefinition>>
+        FilteredGroups =>
+            TheServices
+                .Where(MatchesFilter)
+                .OrderBy(service => service.Group)
+                .ThenBy(service => service.Name)
+                .GroupBy(service => service.Group);
+
+    private int RunningContainerCount =>
+        TheServices.Count(service =>
+            string.Equals(
+                FindContainer(service)?.State,
+                "running",
+                StringComparison.OrdinalIgnoreCase));
+
+    private int PublicServiceCount =>
+        TheServices.Count(service =>
+            string.Equals(
+                service.Visibility,
+                "Public",
+                StringComparison.OrdinalIgnoreCase));
+
+    private bool HasFilteredServices =>
+        FilteredGroups.Any();
+
+    private bool MatchesFilter(
+        ServiceDefinition service)
+    {
+        if (string.IsNullOrWhiteSpace(_filter))
+        {
+            return true;
+        }
+
+        string filter = _filter.Trim();
+
+        return Contains(service.Name, filter) ||
+               Contains(service.Group, filter) ||
+               Contains(service.Summary, filter) ||
+               Contains(service.Description, filter) ||
+               Contains(service.ContainerName, filter) ||
+               Contains(service.Protocol, filter) ||
+               Contains(service.Endpoint, filter) ||
+               Contains(service.Image, filter) ||
+               service.SearchTerms.Any(
+                   term => Contains(term, filter));
+    }
+
+    private static bool Contains(
+        string? value,
+        string filter)
+    {
+        return value?.Contains(
+            filter,
+            StringComparison.OrdinalIgnoreCase) == true;
     }
 }
