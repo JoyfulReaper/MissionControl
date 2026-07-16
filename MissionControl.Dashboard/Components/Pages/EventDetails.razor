@@ -27,54 +27,12 @@ else if (_event is null)
 else
 {
     <h1>Event Details</h1>
-
-    <dl class="row">
-        <dt class="col-sm-3">Event ID</dt>
-        <dd class="col-sm-9">
-            <code>@_event.EventId</code>
-        </dd>
-
-        <dt class="col-sm-3">Event type</dt>
-        <dd class="col-sm-9">@_event.EventType</dd>
-
-        <dt class="col-sm-3">Source</dt>
-        <dd class="col-sm-9">@_event.Source</dd>
-
-        <dt class="col-sm-3">Schema version</dt>
-        <dd class="col-sm-9">@_event.SchemaVersion</dd>
-
-        <dt class="col-sm-3">Occurred</dt>
-        <dd class="col-sm-9">
-            @FormatTimestamp(_event.OccurredAt)
-        </dd>
-
-        <dt class="col-sm-3">Received</dt>
-        <dd class="col-sm-9">
-            @FormatTimestamp(_event.ReceivedAt)
-        </dd>
-
-        <dt class="col-sm-3">Correlation ID</dt>
-        <dd class="col-sm-9">
-            <code>@(_event.CorrelationId ?? "—")</code>
-        </dd>
-
-        <dt class="col-sm-3">Causation ID</dt>
-        <dd class="col-sm-9">
-            <code>@(_event.CausationId ?? "—")</code>
-        </dd>
-    </dl>
-
-    <h2 class="h4">Payload</h2>
-
-    <pre class="border rounded p-3 bg-light"><code>@FormatPayload()</code></pre>
+    <EventDetailsContent Event="_event" />
 }
 
 @code {
     [Parameter]
     public Guid EventId { get; set; }
-
-    private static readonly TimeZoneInfo DashboardTimeZone =
-        TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
 
     private ArchiveEventDetailsItem? _event;
     private bool _isLoading;
@@ -104,29 +62,5 @@ else
         {
             _isLoading = false;
         }
-    }
-
-    private string FormatPayload()
-    {
-        return _event?.Payload.ValueKind is
-            JsonValueKind.Undefined or JsonValueKind.Null
-                ? "null"
-                : JsonSerializer.Serialize(
-                    _event.Payload,
-                    new JsonSerializerOptions
-                    {
-                        WriteIndented = true
-                    });
-    }
-
-    private static string FormatTimestamp(
-        DateTimeOffset timestamp)
-    {
-        var localTime = TimeZoneInfo.ConvertTime(
-            timestamp,
-            DashboardTimeZone);
-
-        return localTime.ToString(
-            "yyyy-MM-dd HH:mm:ss zzz");
     }
 }
