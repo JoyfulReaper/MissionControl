@@ -1,6 +1,7 @@
 ﻿@page "/events"
 
 @inject IArchiveEventClient ArchiveClient
+@inject IDashboardDateTimeFormatter DateTimeFormatter
 
 <PageTitle>Events</PageTitle>
 
@@ -114,7 +115,9 @@ else
                     @onkeydown="eventArgs =>
                                     HandleEventRowKeyDown(eventArgs, item.EventId)">
 
-                        <td>@FormatTimestamp(item.OccurredAt)</td>
+                        <td>
+                            @DateTimeFormatter.Format(item.OccurredAt)
+                        </td>
                         <td>@item.Source</td>
                         <td>@item.EventType</td>
                         <td>@(item.CorrelationId ?? "—")</td>
@@ -178,18 +181,6 @@ else
     private bool IsBusy =>
         _isLoading || _isLoadingMore;
 
-    private static readonly TimeZoneInfo DashboardTimeZone =
-        TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
-
-    private static string FormatTimestamp(DateTimeOffset timestamp)
-    {
-        var localTime = TimeZoneInfo.ConvertTime(
-            timestamp,
-            DashboardTimeZone);
-
-        return localTime.ToString(
-            "yyyy-MM-dd HH:mm:ss zzz");
-    }
 
     protected override Task OnInitializedAsync()
     {

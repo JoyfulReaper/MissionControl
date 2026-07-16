@@ -1,6 +1,7 @@
 ﻿@page "/"
 
 @inject IArchiveEventClient ArchiveClient
+@inject IDashboardDateTimeFormatter DateTimeFormatter
 
 <PageTitle>Mission Control</PageTitle>
 
@@ -35,7 +36,7 @@
             <div class="latest-event">
                 Latest receipt
                 <strong>
-                    @FormatTimestamp(
+                    @DateTimeFormatter.Format(
                         _statistics.LatestReceivedAt.Value)
                 </strong>
             </div>
@@ -177,21 +178,5 @@
         {
             _isLoading = false;
         }
-    }
-
-    private static readonly TimeZoneInfo DashboardTimeZone =
-        TimeZoneInfo.FindSystemTimeZoneById(
-            "America/New_York");
-
-    private static string FormatTimestamp(
-        DateTimeOffset timestamp)
-    {
-        DateTimeOffset localTime =
-            TimeZoneInfo.ConvertTime(
-                timestamp,
-                DashboardTimeZone);
-
-        return localTime.ToString(
-            "yyyy-MM-dd HH:mm:ss zzz");
     }
 }

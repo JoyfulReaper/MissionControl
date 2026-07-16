@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using MissionControl.Dashboard.Archive;
 using MissionControl.Dashboard.Components;
+using MissionControl.Dashboard.Formatting;
 using MissionControl.Dashboard.Security;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +43,32 @@ builder.Services.AddHttpClient<
         httpClient.Timeout = TimeSpan.FromSeconds(10);
     });
 
+builder.Services
+    .AddOptions<DashboardDateTimeOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            DashboardDateTimeOptions.SectionName))
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(
+                options.TimeZoneId),
+        "Dashboard date/time timezone is required.")
+    .Validate(
+        options =>
+            !string.IsNullOrWhiteSpace(
+                options.Format),
+        "Dashboard date/time format is required.")
+    .Validate(
+        options =>
+            IsValidTimeZoneId(
+                options.TimeZoneId),
+        "Dashboard date/time timezone is invalid.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<
+    IDashboardDateTimeFormatter,
+    DashboardDateTimeFormatter>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -65,3 +92,23 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+static bool IsValidTimeZoneId(
+    string timeZoneId)
+{
+    try
+    {
+        _ = TimeZoneInfo.FindSystemTimeZoneById(
+            timeZoneId);
+
+        return true;
+    }
+    catch (TimeZoneNotFoundException)
+    {
+        return false;
+    }
+    catch (InvalidTimeZoneException)
+    {
+        return false;
+    }
+}
