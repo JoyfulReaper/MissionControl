@@ -8,11 +8,12 @@ public class ArchiveEventClient(HttpClient client)
     : IArchiveEventClient
 {
     public async Task<IReadOnlyList<ArchiveEventSummaryItem>>
-        GetRecentAsync(
-            int limit = 50,
-            string? source = null,
-            string? eventType = null,
-            CancellationToken cancellationToken = default)
+    GetRecentAsync(
+        int limit = 50,
+        string? source = null,
+        string? eventType = null,
+        ArchiveEventCursor? before = null,
+        CancellationToken cancellationToken = default)
     {
         limit = Math.Clamp(limit, 1, 200);
 
@@ -30,6 +31,22 @@ public class ArchiveEventClient(HttpClient client)
         if (!string.IsNullOrWhiteSpace(eventType))
         {
             queryParameters["eventType"] = eventType.Trim();
+        }
+
+        if (before is not null)
+        {
+            queryParameters["beforeOccurredAt"] =
+                before.OccurredAt
+                    .ToUniversalTime()
+                    .ToString("O", CultureInfo.InvariantCulture);
+
+            queryParameters["beforeReceivedAt"] =
+                before.ReceivedAt
+                    .ToUniversalTime()
+                    .ToString("O", CultureInfo.InvariantCulture);
+
+            queryParameters["beforeEventId"] =
+                before.EventId.ToString("D");
         }
 
         string requestUri = QueryHelpers.AddQueryString(

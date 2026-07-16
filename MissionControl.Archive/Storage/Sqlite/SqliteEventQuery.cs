@@ -1,4 +1,10 @@
-﻿using Microsoft.Data.Sqlite;
+﻿/*
+ * Mission Control
+ * Copyright 2026 Kyle Givler
+ * Licensed under the MIT License
+ */
+
+using Microsoft.Data.Sqlite;
 using MissionControl.Archive.Contracts;
 using System.Globalization;
 using System.Text;

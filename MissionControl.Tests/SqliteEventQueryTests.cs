@@ -1,3 +1,9 @@
+/*
+ * Mission Control
+ * Copyright 2026 Kyle Givler
+ * Licensed under the MIT License
+ */
+
 extern alias ArchiveApp;
 using ArchiveApp::MissionControl.Archive.Contracts;
 using ArchiveApp::MissionControl.Archive.Storage.Sqlite;
@@ -65,8 +71,6 @@ public sealed class SqliteEventQueryTests
 
                 EventSummaryItem cursor = firstPage[^1];
 
-                // This call will use the new composite cursor after
-                // the production query is updated.
                 IReadOnlyList<EventSummaryItem> secondPage =
                     await query.GetRecentSummariesAsync(
                         limit: 2,
