@@ -57,7 +57,7 @@
         <div class="col-md-auto">
             <button type="button"
                     class="btn btn-primary"
-                    disabled="@_isLoading"
+                    disabled="@IsBusy"
                     @onclick="ApplyFiltersAsync">
                 @(_isLoading ? "Loading..." : "Apply")
             </button>
@@ -66,7 +66,7 @@
         <div class="col-md-auto">
             <button type="button"
                     class="btn btn-outline-secondary"
-                    disabled="@_isLoading"
+                    disabled="@IsBusy"
                     @onclick="ClearFiltersAsync">
                 Clear
             </button>
@@ -121,18 +121,47 @@ else
             }
         </tbody>
     </table>
+    @if (_loadMoreError is not null)
+    {
+        <div class="alert alert-danger">
+            @_loadMoreError
+        </div>
+    }
+
+    @if (_hasMore)
+    {
+        <div class="text-center mb-3">
+            <button type="button"
+                    class="btn btn-outline-primary"
+                    disabled="@IsBusy"
+                    @onclick="LoadOlderAsync">
+                @(_isLoadingMore
+                    ? "Loading older events..."
+                    : "Load older")
+            </button>
+        </div>
+    }
 }
 
 @code {
     private IReadOnlyList<ArchiveEventSummaryItem> _events = [];
-    private bool _isLoading;
-    private string? _error;
 
     private IReadOnlyList<string> _sourceSuggestions = [];
     private IReadOnlyList<string> _eventTypeSuggestions = [];
 
     private string? _sourceFilter;
     private string? _eventTypeFilter;
+
+    private const int PageSize = 50;
+
+    private bool _isLoading;
+    private bool _isLoadingMore;
+    private bool _hasMore;
+    private string? _error;
+    private string? _loadMoreError;
+
+    private bool IsBusy =>
+        _isLoading || _isLoadingMore;
 
     private static readonly TimeZoneInfo DashboardTimeZone =
         TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
@@ -181,24 +210,57 @@ else
 
     private async Task LoadEventsAsync(
         bool refreshSuggestions = false,
-        bool ignoreFilters = false)
+        bool ignoreFilters = false,
+        bool append = false)
     {
-        _isLoading = true;
-        _error = null;
+        if (IsBusy)
+        {
+            return;
+        }
+
+        if (append)
+        {
+            _isLoadingMore = true;
+            _loadMoreError = null;
+        }
+        else
+        {
+            _isLoading = true;
+            _error = null;
+            _loadMoreError = null;
+        }
 
         try
         {
             string? source = ignoreFilters
                 ? null
                 : NormalizeFilter(_sourceFilter);
+
             string? eventType = ignoreFilters
                 ? null
                 : NormalizeFilter(_eventTypeFilter);
 
-            _events = await ArchiveClient.GetRecentAsync(
-                limit: 50,
-                source: source,
-                eventType: eventType);
+            ArchiveEventCursor? cursor =
+                append && _events.Count > 0
+                    ? CreateCursor(_events[^1])
+                    : null;
+
+            IReadOnlyList<ArchiveEventSummaryItem> result =
+                await ArchiveClient.GetRecentAsync(
+                    limit: PageSize + 1,
+                    source: source,
+                    eventType: eventType,
+                    before: cursor);
+
+            ArchiveEventSummaryItem[] page = result
+                .Take(PageSize)
+                .ToArray();
+
+            _hasMore = result.Count > PageSize;
+
+            _events = append
+                ? _events.Concat(page).ToArray()
+                : page;
 
             if (refreshSuggestions)
             {
@@ -207,18 +269,50 @@ else
         }
         catch (HttpRequestException exception)
         {
-            _error =
+            SetError(
+                append,
                 $"Mission Control Archive could not be reached: " +
-                exception.Message;
+                exception.Message);
         }
         catch (TaskCanceledException)
         {
-            _error =
-                "The Mission Control Archive request timed out.";
+            SetError(
+                append,
+                "The Mission Control Archive request timed out.");
         }
         finally
         {
-            _isLoading = false;
+            if (append)
+            {
+                _isLoadingMore = false;
+            }
+            else
+            {
+                _isLoading = false;
+            }
+        }
+    }
+
+    private static ArchiveEventCursor CreateCursor(
+        ArchiveEventSummaryItem item)
+    {
+        return new ArchiveEventCursor(
+            OccurredAt: item.OccurredAt,
+            ReceivedAt: item.ReceivedAt,
+            EventId: item.EventId);
+    }
+
+    private void SetError(
+        bool loadingMore,
+        string message)
+    {
+        if (loadingMore)
+        {
+            _loadMoreError = message;
+        }
+        else
+        {
+            _error = message;
         }
     }
 
@@ -235,10 +329,15 @@ else
         await LoadEventsAsync();
     }
 
+    private Task LoadOlderAsync()
+    {
+        return LoadEventsAsync(append: true);
+    }
+
     private Task HandleFilterKeyDown(
         KeyboardEventArgs eventArgs)
     {
-        return eventArgs.Key == "Enter"
+        return eventArgs.Key == "Enter" && !IsBusy
             ? ApplyFiltersAsync()
             : Task.CompletedTask;
     }
