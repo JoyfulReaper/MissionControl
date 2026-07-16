@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MissionControl.Agent\MissionControl.Agent.csproj" Aliases="AgentApp" />
     <ProjectReference Include="..\MissionControl.Gateway\MissionControl.Gateway.csproj" />
     <ProjectReference Include="..\MissionControl.Archive\MissionControl.Archive.csproj" Aliases="ArchiveApp" />
     <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
