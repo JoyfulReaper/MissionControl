@@ -1,10 +1,32 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using MissionControl.Dashboard.Components;
+using MissionControl.Dashboard.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddRazorComponents()
+builder.Services
+    .AddRazorComponents()
     .AddInteractiveServerComponents();
+
+builder.Services.AddCascadingAuthenticationState();
+
+builder.Services
+    .AddAuthentication(
+        DashboardAuthenticationDefaults.Scheme)
+    .AddScheme<
+        AuthenticationSchemeOptions,
+        DashboardAuthenticationHandler>(
+        DashboardAuthenticationDefaults.Scheme,
+        _ => { });
+
+builder.Services
+    .AddAuthorizationBuilder()
+    .SetFallbackPolicy(
+        new AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build());
 
 var app = builder.Build();
 
@@ -18,9 +40,13 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
