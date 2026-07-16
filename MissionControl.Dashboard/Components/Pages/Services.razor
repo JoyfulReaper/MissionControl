@@ -1,4 +1,4 @@
-﻿@page "/services"
+@page "/services"
 
 @inject IAgentSnapshotClient AgentClient
 @inject IOptions<ServiceCatalogOptions> CatalogOptions
@@ -18,53 +18,6 @@
         and operational infrastructure from one workspace.
     </p>
 </header>
-
-<section class="service-toolbar">
-    <div>
-        <label for="service-filter"
-               class="form-label">
-            Filter services
-        </label>
-
-        <input id="service-filter"
-               type="search"
-               class="form-control"
-               placeholder="Name, protocol, container, endpoint..."
-               autocomplete="off"
-               @bind="_filter"
-               @bind:event="oninput" />
-    </div>
-
-    <div class="service-result-count">
-        @TheServices.Count(MatchesFilter).ToString("N0")
-        matching services
-    </div>
-</section>
-
-<section class="service-stats"
-         aria-label="Service summary">
-    <div class="service-stat">
-        <span>Configured services</span>
-        <strong>@TheServices.Count.ToString("N0")</strong>
-    </div>
-
-    <div class="service-stat service-stat-accent">
-        <span>Running containers</span>
-        <strong>@RunningContainerCount.ToString("N0")</strong>
-    </div>
-
-    <div class="service-stat">
-        <span>Public services</span>
-        <strong>@PublicServiceCount.ToString("N0")</strong>
-    </div>
-
-    <div class="service-stat">
-        <span>Snapshot containers</span>
-        <strong>
-            @((_snapshot?.Containers.Count ?? 0).ToString("N0"))
-        </strong>
-    </div>
-</section>
 
 <section class="snapshot-panel">
     <div class="snapshot-copy">
@@ -111,18 +64,37 @@
             </div>
         </div>
 
-        @if (_snapshot?.Stale == true)
-        {
-            <span class="service-chip status-missing">
-                STALE
+        <div class="snapshot-chips">
+            @if (_snapshot?.Stale == true)
+            {
+                <span class="service-chip status-missing">
+                    STALE
+                </span>
+            }
+            else if (_snapshot is not null)
+            {
+                <span class="service-chip status-running">
+                    FRESH
+                </span>
+            }
+
+            <span class="service-chip @GetPublishStateClass()">
+                @GetPublishState()
             </span>
-        }
-        else if (_snapshot is not null)
-        {
-            <span class="service-chip status-running">
-                FRESH
-            </span>
-        }
+
+            @if (_snapshot?.LastMissionControlPublishAttemptAt is not null)
+            {
+                <span class="snapshot-publish-attempt">
+                    Last publish
+                    <strong>
+                        @DateTimeFormatter.Format(
+                            _snapshot
+                                .LastMissionControlPublishAttemptAt
+                                .Value)
+                    </strong>
+                </span>
+            }
+        </div>
     </div>
 
     <button type="button"
@@ -132,6 +104,119 @@
         @(_isLoading ? "Refreshing..." : "Refresh")
     </button>
 </section>
+
+<section class="service-stats"
+         aria-label="Service summary">
+    <div class="service-stat">
+        <span>Configured services</span>
+        <strong>@(TheServices.Count.ToString("N0"))</strong>
+    </div>
+
+    <div class="service-stat service-stat-accent">
+        <span>Running containers</span>
+        <strong>@(RunningContainerCount.ToString("N0"))</strong>
+    </div>
+
+    <div class="service-stat">
+        <span>Public services</span>
+        <strong>@(PublicServiceCount.ToString("N0"))</strong>
+    </div>
+
+    <div class="service-stat">
+        <span>Snapshot containers</span>
+        <strong>
+            @((_snapshot?.Containers.Count ?? 0).ToString("N0"))
+        </strong>
+    </div>
+
+    <div class="service-stat">
+        <span>Successful probes</span>
+        <strong>@(SuccessfulProtocolCount.ToString("N0"))</strong>
+    </div>
+
+    <div class="service-stat">
+        <span>Failed probes</span>
+        <strong>@(FailedProtocolCount.ToString("N0"))</strong>
+    </div>
+</section>
+
+<section class="service-toolbar">
+    <div>
+        <label for="service-filter"
+               class="form-label">
+            Filter services
+        </label>
+
+        <input id="service-filter"
+               type="search"
+               class="form-control"
+               placeholder="Name, protocol, probe, container, endpoint..."
+               autocomplete="off"
+               @bind="_filter"
+               @bind:event="oninput" />
+    </div>
+
+    <div class="service-result-count">
+        @(TheServices.Count(MatchesFilter).ToString("N0"))
+        matching services
+    </div>
+</section>
+
+@if (UncataloguedContainers.Any())
+{
+    <section class="uncatalogued-panel"
+             aria-label="Uncatalogued containers">
+        <div class="uncatalogued-heading">
+            <strong>Uncatalogued snapshot containers</strong>
+            <span>
+                Add these to services.json when they are expected.
+            </span>
+        </div>
+
+        <div class="uncatalogued-list">
+            @foreach (AgentContainerStatusItem container
+                in UncataloguedContainers)
+            {
+                <div class="uncatalogued-item">
+                    <strong>@container.Name</strong>
+                    <span>@container.State</span>
+                    <span>@FormatMemory(container)</span>
+                    <span>@($"{container.CpuPercent:0.##}% CPU")</span>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@if (UncataloguedProtocols.Any())
+{
+    <section class="uncatalogued-panel"
+             aria-label="Uncatalogued protocol probes">
+        <div class="uncatalogued-heading">
+            <strong>Uncatalogued protocol probes</strong>
+            <span>
+                Map these probe keys to a service when they are expected.
+            </span>
+        </div>
+
+        <div class="uncatalogued-list">
+            @foreach (AgentProtocolStatusItem protocol
+                in UncataloguedProtocols)
+            {
+                <div class="uncatalogued-item">
+                    <strong>@protocol.Service</strong>
+                    <span>
+                        @(protocol.Succeeded ? "Succeeded" : "Failed")
+                    </span>
+                    <span>
+                        @FormatDuration(
+                            protocol.DurationMilliseconds)
+                    </span>
+                </div>
+            }
+        </div>
+    </section>
+}
 
 @if (!HasFilteredServices)
 {
@@ -154,7 +239,7 @@ else
                 </div>
 
                 <span>
-                    @group.Count().ToString("N0")
+                    @(group.Count().ToString("N0"))
                     services
                 </span>
             </div>
@@ -188,6 +273,15 @@ else
                                     @GetContainerState(service)
                                 </span>
 
+                                @if (HasProtocolServiceKey(service))
+                                {
+                                    <span class="service-chip
+                                        @GetProtocolStateClass(
+                                            service)">
+                                        @GetProtocolState(service)
+                                    </span>
+                                }
+
                                 @if (!string.IsNullOrWhiteSpace(
                                     service.Protocol))
                                 {
@@ -204,7 +298,9 @@ else
                                 <div class="service-meta">
                                     <span>Container</span>
                                     <strong>
-                                        @(service.ContainerName ?? "—")
+                                        @(container?.Name ??
+                                            service.ContainerName ??
+                                            "—")
                                     </strong>
                                 </div>
 
@@ -236,8 +332,7 @@ else
                                     <strong>
                                         @(container is null
                                             ? "—"
-                                            : FormatBytes(
-                                                container.MemoryUsageBytes))
+                                            : FormatMemory(container))
                                     </strong>
                                 </div>
 
@@ -248,6 +343,34 @@ else
                                             .ToString("N0") ?? "—")
                                     </strong>
                                 </div>
+
+                                @if (HasProtocolServiceKey(service))
+                                {
+                                    <div class="service-meta">
+                                        <span>Probe service</span>
+                                        <strong>
+                                            @service.ProtocolServiceKey
+                                        </strong>
+                                    </div>
+
+                                    <div class="service-meta">
+                                        <span>Live probe</span>
+                                        <strong>
+                                            @GetProtocolDetail(protocol)
+                                        </strong>
+                                    </div>
+
+                                    <div class="service-meta">
+                                        <span>Probe latency</span>
+                                        <strong>
+                                            @(protocol is null
+                                                ? "—"
+                                                : FormatDuration(
+                                                    protocol
+                                                        .DurationMilliseconds))
+                                        </strong>
+                                    </div>
+                                }
                             </div>
 
                             <p class="service-description">
@@ -334,7 +457,8 @@ else
                     StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string FormatBytes(long bytes)
+    private static string FormatBytes(
+        long bytes)
     {
         string[] units =
             ["B", "KB", "MB", "GB", "TB"];
@@ -350,6 +474,29 @@ else
         }
 
         return $"{value:0.#} {units[unit]}";
+    }
+
+    private static string FormatDuration(
+        double durationMilliseconds)
+    {
+        return $"{durationMilliseconds:0.#} ms";
+    }
+
+    private static string FormatMemory(
+        AgentContainerStatusItem container)
+    {
+        string usage =
+            FormatBytes(container.MemoryUsageBytes);
+
+        string limit = container.MemoryLimitBytes > 0
+            ? FormatBytes(container.MemoryLimitBytes)
+            : "No limit";
+
+        string percent = container.MemoryLimitBytes > 0
+            ? $"{container.MemoryPercent:0.#}%"
+            : "—";
+
+        return $"{usage} / {limit} ({percent})";
     }
 
     private async Task RefreshSnapshotAsync()
@@ -420,6 +567,25 @@ else
         };
     }
 
+    private string GetPublishState()
+    {
+        return _snapshot?.MissionControlPublishSucceeded switch
+        {
+            true => "EVENT PUBLISH OK",
+            false => "EVENT PUBLISH FAILED",
+            _ => "EVENT PUBLISH UNKNOWN"
+        };
+    }
+
+    private string GetPublishStateClass()
+    {
+        return _snapshot?.MissionControlPublishSucceeded switch
+        {
+            true => "status-running",
+            false => "status-stopped",
+            _ => "status-unknown"
+        };
+    }
 
     private IEnumerable<IGrouping<string, ServiceDefinition>>
         FilteredGroups =>
@@ -443,6 +609,32 @@ else
                 "Public",
                 StringComparison.OrdinalIgnoreCase));
 
+    private int SuccessfulProtocolCount =>
+        _snapshot?.Protocols.Count(protocol => protocol.Succeeded) ?? 0;
+
+    private int FailedProtocolCount =>
+        _snapshot?.Protocols.Count(protocol => !protocol.Succeeded) ?? 0;
+
+    private IEnumerable<AgentContainerStatusItem>
+        UncataloguedContainers =>
+            _snapshot?.Containers.Where(container =>
+                !TheServices.Any(service =>
+                    string.Equals(
+                        service.ContainerName,
+                        container.Name,
+                        StringComparison.OrdinalIgnoreCase))) ??
+            [];
+
+    private IEnumerable<AgentProtocolStatusItem>
+        UncataloguedProtocols =>
+            _snapshot?.Protocols.Where(protocol =>
+                !TheServices.Any(service =>
+                    string.Equals(
+                        service.ProtocolServiceKey,
+                        protocol.Service,
+                        StringComparison.OrdinalIgnoreCase))) ??
+            [];
+
     private bool HasFilteredServices =>
         FilteredGroups.Any();
 
@@ -462,6 +654,7 @@ else
                Contains(service.Description, filter) ||
                Contains(service.ContainerName, filter) ||
                Contains(service.Protocol, filter) ||
+               Contains(service.ProtocolServiceKey, filter) ||
                Contains(service.Endpoint, filter) ||
                Contains(service.Image, filter) ||
                service.SearchTerms.Any(
@@ -478,7 +671,7 @@ else
     }
 
     private AgentProtocolStatusItem? FindProtocol(
-    ServiceDefinition service)
+        ServiceDefinition service)
     {
         if (string.IsNullOrWhiteSpace(
             service.ProtocolServiceKey))
@@ -500,13 +693,65 @@ else
         AgentProtocolStatusItem? protocol =
             FindProtocol(service);
 
-        if (_snapshot is null || protocol is null)
+        if (_snapshot is null)
         {
             return "status-unknown";
+        }
+
+        if (protocol is null)
+        {
+            return "status-warning";
         }
 
         return protocol.Succeeded
             ? "status-running"
             : "status-stopped";
+    }
+
+    private string GetProtocolState(
+        ServiceDefinition service)
+    {
+        AgentProtocolStatusItem? protocol =
+            FindProtocol(service);
+
+        if (_snapshot is null)
+        {
+            return "PROBE UNKNOWN";
+        }
+
+        if (protocol is null)
+        {
+            return "PROBE MISSING";
+        }
+
+        return protocol.Succeeded
+            ? $"REACHABLE · {FormatDuration(
+                protocol.DurationMilliseconds)}"
+            : "PROBE FAILED";
+    }
+
+    private string GetProtocolDetail(
+        AgentProtocolStatusItem? protocol)
+    {
+        if (_snapshot is null)
+        {
+            return "Unavailable";
+        }
+
+        if (protocol is null)
+        {
+            return "Missing";
+        }
+
+        return protocol.Succeeded
+            ? "Succeeded"
+            : "Failed";
+    }
+
+    private static bool HasProtocolServiceKey(
+        ServiceDefinition service)
+    {
+        return !string.IsNullOrWhiteSpace(
+            service.ProtocolServiceKey);
     }
 }
