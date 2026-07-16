@@ -30,4 +30,9 @@ public interface IIntegrationEventQuery
         DateTimeOffset? beforeReceivedAt = null,
         Guid? beforeEventId = null,
         CancellationToken cancellationToken = default);
+
+    Task<EventArchiveStatistics> GetStatisticsAsync(
+        DateTimeOffset receivedSince,
+        int topCategoryLimit = 5,
+        CancellationToken cancellationToken = default);
 }

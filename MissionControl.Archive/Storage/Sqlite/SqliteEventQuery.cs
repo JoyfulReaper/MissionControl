@@ -17,6 +17,98 @@ public sealed class SqliteEventQuery(
 {
     private const int MaximumLimit = 200;
 
+    public async Task<EventArchiveStatistics> GetStatisticsAsync(
+        DateTimeOffset receivedSince,
+        int topCategoryLimit = 5,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(
+            topCategoryLimit,
+            1);
+
+        topCategoryLimit = Math.Min(topCategoryLimit, 20);
+
+        await using var connection =
+            new SqliteConnection(database.ConnectionString);
+
+        await connection.OpenAsync(cancellationToken);
+
+        await using var summaryCommand = connection.CreateCommand();
+
+        summaryCommand.CommandText =
+            """
+        SELECT
+            COUNT(*),
+            COUNT(
+                CASE
+                    WHEN ReceivedAt >= $receivedSince
+                    THEN 1
+                END),
+            COUNT(DISTINCT Source),
+            COUNT(DISTINCT EventType),
+            MAX(ReceivedAt)
+        FROM IntegrationEvents;
+        """;
+
+        summaryCommand.Parameters.AddWithValue(
+            "$receivedSince",
+            receivedSince
+                .ToUniversalTime()
+                .ToString("O"));
+
+        long totalEvents;
+        long recentlyReceivedEvents;
+        long uniqueSources;
+        long uniqueEventTypes;
+        DateTimeOffset? latestReceivedAt;
+
+        await using (var reader =
+            await summaryCommand.ExecuteReaderAsync(
+                cancellationToken))
+        {
+            bool hasResult =
+                await reader.ReadAsync(cancellationToken);
+
+            if (!hasResult)
+            {
+                throw new InvalidOperationException(
+                    "The event statistics query returned no result.");
+            }
+
+            totalEvents = reader.GetInt64(0);
+            recentlyReceivedEvents = reader.GetInt64(1);
+            uniqueSources = reader.GetInt64(2);
+            uniqueEventTypes = reader.GetInt64(3);
+
+            latestReceivedAt = reader.IsDBNull(4)
+                ? null
+                : DateTimeOffset.Parse(reader.GetString(4));
+        }
+
+        IReadOnlyList<EventCategoryCount> topSources =
+            await GetTopCategoriesAsync(
+                connection,
+                columnName: "Source",
+                topCategoryLimit,
+                cancellationToken);
+
+        IReadOnlyList<EventCategoryCount> topEventTypes =
+            await GetTopCategoriesAsync(
+                connection,
+                columnName: "EventType",
+                topCategoryLimit,
+                cancellationToken);
+
+        return new EventArchiveStatistics(
+            TotalEvents: totalEvents,
+            EventsReceivedLast24Hours: recentlyReceivedEvents,
+            UniqueSources: uniqueSources,
+            UniqueEventTypes: uniqueEventTypes,
+            LatestReceivedAt: latestReceivedAt,
+            TopSources: topSources,
+            TopEventTypes: topEventTypes);
+    }
+
     public async Task<EventFeedItem?> GetByIdAsync(
         Guid eventId,
         CancellationToken cancellationToken = default)
@@ -291,6 +383,53 @@ public sealed class SqliteEventQuery(
         }
 
         return events;
+    }
+
+    private static async Task<IReadOnlyList<EventCategoryCount>>
+    GetTopCategoriesAsync(
+        SqliteConnection connection,
+        string columnName,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        if (columnName is not ("Source" or "EventType"))
+        {
+            throw new ArgumentException(
+                "Unsupported event category column.",
+                nameof(columnName));
+        }
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText =
+            $"""
+        SELECT
+            {columnName},
+            COUNT(*) AS EventCount
+        FROM IntegrationEvents
+        GROUP BY {columnName}
+        ORDER BY
+            EventCount DESC,
+            {columnName} ASC
+        LIMIT $limit;
+        """;
+
+        command.Parameters.AddWithValue("$limit", limit);
+
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        var results = new List<EventCategoryCount>();
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            results.Add(
+                new EventCategoryCount(
+                    Name: reader.GetString(0),
+                    Count: reader.GetInt64(1)));
+        }
+
+        return results;
     }
 
     private static EventFeedItem ReadEvent(SqliteDataReader reader)

@@ -26,5 +26,8 @@ internal static class SqliteEventArchiveSchema
 
         CREATE INDEX IF NOT EXISTS IX_IntegrationEvents_EventType_OccurredAt
             ON IntegrationEvents (EventType, OccurredAt DESC);
+
+        CREATE INDEX IF NOT EXISTS IX_IntegrationEvents_ReceivedAt
+            ON IntegrationEvents (ReceivedAt DESC);
         """;
 }

@@ -4,6 +4,7 @@
  * Licensed under the MIT License
  */
 
+using MissionControl.Archive.Contracts;
 using MissionControl.Archive.Storage;
 
 namespace MissionControl.Archive.Endpoints;
@@ -34,7 +35,31 @@ public static class ArchiveEndpointRouteBuilderExtensions
             .WithName("GetEventById")
             .WithTags("Events");
 
+        endpoints
+            .MapGet(
+                "/api/events/statistics",
+                HandleGetEventStatisticsAsync)
+            .WithName("GetEventStatistics")
+            .WithTags("Events");
+
         return endpoints;
+    }
+
+    private static async Task<IResult>
+            HandleGetEventStatisticsAsync(
+                IIntegrationEventQuery query,
+                CancellationToken cancellationToken)
+    {
+        DateTimeOffset receivedSince =
+            DateTimeOffset.UtcNow.AddHours(-24);
+
+        EventArchiveStatistics statistics =
+            await query.GetStatisticsAsync(
+                receivedSince: receivedSince,
+                topCategoryLimit: 5,
+                cancellationToken: cancellationToken);
+
+        return Results.Ok(statistics);
     }
 
     private static async Task<IResult> HandleGetRecentEventsAsync(

@@ -23,6 +23,159 @@ public sealed class SqliteEventQueryTests
     }
 
     [Fact]
+    public async Task GetStatisticsAsyncReturnsZerosForEmptyArchive()
+    {
+        await WithArchiveDatabaseAsync(
+            async (_, query) =>
+            {
+                EventArchiveStatistics statistics =
+                    await query.GetStatisticsAsync(
+                        receivedSince:
+                            new DateTimeOffset(
+                                2026,
+                                7,
+                                15,
+                                12,
+                                0,
+                                0,
+                                TimeSpan.Zero));
+
+                Assert.Equal(0, statistics.TotalEvents);
+                Assert.Equal(
+                    0,
+                    statistics.EventsReceivedLast24Hours);
+                Assert.Equal(0, statistics.UniqueSources);
+                Assert.Equal(0, statistics.UniqueEventTypes);
+                Assert.Null(statistics.LatestReceivedAt);
+                Assert.Empty(statistics.TopSources);
+                Assert.Empty(statistics.TopEventTypes);
+            });
+    }
+
+    [Fact]
+    public async Task GetStatisticsAsyncReturnsArchiveCounts()
+    {
+        await WithArchiveDatabaseAsync(
+            async (archive, query) =>
+            {
+                DateTimeOffset now =
+                    new(
+                        2026,
+                        7,
+                        16,
+                        12,
+                        0,
+                        0,
+                        TimeSpan.Zero);
+
+                await archive.StoreAsync(
+                    CreateEnvelope(
+                        Guid.NewGuid(),
+                        "github.push",
+                        "github",
+                        now.AddHours(-2),
+                        now.AddHours(-2)));
+
+                await archive.StoreAsync(
+                    CreateEnvelope(
+                        Guid.NewGuid(),
+                        "github.pull-request",
+                        "github",
+                        now.AddHours(-3),
+                        now.AddHours(-3)));
+
+                await archive.StoreAsync(
+                    CreateEnvelope(
+                        Guid.NewGuid(),
+                        "steam.library-refreshed",
+                        "steam",
+                        now.AddDays(-3),
+                        now.AddDays(-3)));
+
+                EventArchiveStatistics statistics =
+                    await query.GetStatisticsAsync(
+                        receivedSince: now.AddHours(-24));
+
+                Assert.Equal(3, statistics.TotalEvents);
+                Assert.Equal(
+                    2,
+                    statistics.EventsReceivedLast24Hours);
+                Assert.Equal(2, statistics.UniqueSources);
+                Assert.Equal(3, statistics.UniqueEventTypes);
+                Assert.Equal(
+                    now.AddHours(-2),
+                    statistics.LatestReceivedAt);
+            });
+    }
+
+    [Fact]
+    public async Task GetStatisticsAsyncOrdersTopCategoriesByCount()
+    {
+        await WithArchiveDatabaseAsync(
+            async (archive, query) =>
+            {
+                DateTimeOffset timestamp =
+                    new(
+                        2026,
+                        7,
+                        16,
+                        12,
+                        0,
+                        0,
+                        TimeSpan.Zero);
+
+                await archive.StoreAsync(
+                    CreateEnvelope(
+                        Guid.NewGuid(),
+                        "github.push",
+                        "github",
+                        timestamp,
+                        timestamp));
+
+                await archive.StoreAsync(
+                    CreateEnvelope(
+                        Guid.NewGuid(),
+                        "github.push",
+                        "github",
+                        timestamp,
+                        timestamp));
+
+                await archive.StoreAsync(
+                    CreateEnvelope(
+                        Guid.NewGuid(),
+                        "steam.library-refreshed",
+                        "steam",
+                        timestamp,
+                        timestamp));
+
+                EventArchiveStatistics statistics =
+                    await query.GetStatisticsAsync(
+                        receivedSince: timestamp.AddDays(-1));
+
+                Assert.Collection(
+                    statistics.TopSources,
+                    first =>
+                    {
+                        Assert.Equal("github", first.Name);
+                        Assert.Equal(2, first.Count);
+                    },
+                    second =>
+                    {
+                        Assert.Equal("steam", second.Name);
+                        Assert.Equal(1, second.Count);
+                    });
+
+                Assert.Equal(
+                    "github.push",
+                    statistics.TopEventTypes[0].Name);
+
+                Assert.Equal(
+                    2,
+                    statistics.TopEventTypes[0].Count);
+            });
+    }
+
+    [Fact]
     public async Task GetRecentSummariesAsyncDoesNotSkipEventsWithTiedTimestamps()
     {
         await WithArchiveDatabaseAsync(
