@@ -1,4 +1,11 @@
-﻿using MissionControl.Contracts;
+﻿/*
+ * Mission Control
+ * Copyright 2026 Kyle Givler
+ * Licensed under the MIT License
+ */
+
+
+using MissionControl.Contracts;
 
 namespace MissionControl.Archive.Storage;
 
