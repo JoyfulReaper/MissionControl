@@ -106,15 +106,23 @@ else
         <tbody>
             @foreach (var item in _events)
             {
-                <tr>
-                    <td>@FormatTimestamp(item.OccurredAt)</td>
-                    <td>@item.Source</td>
-                    <td>@item.EventType</td>
-                    <td>@(item.CorrelationId ?? "—")</td>
-                    <td>
+                <tr class="event-row"
+                    role="button"
+                    tabindex="0"
+                    title="Open event details"
+                    @onclick="() => OpenEventModal(item.EventId)"
+                    @onkeydown="eventArgs =>
+                                    HandleEventRowKeyDown(eventArgs, item.EventId)">
+
+                        <td>@FormatTimestamp(item.OccurredAt)</td>
+                        <td>@item.Source</td>
+                        <td>@item.EventType</td>
+                        <td>@(item.CorrelationId ?? "—")</td>
+                        <td>
                         <a class="btn btn-sm btn-outline-primary"
-                           href="@($"events/{item.EventId:D}")">
-                            Details
+                           href="@($"events/{item.EventId:D}")"
+                           @onclick:stopPropagation="true">
+                            Full page
                         </a>
                     </td>
                 </tr>
@@ -143,6 +151,12 @@ else
     }
 }
 
+@if (_selectedEventId is Guid selectedEventId)
+{
+    <EventDetailsModal EventId="selectedEventId"
+                       OnClosed="CloseEventModal" />
+}
+
 @code {
     private IReadOnlyList<ArchiveEventSummaryItem> _events = [];
 
@@ -151,6 +165,7 @@ else
 
     private string? _sourceFilter;
     private string? _eventTypeFilter;
+    private Guid? _selectedEventId;
 
     private const int PageSize = 50;
 
@@ -319,6 +334,26 @@ else
     private Task ApplyFiltersAsync()
     {
         return LoadEventsAsync();
+    }
+
+    private void OpenEventModal(Guid eventId)
+    {
+        _selectedEventId = eventId;
+    }
+
+    private void CloseEventModal()
+    {
+        _selectedEventId = null;
+    }
+
+    private void HandleEventRowKeyDown(
+        KeyboardEventArgs eventArgs,
+        Guid eventId)
+    {
+        if (eventArgs.Key == "Enter")
+        {
+            OpenEventModal(eventId);
+        }
     }
 
     private async Task ClearFiltersAsync()
