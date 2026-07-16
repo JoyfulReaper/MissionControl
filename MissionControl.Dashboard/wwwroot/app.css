@@ -29,6 +29,10 @@ body {
     min-width: 320px;
 }
 
+h1:focus {
+    outline: none;
+}
+
 a,
 .btn-link {
     color: var(--mc-accent);

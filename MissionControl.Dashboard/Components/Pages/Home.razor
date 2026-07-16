@@ -1,5 +1,7 @@
 ﻿@page "/"
 
+@inject IArchiveEventClient ArchiveClient
+
 <PageTitle>Mission Control</PageTitle>
 
 <header class="page-header">
@@ -14,6 +16,101 @@
         and investigate payloads without leaving the dashboard.
     </p>
 </header>
+
+<section class="overview-section"
+         aria-labelledby="archive-overview-title">
+    <div class="section-heading">
+        <div>
+            <div class="page-eyebrow">
+                Archive activity
+            </div>
+
+            <h2 id="archive-overview-title">
+                Event overview
+            </h2>
+        </div>
+
+        @if (_statistics?.LatestReceivedAt is not null)
+        {
+            <div class="latest-event">
+                Latest receipt
+                <strong>
+                    @FormatTimestamp(
+                        _statistics.LatestReceivedAt.Value)
+                </strong>
+            </div>
+        }
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="stats-grid">
+            @for (int index = 0; index < 4; index++)
+            {
+                <div class="stat-card stat-card-loading">
+                    <span></span>
+                    <strong></strong>
+                </div>
+            }
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger">
+            @_error
+        </div>
+    }
+    else if (_statistics is not null)
+    {
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span>Total archived</span>
+                <strong>
+                    @_statistics.TotalEvents.ToString("N0")
+                </strong>
+            </div>
+
+            <div class="stat-card stat-card-accent">
+                <span>Received in 24 hours</span>
+                <strong>
+                    @(_statistics.EventsReceivedLast24Hours.ToString("N0"))
+                </strong>
+            </div>
+
+            <div class="stat-card">
+                <span>Event sources</span>
+                <strong>
+                    @(_statistics.UniqueSources.ToString("N0"))
+                </strong>
+            </div>
+
+            <div class="stat-card">
+                <span>Event types</span>
+                <strong>
+                    @(_statistics.UniqueEventTypes.ToString("N0"))
+                </strong>
+            </div>
+        </div>
+
+        <div class="category-grid">
+            <div class="category-card">
+                <h3>Top sources</h3>
+
+                <CategoryList
+                    Items="_statistics.TopSources"
+                    TotalEvents="_statistics.TotalEvents" />
+            </div>
+
+            <div class="category-card">
+                <h3>Top event types</h3>
+
+                <CategoryList
+                    Items="_statistics.TopEventTypes"
+                    TotalEvents="_statistics.TotalEvents" />
+            </div>
+        </div>
+    }
+</section>
 
 <div class="row g-4 mt-1">
     <div class="col-lg-7">
@@ -51,3 +148,50 @@
         </div>
     </div>
 </div>
+
+@code 
+{
+    private ArchiveStatisticsItem? _statistics;
+    private bool _isLoading = true;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _statistics =
+                await ArchiveClient.GetStatisticsAsync();
+        }
+        catch (HttpRequestException exception)
+        {
+            _error =
+                $"Mission Control Archive could not be reached: " +
+                exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _error =
+                "The Mission Control Archive request timed out.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private static readonly TimeZoneInfo DashboardTimeZone =
+        TimeZoneInfo.FindSystemTimeZoneById(
+            "America/New_York");
+
+    private static string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        DateTimeOffset localTime =
+            TimeZoneInfo.ConvertTime(
+                timestamp,
+                DashboardTimeZone);
+
+        return localTime.ToString(
+            "yyyy-MM-dd HH:mm:ss zzz");
+    }
+}

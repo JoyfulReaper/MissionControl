@@ -80,4 +80,17 @@ public class ArchiveEventClient(HttpClient client)
             .ReadFromJsonAsync<ArchiveEventDetailsItem>(
                 cancellationToken);
     }
+
+    public async Task<ArchiveStatisticsItem> GetStatisticsAsync(
+    CancellationToken cancellationToken = default)
+    {
+        ArchiveStatisticsItem? statistics =
+            await client.GetFromJsonAsync<ArchiveStatisticsItem>(
+                "api/events/statistics",
+                cancellationToken);
+
+        return statistics
+            ?? throw new InvalidOperationException(
+                "The Archive statistics response was empty.");
+    }
 }

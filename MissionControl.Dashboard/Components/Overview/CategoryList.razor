@@ -1,0 +1,48 @@
+﻿@if (Items.Count == 0)
+{
+    <p class="empty-message">
+        No event data is available yet.
+    </p>
+}
+else
+{
+    <ol class="category-list">
+        @foreach (ArchiveCategoryCountItem item in Items)
+        {
+            double percentage = TotalEvents == 0
+                ? 0
+                : (double)item.Count / TotalEvents * 100;
+
+            <li>
+                <div class="category-row">
+                    <span class="category-name">
+                        @item.Name
+                    </span>
+
+                    <strong>
+                        @item.Count.ToString("N0")
+                    </strong>
+                </div>
+
+                <div class="category-track"
+                     aria-hidden="true">
+                    <span style="@(
+                          $"width: {percentage:F2}%")">
+                    </span>
+                </div>
+            </li>
+        }
+    </ol>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<ArchiveCategoryCountItem> Items
+    {
+        get;
+        set;
+    } = [];
+
+    [Parameter]
+    public long TotalEvents { get; set; }
+}

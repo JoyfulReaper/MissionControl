@@ -18,4 +18,7 @@ public interface IArchiveEventClient
     Task<ArchiveEventDetailsItem?> GetByIdAsync(
         Guid eventId,
         CancellationToken cancellationToken = default);
+
+    Task<ArchiveStatisticsItem> GetStatisticsAsync(
+        CancellationToken cancellationToken = default);
 }
