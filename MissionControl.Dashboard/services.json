@@ -1,0 +1,78 @@
+{
+  "ServiceCatalog": {
+    "Services": [
+      {
+        "Id": "random-steam-game",
+        "Name": "Random Steam Game",
+        "Group": "Public Services",
+        "Summary": "Stops library paralysis by choosing a game for you.",
+        "Description": "A fast random game picker for public Steam libraries.",
+        "ContainerName": "joyful-stack-randomsteam-1",
+        "Visibility": "Public",
+        "Protocol": "HTTPS / JSON API",
+        "Endpoint": "randomsteam.kgivler.com",
+        "Image": "joyful/randomsteam",
+        "ApplicationUrl": "https://randomsteam.kgivler.com/",
+        "SourceUrl": "https://github.com/JoyfulReaper/RandomSteamGame",
+        "SearchTerms": [
+          "steam",
+          "picker",
+          "game",
+          "api"
+        ]
+      },
+      {
+        "Id": "mission-control-archive",
+        "Name": "Mission Control Archive",
+        "Group": "Mission Control",
+        "Summary": "Persists integration events for investigation.",
+        "Description": "Consumes integration events and stores their complete envelopes and payloads in SQLite.",
+        "ContainerName": "joyful-stack-archive-1",
+        "Visibility": "Internal",
+        "Protocol": "HTTP",
+        "Endpoint": "archive:8080",
+        "Image": "mission-control-archive",
+        "SearchTerms": [
+          "archive",
+          "events",
+          "sqlite",
+          "mission control"
+        ]
+      },
+      {
+        "Id": "rabbitmq",
+        "Name": "RabbitMQ",
+        "Group": "Mission Control",
+        "Summary": "Routes durable integration events between services.",
+        "Description": "The message broker behind Mission Control.",
+        "ContainerName": "joyful-stack-rabbitmq-1",
+        "Visibility": "Private",
+        "Protocol": "AMQP",
+        "Endpoint": "rabbitmq:5672",
+        "Image": "rabbitmq",
+        "SearchTerms": [
+          "broker",
+          "queue",
+          "amqp"
+        ]
+      },
+      {
+        "Id": "uptime-kuma",
+        "Name": "Uptime Kuma",
+        "Group": "Operations",
+        "Summary": "Checks whether exposed services are reachable.",
+        "Description": "Scheduled availability monitoring for websites, APIs, and network protocols.",
+        "ContainerName": "uptime-kuma",
+        "Visibility": "Private",
+        "Protocol": "HTTP",
+        "Endpoint": "127.0.0.1:3001",
+        "Image": "louislam/uptime-kuma:2",
+        "SearchTerms": [
+          "monitoring",
+          "health",
+          "uptime"
+        ]
+      }
+    ]
+  }
+}

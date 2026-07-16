@@ -1,0 +1,115 @@
+﻿@page "/services"
+
+@inject IAgentSnapshotClient AgentClient
+@inject IOptions<ServiceCatalogOptions> CatalogOptions
+@inject IDashboardDateTimeFormatter DateTimeFormatter
+
+<PageTitle>Services</PageTitle>
+
+<header class="page-header">
+    <div class="page-eyebrow">
+        Service operations
+    </div>
+
+    <h1>Services</h1>
+
+    <p class="page-description">
+        Inspect applications, protocols, Mission Control components,
+        and operational infrastructure from one workspace.
+    </p>
+</header>
+
+@code {
+    private AgentSnapshotItem? _snapshot;
+    private bool _isLoading = true;
+    private string? _snapshotError;
+    private string? _filter;
+
+    private IReadOnlyList<ServiceDefinition> TheServices =>
+        CatalogOptions.Value.Services;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _snapshot =
+                await AgentClient.GetSnapshotAsync();
+        }
+        catch (Exception exception)
+            when (exception is
+                HttpRequestException or
+                TaskCanceledException or
+                InvalidOperationException)
+        {
+            _snapshotError = exception.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private AgentContainerStatusItem? FindContainer(
+        ServiceDefinition service)
+    {
+        if (string.IsNullOrWhiteSpace(
+            service.ContainerName))
+        {
+            return null;
+        }
+
+        return _snapshot?.Containers.FirstOrDefault(
+            container =>
+                string.Equals(
+                    container.Name,
+                    service.ContainerName,
+                    StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units =
+            ["B", "KB", "MB", "GB", "TB"];
+
+        double value = bytes;
+        int unit = 0;
+
+        while (value >= 1024 &&
+               unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return $"{value:0.#} {units[unit]}";
+    }
+
+    private async Task RefreshSnapshotAsync()
+    {
+        if (_isLoading)
+        {
+            return;
+        }
+
+        _isLoading = true;
+        _snapshotError = null;
+
+        try
+        {
+            _snapshot =
+                await AgentClient.GetSnapshotAsync();
+        }
+        catch (Exception exception)
+            when (exception is
+                HttpRequestException or
+                TaskCanceledException or
+                InvalidOperationException)
+        {
+            _snapshotError = exception.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

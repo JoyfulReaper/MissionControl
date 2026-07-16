@@ -5,6 +5,7 @@ using MissionControl.Dashboard.Archive;
 using MissionControl.Dashboard.Components;
 using MissionControl.Dashboard.Formatting;
 using MissionControl.Dashboard.Security;
+using MissionControl.Dashboard.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +15,21 @@ builder.Services
     .AddInteractiveServerComponents();
 
 builder.Services.AddCascadingAuthenticationState();
+
+builder.Configuration.AddJsonFile(
+    "services.json",
+    optional: false,
+    reloadOnChange: true);
+
+builder.Services
+    .AddOptions<ServiceCatalogOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            ServiceCatalogOptions.SectionName))
+    .Validate(
+        options => options.Services.Count > 0,
+        "At least one dashboard service must be configured.")
+    .ValidateOnStart();
 
 builder.Services
     .AddAuthentication(
