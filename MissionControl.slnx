@@ -2,6 +2,7 @@
   <Project Path="MissionControl.Agent/MissionControl.Agent.csproj" Id="be58040c-d4b0-4045-b81b-789092ec34e3" />
   <Project Path="MissionControl.Archive/MissionControl.Archive.csproj" />
   <Project Path="MissionControl.Contracts/MissionControl.Contracts.csproj" />
+  <Project Path="MissionControl.Dashboard/MissionControl.Dashboard.csproj" />
   <Project Path="MissionControl.Gateway/MissionControl.Gateway.csproj" />
   <Project Path="MissionControl.GitActivity/MissionControl.GitActivity.csproj" Id="d38b3f82-93f6-4872-9484-c1bf74efd075" />
   <Project Path="MissionControl.Messaging.RabbitMq/MissionControl.Messaging.RabbitMq.csproj" Id="1e707882-81ba-44d4-9a1d-664f76083dc9" />
