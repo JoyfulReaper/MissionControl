@@ -62,19 +62,40 @@ public static class ArchiveEndpointRouteBuilderExtensions
         int? limit,
         string? source,
         string? eventType,
-        DateTimeOffset? before,
+        DateTimeOffset? beforeOccurredAt,
+        DateTimeOffset? beforeReceivedAt,
+        Guid? beforeEventId,
         IIntegrationEventQuery query,
         CancellationToken cancellationToken)
     {
         int effectiveLimit =
             Math.Clamp(limit ?? 50, 1, 200);
 
+        bool hasAnyCursorValue =
+            beforeOccurredAt is not null ||
+            beforeReceivedAt is not null ||
+            beforeEventId is not null;
+
+        bool hasCompleteCursor =
+            beforeOccurredAt is not null &&
+            beforeReceivedAt is not null &&
+            beforeEventId is not null;
+
+        if (hasAnyCursorValue && !hasCompleteCursor)
+        {
+            return Results.BadRequest(
+                "beforeOccurredAt, beforeReceivedAt, and " +
+                "beforeEventId must be provided together.");
+        }
+
         var events = await query.GetRecentSummariesAsync(
-            effectiveLimit,
-            source,
-            eventType,
-            before,
-            cancellationToken);
+            limit: effectiveLimit,
+            source: source,
+            eventType: eventType,
+            beforeOccurredAt: beforeOccurredAt,
+            beforeReceivedAt: beforeReceivedAt,
+            beforeEventId: beforeEventId,
+            cancellationToken: cancellationToken);
 
         return Results.Ok(events);
     }

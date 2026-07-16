@@ -55,15 +55,33 @@ public sealed class SqliteEventQuery(
     }
 
     public async Task<IReadOnlyList<EventSummaryItem>>
-    GetRecentSummariesAsync(
-        int limit,
-        string? source = null,
-        string? eventType = null,
-        DateTimeOffset? before = null,
-        CancellationToken cancellationToken = default)
+        GetRecentSummariesAsync(
+            int limit,
+            string? source = null,
+            string? eventType = null,
+            DateTimeOffset? beforeOccurredAt = null,
+            DateTimeOffset? beforeReceivedAt = null,
+            Guid? beforeEventId = null,
+            CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(limit, 1);
         limit = Math.Min(limit, MaximumLimit);
+
+        bool hasAnyCursorValue =
+            beforeOccurredAt is not null ||
+            beforeReceivedAt is not null ||
+            beforeEventId is not null;
+
+        bool hasCompleteCursor =
+            beforeOccurredAt is not null &&
+            beforeReceivedAt is not null &&
+            beforeEventId is not null;
+
+        if (hasAnyCursorValue && !hasCompleteCursor)
+        {
+            throw new ArgumentException(
+                "All event cursor values must be provided together.");
+        }
 
         await using var connection =
             new SqliteConnection(database.ConnectionString);
@@ -104,15 +122,42 @@ public sealed class SqliteEventQuery(
                 eventType);
         }
 
-        if (before is not null)
+        if (hasCompleteCursor)
         {
-            sql.AppendLine("AND OccurredAt < $before");
+            sql.AppendLine(
+                """
+                AND
+                (
+                    OccurredAt < $beforeOccurredAt
+                    OR
+                    (
+                        OccurredAt = $beforeOccurredAt
+                        AND ReceivedAt < $beforeReceivedAt
+                    )
+                    OR
+                    (
+                        OccurredAt = $beforeOccurredAt
+                        AND ReceivedAt = $beforeReceivedAt
+                        AND EventId < $beforeEventId
+                    )
+                )
+                """);
 
             command.Parameters.AddWithValue(
-                "$before",
-                before.Value
+                "$beforeOccurredAt",
+                beforeOccurredAt!.Value
                     .ToUniversalTime()
                     .ToString("O"));
+
+            command.Parameters.AddWithValue(
+                "$beforeReceivedAt",
+                beforeReceivedAt!.Value
+                    .ToUniversalTime()
+                    .ToString("O"));
+
+            command.Parameters.AddWithValue(
+                "$beforeEventId",
+                beforeEventId!.Value.ToString());
         }
 
         sql.AppendLine(

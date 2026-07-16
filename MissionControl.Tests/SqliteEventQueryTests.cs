@@ -1,8 +1,7 @@
 extern alias ArchiveApp;
-
-using Microsoft.Data.Sqlite;
 using ArchiveApp::MissionControl.Archive.Contracts;
 using ArchiveApp::MissionControl.Archive.Storage.Sqlite;
+using Microsoft.Data.Sqlite;
 using MissionControl.Contracts;
 using System.Reflection;
 using System.Text.Json;
@@ -15,6 +14,75 @@ public sealed class SqliteEventQueryTests
     static SqliteEventQueryTests()
     {
         SQLitePCL.Batteries_V2.Init();
+    }
+
+    [Fact]
+    public async Task GetRecentSummariesAsyncDoesNotSkipEventsWithTiedTimestamps()
+    {
+        await WithArchiveDatabaseAsync(
+            async (archive, query) =>
+            {
+                DateTimeOffset occurredAt =
+                    new(2026, 7, 16, 12, 0, 0, TimeSpan.Zero);
+
+                IntegrationEventEnvelope first = CreateEnvelope(
+                    Guid.Parse("40000000-0000-0000-0000-000000000004"),
+                    "test.event",
+                    "test",
+                    occurredAt,
+                    occurredAt.AddSeconds(4));
+
+                IntegrationEventEnvelope second = CreateEnvelope(
+                    Guid.Parse("40000000-0000-0000-0000-000000000003"),
+                    "test.event",
+                    "test",
+                    occurredAt,
+                    occurredAt.AddSeconds(3));
+
+                IntegrationEventEnvelope third = CreateEnvelope(
+                    Guid.Parse("40000000-0000-0000-0000-000000000002"),
+                    "test.event",
+                    "test",
+                    occurredAt,
+                    occurredAt.AddSeconds(2));
+
+                IntegrationEventEnvelope fourth = CreateEnvelope(
+                    Guid.Parse("40000000-0000-0000-0000-000000000001"),
+                    "test.event",
+                    "test",
+                    occurredAt,
+                    occurredAt.AddSeconds(1));
+
+                await archive.StoreAsync(first);
+                await archive.StoreAsync(second);
+                await archive.StoreAsync(third);
+                await archive.StoreAsync(fourth);
+
+                IReadOnlyList<EventSummaryItem> firstPage =
+                    await query.GetRecentSummariesAsync(2);
+
+                Assert.Equal(2, firstPage.Count);
+
+                EventSummaryItem cursor = firstPage[^1];
+
+                // This call will use the new composite cursor after
+                // the production query is updated.
+                IReadOnlyList<EventSummaryItem> secondPage =
+                    await query.GetRecentSummariesAsync(
+                        limit: 2,
+                        beforeOccurredAt: cursor.OccurredAt,
+                        beforeReceivedAt: cursor.ReceivedAt,
+                        beforeEventId: cursor.EventId);
+
+                Assert.Equal(2, secondPage.Count);
+
+                Guid[] allIds = firstPage
+                    .Concat(secondPage)
+                    .Select(item => item.EventId)
+                    .ToArray();
+
+                Assert.Equal(4, allIds.Distinct().Count());
+            });
     }
 
     [Fact]
@@ -324,7 +392,9 @@ public sealed class SqliteEventQueryTests
                 IReadOnlyList<EventSummaryItem> summaries =
                     await query.GetRecentSummariesAsync(
                         10,
-                        before: cursor);
+                        beforeOccurredAt: atCursor.OccurredAt,
+                        beforeReceivedAt: atCursor.ReceivedAt,
+                        beforeEventId: atCursor.EventId);
 
                 var item = Assert.Single(summaries);
                 Assert.Equal(earlier.EventId, item.EventId);

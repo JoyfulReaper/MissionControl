@@ -26,6 +26,8 @@ public interface IIntegrationEventQuery
         int limit,
         string? source = null,
         string? eventType = null,
-        DateTimeOffset? before = null,
+        DateTimeOffset? beforeOccurredAt = null,
+        DateTimeOffset? beforeReceivedAt = null,
+        Guid? beforeEventId = null,
         CancellationToken cancellationToken = default);
 }
