@@ -4,12 +4,9 @@
  * Licensed under the MIT License
  */
 
-
-using System.Text.Json;
-
 namespace MissionControl.Dashboard.Archive;
 
-public sealed record ArchiveEventFeedItem(
+public sealed record ArchiveEventSummaryItem(
     Guid EventId,
     string EventType,
     string Source,
@@ -17,5 +14,4 @@ public sealed record ArchiveEventFeedItem(
     DateTimeOffset OccurredAt,
     DateTimeOffset ReceivedAt,
     string? CorrelationId,
-    string? CausationId,
-    JsonElement Payload);
+    string? CausationId);

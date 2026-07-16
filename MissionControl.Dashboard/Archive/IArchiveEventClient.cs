@@ -2,7 +2,7 @@
 
 public interface IArchiveEventClient
 {
-    Task<IReadOnlyList<ArchiveEventFeedItem>> GetRecentAsync(
+    Task<IReadOnlyList<ArchiveEventSummaryItem>> GetRecentAsync(
         int limit = 50,
         CancellationToken cancellationToken = default);
 }

@@ -98,7 +98,7 @@ public sealed class SqliteEventQuery(
     }
 
     private static EventSummaryItem ReadEventSummary(
-    SqliteDataReader reader)
+        SqliteDataReader reader)
     {
         return new EventSummaryItem(
             EventId: Guid.Parse(reader.GetString(0)),
