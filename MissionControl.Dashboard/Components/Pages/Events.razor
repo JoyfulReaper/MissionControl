@@ -20,6 +20,7 @@
                    placeholder="Type or select a source"
                    autocomplete="off"
                    @bind="_sourceFilter"
+                   @bind:event="oninput"
                    @onkeydown="HandleFilterKeyDown" />
 
             <datalist id="source-options">
@@ -41,7 +42,9 @@
                    list="event-type-options"
                    placeholder="Type or select an event type"
                    autocomplete="off"
-                   @bind="_eventTypeFilter" />
+                   @bind="_eventTypeFilter"
+                   @bind:event="oninput"
+                   @onkeydown="HandleFilterKeyDown" />
 
             <datalist id="event-type-options">
                 @foreach (string eventType in _eventTypeSuggestions)
@@ -131,8 +134,6 @@ else
     private string? _sourceFilter;
     private string? _eventTypeFilter;
 
-    private bool _suggestionsLoaded;
-
     private static readonly TimeZoneInfo DashboardTimeZone =
     TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
 
@@ -161,7 +162,6 @@ else
             _events = await ArchiveClient.GetRecentAsync(limit: 50);
 
             UpdateSuggestions(_events);
-            _suggestionsLoaded = true;
         }
         catch (HttpRequestException exception)
         {
