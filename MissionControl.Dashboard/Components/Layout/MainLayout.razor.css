@@ -1,98 +1,149 @@
-.page {
-    position: relative;
+.app-shell {
     display: flex;
-    flex-direction: column;
-}
-
-main {
-    flex: 1;
+    min-height: 100vh;
+    background: radial-gradient( circle at 75% 0, rgba(72, 201, 176, 0.06), transparent 32rem), var(--mc-background);
 }
 
 .sidebar {
-    background-image: linear-gradient(180deg, rgb(5, 39, 103) 0%, #3a0647 70%);
+    position: sticky;
+    top: 0;
+    flex: 0 0 260px;
+    width: 260px;
+    height: 100vh;
+    overflow-y: auto;
+    background: #0a111c;
+    border-right: 1px solid var(--mc-border);
 }
 
-.top-row {
-    background-color: #f7f7f7;
-    border-bottom: 1px solid #d6d5d5;
-    justify-content: flex-end;
-    height: 3.5rem;
+.workspace {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    min-height: 4.5rem;
+    padding: 0.75rem 2rem;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(8, 13, 22, 0.88);
+    border-bottom: 1px solid var(--mc-border);
+    backdrop-filter: blur(14px);
+}
+
+.topbar-eyebrow {
+    color: var(--mc-text-muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+}
+
+.topbar-title {
+    color: var(--mc-text);
+    font-size: 1rem;
+    font-weight: 650;
+}
+
+.identity {
     display: flex;
     align-items: center;
+    gap: 0.65rem;
 }
 
-    .top-row ::deep a, .top-row ::deep .btn-link {
-        white-space: nowrap;
-        margin-left: 1.5rem;
-        text-decoration: none;
-    }
-
-    .top-row ::deep a:hover, .top-row ::deep .btn-link:hover {
-        text-decoration: underline;
-    }
-
-    .top-row ::deep a:first-child {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-@media (max-width: 640.98px) {
-    .top-row {
-        justify-content: space-between;
-    }
-
-    .top-row ::deep a, .top-row ::deep .btn-link {
-        margin-left: 0;
-    }
+.identity-status {
+    width: 0.55rem;
+    height: 0.55rem;
+    background: var(--mc-accent);
+    border-radius: 50%;
+    box-shadow: 0 0 0 0.25rem var(--mc-accent-subtle);
 }
 
-@media (min-width: 641px) {
-    .page {
-        flex-direction: row;
+.identity-danger .identity-status {
+    background: var(--mc-danger);
+    box-shadow: 0 0 0 0.25rem rgba(248, 113, 113, 0.12);
+}
+
+.identity-label {
+    color: var(--mc-text-muted);
+    font-size: 0.68rem;
+}
+
+.identity-name {
+    max-width: 18rem;
+    overflow: hidden;
+    color: var(--mc-text);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.main-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.content-container {
+    width: 100%;
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+@media (max-width: 700px) {
+    .app-shell {
+        flex-direction: column;
     }
 
     .sidebar {
-        width: 250px;
-        height: 100vh;
-        position: sticky;
-        top: 0;
+        position: relative;
+        width: 100%;
+        height: auto;
+        flex-basis: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--mc-border);
     }
 
-    .top-row {
-        position: sticky;
-        top: 0;
-        z-index: 1;
+    .topbar {
+        position: relative;
+        padding: 0.75rem 1rem;
     }
 
-    .top-row.auth ::deep a:first-child {
-        flex: 1;
-        text-align: right;
-        width: 0;
+    .topbar-eyebrow,
+    .identity-label {
+        display: none;
     }
 
-    .top-row, article {
-        padding-left: 2rem !important;
-        padding-right: 1.5rem !important;
+    .content-container {
+        padding: 1.25rem 1rem;
     }
 }
 
 #blazor-error-ui {
     color-scheme: light only;
-    background: lightyellow;
-    bottom: 0;
-    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
-    box-sizing: border-box;
-    display: none;
-    left: 0;
-    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
     position: fixed;
-    width: 100%;
-    z-index: 1000;
+    right: 1rem;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 2000;
+    display: none;
+    box-sizing: border-box;
+    padding: 0.8rem 3rem 0.8rem 1rem;
+    color: #281b00;
+    background: #fbbf24;
+    border-radius: 0.5rem;
+    box-shadow: var(--mc-shadow);
 }
 
     #blazor-error-ui .dismiss {
-        cursor: pointer;
         position: absolute;
-        right: 0.75rem;
-        top: 0.5rem;
+        top: 0.65rem;
+        right: 0.8rem;
+        cursor: pointer;
     }

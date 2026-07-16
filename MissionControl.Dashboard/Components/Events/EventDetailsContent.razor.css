@@ -1,0 +1,13 @@
+.event-payload {
+    max-height: 60vh;
+    margin: 0;
+    padding: 1rem;
+    color: #c9d8ec;
+    background: #070b12;
+    border: 1px solid var(--mc-border);
+    border-radius: 0.5rem;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}

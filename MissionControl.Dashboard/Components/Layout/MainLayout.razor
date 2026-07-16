@@ -1,38 +1,75 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
+<div class="app-shell">
+    <aside class="sidebar">
         <NavMenu />
-    </div>
+    </aside>
 
-    <main>
-        <div class="top-row px-4">
+    <div class="workspace">
+        <header class="topbar">
+            <div>
+                <div class="topbar-eyebrow">
+                    Private operations console
+                </div>
+
+                <div class="topbar-title">
+                    Mission Control
+                </div>
+            </div>
+
             <AuthorizeView>
                 <Authorized Context="authentication">
-                    <span class="text-secondary">
-                        Signed in as
-                        <strong>
-                            @authentication.User.Identity?.Name
-                        </strong>
-                    </span>
+                    <div class="identity">
+                        <span class="identity-status"
+                              aria-hidden="true">
+                        </span>
+
+                        <div>
+                            <div class="identity-label">
+                                Signed in
+                            </div>
+
+                            <div class="identity-name">
+                                @authentication.User.Identity?.Name
+                            </div>
+                        </div>
+                    </div>
                 </Authorized>
 
                 <NotAuthorized>
-                    <span class="text-danger">
-                        Not authenticated
-                    </span>
+                    <div class="identity identity-danger">
+                        <span class="identity-status"
+                              aria-hidden="true">
+                        </span>
+
+                        <div>
+                            <div class="identity-label">
+                                Access
+                            </div>
+
+                            <div class="identity-name">
+                                Not authenticated
+                            </div>
+                        </div>
+                    </div>
                 </NotAuthorized>
             </AuthorizeView>
-        </div>
+        </header>
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
+        <main class="main-content">
+            <article class="content-container">
+                @Body
+            </article>
+        </main>
+    </div>
 </div>
 
-<div id="blazor-error-ui" data-nosnippet>
+<div id="blazor-error-ui"
+     data-nosnippet>
     An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
+    <a href="."
+       class="reload">
+        Reload
+    </a>
     <span class="dismiss">🗙</span>
 </div>

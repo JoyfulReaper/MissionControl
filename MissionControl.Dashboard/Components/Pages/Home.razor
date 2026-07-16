@@ -1,35 +1,53 @@
 ﻿@page "/"
 
-<PageTitle>Mission Control Dashboard</PageTitle>
+<PageTitle>Mission Control</PageTitle>
 
-<h1>Mission Control</h1>
+<header class="page-header">
+    <div class="page-eyebrow">
+        Operations dashboard
+    </div>
 
-<p class="text-secondary">
-    Private operations and event dashboard.
-</p>
+    <h1>Mission Control</h1>
 
-<div class="card">
-    <div class="card-body">
-        <h2 class="h5">Dashboard Status</h2>
+    <p class="page-description">
+        Inspect archived integration events, trace related activity,
+        and investigate payloads without leaving the dashboard.
+    </p>
+</header>
 
-        <p>
-            Interactive Server test count:
-            <strong>@_testCount</strong>
-        </p>
+<div class="row g-4 mt-1">
+    <div class="col-lg-7">
+        <a class="workspace-card"
+           href="events">
+            <div class="workspace-card-label">
+                Event Archive
+            </div>
 
-        <button type="button"
-                class="btn btn-primary"
-                @onclick="IncrementTestCount">
-            Test interactivity
-        </button>
+            <h2>Explore integration events</h2>
+
+            <p>
+                Filter by source or event type, page through historical
+                activity, and open complete event payloads in place.
+            </p>
+
+            <span class="workspace-card-action">
+                Open archive →
+            </span>
+        </a>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="workspace-card workspace-card-secondary">
+            <div class="workspace-card-label">
+                Investigation workflow
+            </div>
+
+            <h2>Keep your place</h2>
+
+            <p>
+                Click an event row for a quick modal inspection, or open
+                the full event page when you need a permanent URL.
+            </p>
+        </div>
     </div>
 </div>
-
-@code {
-    private int _testCount;
-
-    private void IncrementTestCount()
-    {
-        _testCount++;
-    }
-}
