@@ -7,12 +7,68 @@
 <h1>Events</h1>
 
 <div class="mb-3">
-    <button type="button"
-            class="btn btn-primary"
-            disabled="@_isLoading"
-            @onclick="LoadEventsAsync">
-        @(_isLoading ? "Loading..." : "Refresh")
-    </button>
+    <div class="row g-2 align-items-end mb-3">
+        <div class="col-md-3">
+            <label for="source-filter"
+                   class="form-label">
+                Source
+            </label>
+
+            <input id="source-filter"
+                   class="form-control"
+                   list="source-options"
+                   placeholder="Type or select a source"
+                   autocomplete="off"
+                   @bind="_sourceFilter"
+                   @onkeydown="HandleFilterKeyDown" />
+
+            <datalist id="source-options">
+                @foreach (string source in _sourceSuggestions)
+                {
+                    <option value="@source"></option>
+                }
+            </datalist>
+        </div>
+
+        <div class="col-md-5">
+            <label for="event-type-filter"
+                   class="form-label">
+                Event type
+            </label>
+
+            <input id="event-type-filter"
+                   class="form-control"
+                   list="event-type-options"
+                   placeholder="Type or select an event type"
+                   autocomplete="off"
+                   @bind="_eventTypeFilter" />
+
+            <datalist id="event-type-options">
+                @foreach (string eventType in _eventTypeSuggestions)
+                {
+                    <option value="@eventType"></option>
+                }
+            </datalist>
+        </div>
+
+        <div class="col-md-auto">
+            <button type="button"
+                    class="btn btn-primary"
+                    disabled="@_isLoading"
+                    @onclick="ApplyFiltersAsync">
+                @(_isLoading ? "Loading..." : "Apply")
+            </button>
+        </div>
+
+        <div class="col-md-auto">
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    disabled="@_isLoading"
+                    @onclick="ClearFiltersAsync">
+                Clear
+            </button>
+        </div>
+    </div>
 </div>
 
 @if (_error is not null)
@@ -69,6 +125,14 @@ else
     private bool _isLoading;
     private string? _error;
 
+    private IReadOnlyList<string> _sourceSuggestions = [];
+    private IReadOnlyList<string> _eventTypeSuggestions = [];
+
+    private string? _sourceFilter;
+    private string? _eventTypeFilter;
+
+    private bool _suggestionsLoaded;
+
     private static readonly TimeZoneInfo DashboardTimeZone =
     TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
 
@@ -82,19 +146,22 @@ else
             "yyyy-MM-dd HH:mm:ss zzz");
     }
 
-    protected override Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync()
     {
-        return LoadEventsAsync();
+        await LoadInitialEventsAsync();
     }
 
-    private async Task LoadEventsAsync()
+    private async Task LoadInitialEventsAsync()
     {
         _isLoading = true;
         _error = null;
 
         try
         {
-            _events = await ArchiveClient.GetRecentAsync(50);
+            _events = await ArchiveClient.GetRecentAsync(limit: 50);
+
+            UpdateSuggestions(_events);
+            _suggestionsLoaded = true;
         }
         catch (HttpRequestException exception)
         {
@@ -110,6 +177,106 @@ else
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private void UpdateSuggestions(
+    IEnumerable<ArchiveEventSummaryItem> events)
+    {
+        _sourceSuggestions = events
+            .Select(item => item.Source)
+            .Where(source => !string.IsNullOrWhiteSpace(source))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(source => source, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        _eventTypeSuggestions = events
+            .Select(item => item.EventType)
+            .Where(eventType => !string.IsNullOrWhiteSpace(eventType))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(eventType => eventType, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            _events = await ArchiveClient.GetRecentAsync(
+                limit: 50,
+                source: NormalizeFilter(_sourceFilter),
+                eventType: NormalizeFilter(_eventTypeFilter));
+        }
+        catch (HttpRequestException exception)
+        {
+            _error =
+                $"Mission Control Archive could not be reached: " +
+                exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _error =
+                "The Mission Control Archive request timed out.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private static string? NormalizeFilter(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+    }
+
+    private async Task LoadEventsAsync()
+    {
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            _events = await ArchiveClient.GetRecentAsync(
+                limit: 50,
+                source: _sourceFilter,
+                eventType: _eventTypeFilter);
+        }
+        catch (HttpRequestException exception)
+        {
+            _error =
+                $"Mission Control Archive could not be reached: " +
+                exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _error =
+                "The Mission Control Archive request timed out.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _sourceFilter = null;
+        _eventTypeFilter = null;
+
+        await LoadEventsAsync();
+    }
+
+    private async Task HandleFilterKeyDown(
+        KeyboardEventArgs eventArgs)
+    {
+        if (eventArgs.Key == "Enter")
+        {
+            await ApplyFiltersAsync();
         }
     }
 }
