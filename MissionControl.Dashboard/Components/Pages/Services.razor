@@ -165,6 +165,9 @@ else
                     AgentContainerStatusItem? container =
                         FindContainer(service);
 
+                    AgentProtocolStatusItem? protocol =
+                        FindProtocol(service);
+
                     <details class="service-entry">
                         <summary>
                             <div class="service-summary-copy">
@@ -472,5 +475,38 @@ else
         return value?.Contains(
             filter,
             StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private AgentProtocolStatusItem? FindProtocol(
+    ServiceDefinition service)
+    {
+        if (string.IsNullOrWhiteSpace(
+            service.ProtocolServiceKey))
+        {
+            return null;
+        }
+
+        return _snapshot?.Protocols.FirstOrDefault(
+            protocol =>
+                string.Equals(
+                    protocol.Service,
+                    service.ProtocolServiceKey,
+                    StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string GetProtocolStateClass(
+        ServiceDefinition service)
+    {
+        AgentProtocolStatusItem? protocol =
+            FindProtocol(service);
+
+        if (_snapshot is null || protocol is null)
+        {
+            return "status-unknown";
+        }
+
+        return protocol.Succeeded
+            ? "status-running"
+            : "status-stopped";
     }
 }
