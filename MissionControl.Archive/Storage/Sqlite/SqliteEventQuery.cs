@@ -11,6 +11,49 @@ public sealed class SqliteEventQuery(
 {
     private const int MaximumLimit = 200;
 
+    public async Task<EventFeedItem?> GetByIdAsync(
+        Guid eventId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection =
+            new SqliteConnection(database.ConnectionString);
+
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText =
+            """
+        SELECT
+            EventId,
+            EventType,
+            Source,
+            SchemaVersion,
+            OccurredAt,
+            ReceivedAt,
+            CorrelationId,
+            CausationId,
+            PayloadJson
+        FROM IntegrationEvents
+        WHERE EventId = $eventId
+        LIMIT 1;
+        """;
+
+        command.Parameters.AddWithValue(
+            "$eventId",
+            eventId.ToString());
+
+        await using var reader =
+            await command.ExecuteReaderAsync(cancellationToken);
+
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return ReadEvent(reader);
+    }
+
     public async Task<IReadOnlyList<EventSummaryItem>>
     GetRecentSummariesAsync(
         int limit,

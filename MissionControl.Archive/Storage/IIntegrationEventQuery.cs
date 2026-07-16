@@ -11,6 +11,10 @@ namespace MissionControl.Archive.Storage;
 
 public interface IIntegrationEventQuery
 {
+    Task<EventFeedItem?> GetByIdAsync(
+        Guid eventId,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<EventFeedItem>> GetRecentAsync(
         int limit,
         string? source = null,

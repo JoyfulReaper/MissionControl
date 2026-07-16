@@ -27,6 +27,13 @@ public static class ArchiveEndpointRouteBuilderExtensions
             .WithName("GetEventFeed")
             .WithTags("Events");
 
+        endpoints
+            .MapGet(
+                "/api/events/{eventId:guid}",
+                HandleGetEventByIdAsync)
+            .WithName("GetEventById")
+            .WithTags("Events");
+
         return endpoints;
     }
 
@@ -70,5 +77,19 @@ public static class ArchiveEndpointRouteBuilderExtensions
             cancellationToken);
 
         return Results.Ok(events);
+    }
+
+    private static async Task<IResult> HandleGetEventByIdAsync(
+        Guid eventId,
+        IIntegrationEventQuery query,
+        CancellationToken cancellationToken)
+    {
+        var archivedEvent = await query.GetByIdAsync(
+            eventId,
+            cancellationToken);
+
+        return archivedEvent is null
+            ? Results.NotFound()
+            : Results.Ok(archivedEvent);
     }
 }

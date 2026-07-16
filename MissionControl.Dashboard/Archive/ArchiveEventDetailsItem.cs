@@ -9,7 +9,7 @@ using System.Text.Json;
 
 namespace MissionControl.Dashboard.Archive;
 
-public sealed record ArchiveEventFeedItem(
+public sealed record ArchiveEventDetailsItem(
     Guid EventId,
     string EventType,
     string Source,
