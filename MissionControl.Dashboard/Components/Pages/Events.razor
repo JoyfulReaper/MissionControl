@@ -135,7 +135,7 @@ else
     private string? _eventTypeFilter;
 
     private static readonly TimeZoneInfo DashboardTimeZone =
-    TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+        TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
 
     private static string FormatTimestamp(DateTimeOffset timestamp)
     {
@@ -147,41 +147,15 @@ else
             "yyyy-MM-dd HH:mm:ss zzz");
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync()
     {
-        await LoadInitialEventsAsync();
-    }
-
-    private async Task LoadInitialEventsAsync()
-    {
-        _isLoading = true;
-        _error = null;
-
-        try
-        {
-            _events = await ArchiveClient.GetRecentAsync(limit: 50);
-
-            UpdateSuggestions(_events);
-        }
-        catch (HttpRequestException exception)
-        {
-            _error =
-                $"Mission Control Archive could not be reached: " +
-                exception.Message;
-        }
-        catch (TaskCanceledException)
-        {
-            _error =
-                "The Mission Control Archive request timed out.";
-        }
-        finally
-        {
-            _isLoading = false;
-        }
+        return LoadEventsAsync(
+            refreshSuggestions: true,
+            ignoreFilters: true);
     }
 
     private void UpdateSuggestions(
-    IEnumerable<ArchiveEventSummaryItem> events)
+        IEnumerable<ArchiveEventSummaryItem> events)
     {
         _sourceSuggestions = events
             .Select(item => item.Source)
@@ -198,35 +172,6 @@ else
             .ToArray();
     }
 
-    private async Task ApplyFiltersAsync()
-    {
-        _isLoading = true;
-        _error = null;
-
-        try
-        {
-            _events = await ArchiveClient.GetRecentAsync(
-                limit: 50,
-                source: NormalizeFilter(_sourceFilter),
-                eventType: NormalizeFilter(_eventTypeFilter));
-        }
-        catch (HttpRequestException exception)
-        {
-            _error =
-                $"Mission Control Archive could not be reached: " +
-                exception.Message;
-        }
-        catch (TaskCanceledException)
-        {
-            _error =
-                "The Mission Control Archive request timed out.";
-        }
-        finally
-        {
-            _isLoading = false;
-        }
-    }
-
     private static string? NormalizeFilter(string? value)
     {
         return string.IsNullOrWhiteSpace(value)
@@ -234,17 +179,31 @@ else
             : value.Trim();
     }
 
-    private async Task LoadEventsAsync()
+    private async Task LoadEventsAsync(
+        bool refreshSuggestions = false,
+        bool ignoreFilters = false)
     {
         _isLoading = true;
         _error = null;
 
         try
         {
+            string? source = ignoreFilters
+                ? null
+                : NormalizeFilter(_sourceFilter);
+            string? eventType = ignoreFilters
+                ? null
+                : NormalizeFilter(_eventTypeFilter);
+
             _events = await ArchiveClient.GetRecentAsync(
                 limit: 50,
-                source: _sourceFilter,
-                eventType: _eventTypeFilter);
+                source: source,
+                eventType: eventType);
+
+            if (refreshSuggestions)
+            {
+                UpdateSuggestions(_events);
+            }
         }
         catch (HttpRequestException exception)
         {
@@ -261,6 +220,11 @@ else
         {
             _isLoading = false;
         }
+    }
+
+    private Task ApplyFiltersAsync()
+    {
+        return LoadEventsAsync();
     }
 
     private async Task ClearFiltersAsync()
@@ -271,12 +235,11 @@ else
         await LoadEventsAsync();
     }
 
-    private async Task HandleFilterKeyDown(
+    private Task HandleFilterKeyDown(
         KeyboardEventArgs eventArgs)
     {
-        if (eventArgs.Key == "Enter")
-        {
-            await ApplyFiltersAsync();
-        }
+        return eventArgs.Key == "Enter"
+            ? ApplyFiltersAsync()
+            : Task.CompletedTask;
     }
 }
