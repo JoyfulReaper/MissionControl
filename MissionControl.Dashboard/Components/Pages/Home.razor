@@ -1,7 +1,35 @@
 ﻿@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Mission Control Dashboard</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Mission Control</h1>
 
-Welcome to your new app.
+<p class="text-secondary">
+    Private operations and event dashboard.
+</p>
+
+<div class="card">
+    <div class="card-body">
+        <h2 class="h5">Dashboard Status</h2>
+
+        <p>
+            Interactive Server test count:
+            <strong>@_testCount</strong>
+        </p>
+
+        <button type="button"
+                class="btn btn-primary"
+                @onclick="IncrementTestCount">
+            Test interactivity
+        </button>
+    </div>
+</div>
+
+@code {
+    private int _testCount;
+
+    private void IncrementTestCount()
+    {
+        _testCount++;
+    }
+}
