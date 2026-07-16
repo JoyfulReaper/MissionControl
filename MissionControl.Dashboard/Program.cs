@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using MissionControl.Dashboard.Agent;
 using MissionControl.Dashboard.Archive;
 using MissionControl.Dashboard.Components;
 using MissionControl.Dashboard.Formatting;
@@ -64,6 +65,22 @@ builder.Services
                 options.TimeZoneId),
         "Dashboard date/time timezone is invalid.")
     .ValidateOnStart();
+
+string agentBaseUrl =
+    builder.Configuration["Agent:BaseUrl"]
+    ?? throw new InvalidOperationException(
+        "Agent:BaseUrl is not configured.");
+
+builder.Services.AddHttpClient<
+    IAgentSnapshotClient,
+    AgentSnapshotClient>(httpClient =>
+    {
+        httpClient.BaseAddress =
+            new Uri(agentBaseUrl);
+
+        httpClient.Timeout =
+            TimeSpan.FromSeconds(10);
+    });
 
 builder.Services.AddSingleton<
     IDashboardDateTimeFormatter,
