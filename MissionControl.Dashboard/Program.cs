@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using MissionControl.Dashboard.Archive;
 using MissionControl.Dashboard.Components;
 using MissionControl.Dashboard.Security;
 
@@ -27,6 +28,19 @@ builder.Services
         new AuthorizationPolicyBuilder()
             .RequireAuthenticatedUser()
             .Build());
+
+var archiveBaseUrl =
+    builder.Configuration["Archive:BaseUrl"]
+    ?? throw new InvalidOperationException(
+        "Archive:BaseUrl is not configured.");
+
+builder.Services.AddHttpClient<
+    IArchiveEventClient,
+    ArchiveEventClient>(httpClient =>
+    {
+        httpClient.BaseAddress = new Uri(archiveBaseUrl);
+        httpClient.Timeout = TimeSpan.FromSeconds(10);
+    });
 
 var app = builder.Build();
 

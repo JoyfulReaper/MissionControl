@@ -1,13 +1,108 @@
 ﻿@page "/events"
 
+@inject IArchiveEventClient ArchiveClient
+
 <PageTitle>Events</PageTitle>
 
 <h1>Events</h1>
 
-<p class="text-secondary">
-    Mission Control event data will appear here.
-</p>
-
-<div class="alert alert-info">
-    The dashboard is not connected to Mission Control yet.
+<div class="mb-3">
+    <button type="button"
+            class="btn btn-primary"
+            disabled="@_isLoading"
+            @onclick="LoadEventsAsync">
+        @(_isLoading ? "Loading..." : "Refresh")
+    </button>
 </div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">
+        @_error
+    </div>
+}
+else if (_isLoading)
+{
+    <p>Loading Mission Control events...</p>
+}
+else if (_events.Count == 0)
+{
+    <div class="alert alert-info">
+        No archived events were found.
+    </div>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Occurred</th>
+                <th>Source</th>
+                <th>Event type</th>
+                <th>Correlation</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @foreach (var item in _events)
+            {
+                <tr>
+                    <td>@FormatTimestamp(item.OccurredAt)</td>
+                    <td>@item.Source</td>
+                    <td>@item.EventType</td>
+                    <td>@(item.CorrelationId ?? "—")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<ArchiveEventFeedItem> _events = [];
+    private bool _isLoading;
+    private string? _error;
+
+    private static readonly TimeZoneInfo DashboardTimeZone =
+    TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+
+    private static string FormatTimestamp(DateTimeOffset timestamp)
+    {
+        var localTime = TimeZoneInfo.ConvertTime(
+            timestamp,
+            DashboardTimeZone);
+
+        return localTime.ToString(
+            "yyyy-MM-dd HH:mm:ss zzz");
+    }
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadEventsAsync();
+    }
+
+    private async Task LoadEventsAsync()
+    {
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            _events = await ArchiveClient.GetRecentAsync(50);
+        }
+        catch (HttpRequestException exception)
+        {
+            _error =
+                $"Mission Control Archive could not be reached: " +
+                exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _error =
+                "The Mission Control Archive request timed out.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}
