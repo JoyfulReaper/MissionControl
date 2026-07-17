@@ -66,10 +66,6 @@ public static class DashboardServiceCollectionExtensions
             SqliteDashboardUserStore>();
 
         services.AddSingleton<
-            IDashboardUserStore,
-            SqliteDashboardUserStore>();
-
-        services.AddSingleton<
             IPasswordHasher<DashboardUser>,
             PasswordHasher<DashboardUser>>();
 
