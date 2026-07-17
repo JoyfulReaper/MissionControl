@@ -1,0 +1,52 @@
+<section class="service-stats"
+         aria-label="Service summary">
+    <div class="service-stat">
+        <span>Configured services</span>
+        <strong>@(ConfiguredServices.ToString("N0"))</strong>
+    </div>
+
+    <div class="service-stat service-stat-accent">
+        <span>Running containers</span>
+        <strong>@(RunningContainers.ToString("N0"))</strong>
+    </div>
+
+    <div class="service-stat">
+        <span>Public services</span>
+        <strong>@(PublicServices.ToString("N0"))</strong>
+    </div>
+
+    <div class="service-stat">
+        <span>Snapshot containers</span>
+        <strong>@(SnapshotContainers.ToString("N0"))</strong>
+    </div>
+
+    <div class="service-stat">
+        <span>Successful probes</span>
+        <strong>@(SuccessfulProbes.ToString("N0"))</strong>
+    </div>
+
+    <div class="service-stat">
+        <span>Failed probes</span>
+        <strong>@(FailedProbes.ToString("N0"))</strong>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public int ConfiguredServices { get; set; }
+
+    [Parameter, EditorRequired]
+    public int RunningContainers { get; set; }
+
+    [Parameter, EditorRequired]
+    public int PublicServices { get; set; }
+
+    [Parameter, EditorRequired]
+    public int SnapshotContainers { get; set; }
+
+    [Parameter, EditorRequired]
+    public int SuccessfulProbes { get; set; }
+
+    [Parameter, EditorRequired]
+    public int FailedProbes { get; set; }
+}
