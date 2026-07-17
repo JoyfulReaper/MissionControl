@@ -1,6 +1,7 @@
 ﻿@page "/"
 
 @inject IArchiveEventClient ArchiveClient
+@inject IAgentSnapshotClient AgentClient
 @inject IDashboardDateTimeFormatter DateTimeFormatter
 
 <PageTitle>Mission Control</PageTitle>
@@ -113,6 +114,33 @@
     }
 </section>
 
+<section class="overview-section"
+         aria-labelledby="node-resources-title">
+    <div class="section-heading">
+        <div>
+            <div class="page-eyebrow">
+                Agent snapshot
+            </div>
+
+            <h2 id="node-resources-title">
+                Node resources
+            </h2>
+        </div>
+
+        @if (_agentSnapshot is not null)
+        {
+            <div class="latest-event">
+                Node
+                <strong>@_agentSnapshot.Node</strong>
+            </div>
+        }
+    </div>
+
+    <NodeResourceCards Host="_agentSnapshot?.Host"
+                       IsLoading="_resourceIsLoading"
+                       ErrorMessage="@_resourceError" />
+</section>
+
 <div class="row g-4 mt-1">
     <div class="col-lg-7">
         <a class="workspace-card"
@@ -153,10 +181,20 @@
 @code 
 {
     private ArchiveStatisticsItem? _statistics;
+    private AgentSnapshotItem? _agentSnapshot;
     private bool _isLoading = true;
+    private bool _resourceIsLoading = true;
     private string? _error;
+    private string? _resourceError;
 
     protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(
+            LoadArchiveStatisticsAsync(),
+            LoadAgentSnapshotAsync());
+    }
+
+    private async Task LoadArchiveStatisticsAsync()
     {
         try
         {
@@ -177,6 +215,34 @@
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private async Task LoadAgentSnapshotAsync()
+    {
+        try
+        {
+            _agentSnapshot =
+                await AgentClient.GetSnapshotAsync();
+
+            if (_agentSnapshot.Host is null)
+            {
+                _resourceError =
+                    "This Agent snapshot does not include host resource metrics yet.";
+            }
+        }
+        catch (Exception exception)
+            when (exception is
+                HttpRequestException or
+                TaskCanceledException or
+                InvalidOperationException)
+        {
+            _resourceError =
+                $"Node resource usage is unavailable: {exception.Message}";
+        }
+        finally
+        {
+            _resourceIsLoading = false;
         }
     }
 }

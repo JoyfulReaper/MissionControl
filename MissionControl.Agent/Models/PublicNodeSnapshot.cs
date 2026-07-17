@@ -5,6 +5,7 @@ public sealed record PublicNodeSnapshot(
     DateTimeOffset CapturedAt,
     long AgeSeconds,
     bool Stale,
+    PublicHostMetric? Host,
     bool? MissionControlPublishSucceeded,
     DateTimeOffset? LastMissionControlPublishAttemptAt,
     IReadOnlyList<PublicProtocolStatus> Protocols,

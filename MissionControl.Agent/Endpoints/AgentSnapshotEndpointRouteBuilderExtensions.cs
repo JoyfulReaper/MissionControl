@@ -117,6 +117,21 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                     ageSeconds,
                 Stale:
                     stale,
+                Host:
+                    storedSnapshot.Snapshot.Host is null
+                        ? null
+                        : new PublicHostMetric(
+                            LogicalProcessorCount:
+                                storedSnapshot.Snapshot.Host
+                                    .LogicalProcessorCount,
+                            CpuPercent:
+                                storedSnapshot.Snapshot.Host.CpuPercent,
+                            MemoryTotalBytes:
+                                storedSnapshot.Snapshot.Host
+                                    .MemoryTotalBytes,
+                            MemoryAvailableBytes:
+                                storedSnapshot.Snapshot.Host
+                                    .MemoryAvailableBytes),
                 MissionControlPublishSucceeded:
                     storedSnapshot.PublishSucceeded,
                 LastMissionControlPublishAttemptAt:

@@ -46,6 +46,7 @@ public sealed class SqliteNodeSnapshotStoreTests
 
         Assert.Equal(snapshot.Node, stored.Snapshot.Node);
         Assert.Equal(snapshot.CapturedAt, stored.Snapshot.CapturedAt);
+        Assert.Equal(snapshot.Host, stored.Snapshot.Host);
         AssertProtocolResultsEqual(
             snapshot.Protocols,
             stored.Snapshot.Protocols);
@@ -477,6 +478,47 @@ public sealed class SqliteNodeSnapshotStoreTests
                 CancellationToken.None));
     }
 
+    [Fact]
+    public async Task GetAsyncReadsSnapshotStoredBeforeHostMetricsWereAdded()
+    {
+        await using var fixture =
+            await AgentSnapshotStoreFixture.CreateAsync();
+
+        NodeSnapshotEvent snapshot = CreateSnapshot();
+
+        await fixture.SnapshotStore.SaveAsync(
+            snapshot,
+            CancellationToken.None);
+
+        await using (SqliteConnection connection =
+            fixture.Database.CreateConnection())
+        {
+            await connection.OpenAsync(CancellationToken.None);
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    """
+                    UPDATE NodeSnapshots
+                    SET Payload = json_remove(Payload, '$.host')
+                    WHERE Node = @Node;
+                    """,
+                    new { snapshot.Node },
+                    cancellationToken: CancellationToken.None));
+        }
+
+        StoredNodeSnapshot stored =
+            await GetRequiredSnapshotAsync(
+                fixture.SnapshotStore,
+                snapshot.Node);
+
+        Assert.Null(stored.Snapshot.Host);
+        AssertProtocolResultsEqual(
+            snapshot.Protocols,
+            stored.Snapshot.Protocols);
+        AssertContainerMetricsEqual(
+            snapshot.Containers,
+            stored.Snapshot.Containers);
+    }
+
     private static NodeSnapshotEvent CreateSnapshot(
         string node = "node-01",
         DateTimeOffset? capturedAt = null,
@@ -497,6 +539,11 @@ public sealed class SqliteNodeSnapshotStoreTests
         return new NodeSnapshotEvent(
             Node: node,
             CapturedAt: effectiveCapturedAt,
+            Host: new HostMetric(
+                LogicalProcessorCount: 4,
+                CpuPercent: 32.2,
+                MemoryTotalBytes: 4_000_000_000,
+                MemoryAvailableBytes: 2_500_000_000),
             Protocols:
             [
                 new ProtocolProbeResult(
