@@ -62,7 +62,7 @@ public sealed class DashboardPasswordAuthenticationService
 
         if (string.IsNullOrWhiteSpace(username))
         {
-            VerifyDummyPassword(password);
+            ConsumePasswordVerificationWork(password);
 
             return DashboardPasswordAuthenticationResult
                 .Failed();
@@ -80,7 +80,7 @@ public sealed class DashboardPasswordAuthenticationService
 
         if (user is null)
         {
-            VerifyDummyPassword(password);
+            ConsumePasswordVerificationWork(password);
 
             return DashboardPasswordAuthenticationResult
                 .Failed();
@@ -150,7 +150,7 @@ public sealed class DashboardPasswordAuthenticationService
             .Success(authenticatedUser);
     }
 
-    private void VerifyDummyPassword(
+    private void ConsumePasswordVerificationWork(
         string providedPassword)
     {
         _passwordHasher.VerifyHashedPassword(
