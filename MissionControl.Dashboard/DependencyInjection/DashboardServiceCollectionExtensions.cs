@@ -1,5 +1,6 @@
 using JoyfulReaperLib.Sqlite;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using MissionControl.Dashboard.Agent;
@@ -41,6 +42,25 @@ public static class DashboardServiceCollectionExtensions
         return services;
     }
 
+    private static void AddDashboardDataProtection(
+        IServiceCollection services,
+        DashboardAuthenticationOptions options)
+    {
+        string keysPath =
+            Path.GetFullPath(
+                options.DataProtectionKeysPath,
+                AppContext.BaseDirectory);
+
+        Directory.CreateDirectory(keysPath);
+
+        services
+            .AddDataProtection()
+            .SetApplicationName(
+                "MissionControl.Dashboard")
+            .PersistKeysToFileSystem(
+                new DirectoryInfo(keysPath));
+    }
+
     private static void AddDashboardAuthenticationStorage(
         IServiceCollection services,
         IConfiguration configuration)
@@ -51,6 +71,10 @@ public static class DashboardServiceCollectionExtensions
                     DashboardAuthenticationOptions.SectionName)
                 .Get<DashboardAuthenticationOptions>()
             ?? new DashboardAuthenticationOptions();
+
+        AddDashboardDataProtection(
+            services,
+            options);
 
         string connectionString =
             SqliteDatabaseInitializer.Initialize(
