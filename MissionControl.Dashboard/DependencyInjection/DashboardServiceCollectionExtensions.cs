@@ -1,3 +1,4 @@
+using JoyfulReaperLib.Sqlite;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
@@ -24,6 +25,9 @@ public static class DashboardServiceCollectionExtensions
         AddDashboardOptions(
             services,
             configuration);
+        AddDashboardAuthenticationStorage(
+            services,
+            configuration);
         AddArchiveClient(
             services,
             configuration);
@@ -33,6 +37,28 @@ public static class DashboardServiceCollectionExtensions
         AddDashboardFormatting(services);
 
         return services;
+    }
+
+    private static void AddDashboardAuthenticationStorage(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        DashboardAuthenticationOptions options =
+            configuration
+                .GetSection(
+                    DashboardAuthenticationOptions.SectionName)
+                .Get<DashboardAuthenticationOptions>()
+            ?? new DashboardAuthenticationOptions();
+
+        string connectionString =
+            SqliteDatabaseInitializer.Initialize(
+                options.DatabaseFileName,
+                DashboardAuthenticationSchema.Sql,
+                options.BasePath);
+
+        services.AddSingleton(
+            new DashboardAuthenticationDatabase(
+                connectionString));
     }
 
     private static void AddDashboardComponents(
