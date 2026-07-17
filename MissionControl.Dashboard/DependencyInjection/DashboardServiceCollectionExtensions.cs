@@ -59,6 +59,10 @@ public static class DashboardServiceCollectionExtensions
         services.AddSingleton(
             new DashboardAuthenticationDatabase(
                 connectionString));
+
+        services.AddSingleton<
+            IDashboardUserStore,
+            SqliteDashboardUserStore>();
     }
 
     private static void AddDashboardComponents(

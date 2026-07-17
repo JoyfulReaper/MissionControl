@@ -1,4 +1,23 @@
-﻿namespace MissionControl.Dashboard.Authentication;
+﻿using Microsoft.Data.Sqlite;
 
-public sealed record DashboardAuthenticationDatabase(
-    string ConnectionString);
+namespace MissionControl.Dashboard.Authentication;
+
+public sealed class DashboardAuthenticationDatabase
+{
+    public DashboardAuthenticationDatabase(
+        string connectionString)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            connectionString);
+
+        ConnectionString = connectionString;
+    }
+
+    public string ConnectionString { get; }
+
+    public SqliteConnection CreateConnection()
+    {
+        return new SqliteConnection(
+            ConnectionString);
+    }
+}
