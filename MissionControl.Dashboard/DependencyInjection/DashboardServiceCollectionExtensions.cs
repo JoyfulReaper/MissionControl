@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using MissionControl.Dashboard.Agent;
 using MissionControl.Dashboard.Archive;
+using MissionControl.Dashboard.Authentication;
 using MissionControl.Dashboard.Formatting;
 using MissionControl.Dashboard.Security;
 using MissionControl.Dashboard.Services;
@@ -68,6 +69,40 @@ public static class DashboardServiceCollectionExtensions
         IServiceCollection services,
         IConfiguration configuration)
     {
+        services
+            .AddOptions<DashboardAuthenticationOptions>()
+            .Bind(
+                configuration.GetSection(
+                    DashboardAuthenticationOptions.SectionName))
+            .Validate(
+                options =>
+                    !string.IsNullOrWhiteSpace(
+                        options.DatabaseFileName),
+                "Dashboard authentication database filename is required.")
+            .Validate(
+                options =>
+                    !string.IsNullOrWhiteSpace(
+                        options.BasePath),
+                "Dashboard authentication base path is required.")
+            .Validate(
+                options =>
+                    !string.IsNullOrWhiteSpace(
+                        options.DataProtectionKeysPath),
+                "Dashboard Data Protection key path is required.")
+            .Validate(
+                options =>
+                    options.CookieLifetimeHours is >= 1 and <= 168,
+                "Dashboard cookie lifetime must be between 1 and 168 hours.")
+            .Validate(
+                options =>
+                    options.MaxFailedAttempts is >= 1 and <= 20,
+                "Dashboard maximum failed attempts must be between 1 and 20.")
+            .Validate(
+                options =>
+                    options.LockoutMinutes is >= 1 and <= 1440,
+                "Dashboard lockout duration must be between 1 and 1440 minutes.")
+            .ValidateOnStart();
+
         services
             .AddOptions<ServiceCatalogOptions>()
             .Bind(
