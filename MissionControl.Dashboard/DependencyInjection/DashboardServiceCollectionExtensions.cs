@@ -1,6 +1,7 @@
 using JoyfulReaperLib.Sqlite;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using MissionControl.Dashboard.Agent;
 using MissionControl.Dashboard.Archive;
@@ -63,6 +64,17 @@ public static class DashboardServiceCollectionExtensions
         services.AddSingleton<
             IDashboardUserStore,
             SqliteDashboardUserStore>();
+
+        services.AddSingleton<
+            IDashboardUserStore,
+            SqliteDashboardUserStore>();
+
+        services.AddSingleton<
+            IPasswordHasher<DashboardUser>,
+            PasswordHasher<DashboardUser>>();
+
+        services.AddSingleton<
+            DashboardUserProvisioningService>();
     }
 
     private static void AddDashboardComponents(

@@ -58,6 +58,85 @@ public sealed class SqliteDashboardUserStore(
             : Map(row);
     }
 
+    public async Task<DashboardUser> CreateAsync(
+        NewDashboardUser user,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+
+        const string sql =
+            """
+                INSERT INTO DashboardUsers
+                (
+                    Username,
+                    NormalizedUsername,
+                    DisplayName,
+                    PasswordHash,
+                    IsEnabled,
+                    FailedLoginCount,
+                    LockoutEndUtc,
+                    SecurityStamp,
+                    CreatedAtUtc,
+                    UpdatedAtUtc
+                )
+                VALUES
+                (
+                    @Username,
+                    @NormalizedUsername,
+                    @DisplayName,
+                    @PasswordHash,
+                    1,
+                    0,
+                    NULL,
+                    @SecurityStamp,
+                    @CreatedAtUtc,
+                    @UpdatedAtUtc
+                )
+                RETURNING
+                    Id,
+                    Username,
+                    NormalizedUsername,
+                    DisplayName,
+                    PasswordHash,
+                    IsEnabled,
+                    FailedLoginCount,
+                    LockoutEndUtc,
+                    SecurityStamp,
+                    CreatedAtUtc,
+                    UpdatedAtUtc;
+                """;
+
+        string createdAtUtc =
+            FormatTimestamp(user.CreatedAtUtc);
+
+        var parameters = new
+        {
+            user.Username,
+            user.NormalizedUsername,
+            user.DisplayName,
+            user.PasswordHash,
+            user.SecurityStamp,
+            CreatedAtUtc = createdAtUtc,
+            UpdatedAtUtc = createdAtUtc
+        };
+
+        await using var connection =
+            database.CreateConnection();
+
+        await connection.OpenAsync(
+            cancellationToken);
+
+        DashboardUserRow row =
+            await connection.QuerySingleAsync<DashboardUserRow>(
+                new CommandDefinition(
+                    sql,
+                    parameters,
+                    cancellationToken:
+                        cancellationToken));
+
+        return Map(row);
+    }
+
     private static DashboardUser Map(
         DashboardUserRow row)
     {
@@ -98,6 +177,16 @@ public sealed class SqliteDashboardUserStore(
         return string.IsNullOrWhiteSpace(value)
             ? null
             : ParseTimestamp(value);
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset value)
+    {
+        return value
+            .ToUniversalTime()
+            .ToString(
+                "O",
+                CultureInfo.InvariantCulture);
     }
 
     private sealed class DashboardUserRow
