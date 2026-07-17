@@ -1,5 +1,4 @@
 using JoyfulReaperLib.Sqlite;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
@@ -22,7 +21,9 @@ public static class DashboardServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         AddDashboardComponents(services);
-        AddDashboardAuthentication(services);
+        AddDashboardAuthentication(
+            services,
+            configuration);
         AddDashboardOptions(
             services,
             configuration);
@@ -82,6 +83,8 @@ public static class DashboardServiceCollectionExtensions
     private static void AddDashboardComponents(
         IServiceCollection services)
     {
+        services.AddRazorPages();
+
         services
             .AddRazorComponents()
             .AddInteractiveServerComponents();
@@ -90,16 +93,49 @@ public static class DashboardServiceCollectionExtensions
     }
 
     private static void AddDashboardAuthentication(
-        IServiceCollection services)
+        IServiceCollection services,
+        IConfiguration configuration)
     {
+        DashboardAuthenticationOptions authenticationOptions =
+            configuration
+                .GetSection(
+                    DashboardAuthenticationOptions.SectionName)
+                .Get<DashboardAuthenticationOptions>()
+            ?? new DashboardAuthenticationOptions();
+
         services
             .AddAuthentication(
                 DashboardAuthenticationDefaults.Scheme)
-            .AddScheme<
-                AuthenticationSchemeOptions,
-                DashboardAuthenticationHandler>(
+            .AddCookie(
                 DashboardAuthenticationDefaults.Scheme,
-                _ => { });
+                options =>
+                {
+                    options.LoginPath = "/login";
+                    options.AccessDeniedPath = "/login";
+
+                    options.ReturnUrlParameter =
+                        "returnUrl";
+
+                    options.ExpireTimeSpan =
+                        TimeSpan.FromHours(
+                            authenticationOptions
+                                .CookieLifetimeHours);
+
+                    options.SlidingExpiration = true;
+
+                    options.Cookie.Name =
+                        "__Host-MissionControl.Dashboard";
+
+                    options.Cookie.Path = "/";
+                    options.Cookie.HttpOnly = true;
+                    options.Cookie.IsEssential = true;
+
+                    options.Cookie.SameSite =
+                        SameSiteMode.Strict;
+
+                    options.Cookie.SecurePolicy =
+                        CookieSecurePolicy.Always;
+                });
 
         services
             .AddAuthorizationBuilder()

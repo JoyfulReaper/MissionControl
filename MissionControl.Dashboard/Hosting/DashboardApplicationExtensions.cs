@@ -28,6 +28,7 @@ public static class DashboardApplicationExtensions
         app.UseAuthorization();
 
         app.UseAntiforgery();
+        app.MapRazorPages();
 
         app.MapStaticAssets();
 
