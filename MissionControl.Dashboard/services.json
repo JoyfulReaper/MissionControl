@@ -117,6 +117,28 @@
         ]
       },
       {
+        "Id": "happy-daytime",
+        "Name": "HappyDaytime",
+        "Group": "Public Services",
+        "Summary": "Connect to receive the current server time.",
+        "Description": "A modern .NET implementation of the Daytime Protocol. Clients connect over TCP and receive the current UTC timestamp as an ASCII response.",
+        "ContainerName": "joyful-stack-happydaytime-1",
+        "Visibility": "Public",
+        "Protocol": "Daytime / TCP :13",
+        "ProtocolServiceKey": "happydaytime",
+        "Endpoint": "daytime.kgivler.com:13",
+        "Image": "happy-daytime",
+        "SourceUrl": "https://github.com/JoyfulReaper/HappyDaytime",
+        "SearchTerms": [
+          "daytime",
+          "tcp",
+          "port 13",
+          "time",
+          "timestamp",
+          "classic protocol"
+        ]
+      },
+      {
         "Id": "happy-gopher",
         "Name": "HappyGopher",
         "Group": "Public Services",
