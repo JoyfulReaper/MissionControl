@@ -1,0 +1,67 @@
+@if (Containers.Count > 0)
+{
+    <section class="uncatalogued-panel"
+             aria-label="Uncatalogued containers">
+        <div class="uncatalogued-heading">
+            <strong>Uncatalogued snapshot containers</strong>
+            <span>
+                Add these to services.json when they are expected.
+            </span>
+        </div>
+
+        <div class="uncatalogued-list">
+            @foreach (AgentContainerStatusItem container in Containers)
+            {
+                <div class="uncatalogued-item">
+                    <strong>@container.Name</strong>
+                    <span>@container.State</span>
+                    <span>@FormatMemory(container)</span>
+                    <span>@($"{container.CpuPercent:0.##}% CPU")</span>
+                    <span>
+                        @(container.RestartCount.ToString("N0")) restarts
+                    </span>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<AgentContainerStatusItem> Containers
+    {
+        get;
+        set;
+    }
+
+    private static string FormatMemory(
+        AgentContainerStatusItem container)
+    {
+        string usage = FormatBytes(container.MemoryUsageBytes);
+
+        string limit = container.MemoryLimitBytes > 0
+            ? FormatBytes(container.MemoryLimitBytes)
+            : "No limit";
+
+        string percent = container.MemoryLimitBytes > 0
+            ? $"{container.MemoryPercent:0.#}%"
+            : "—";
+
+        return $"{usage} / {limit} ({percent})";
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        int unit = 0;
+
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return $"{value:0.#} {units[unit]}";
+    }
+}

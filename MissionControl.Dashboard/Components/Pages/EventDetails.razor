@@ -1,0 +1,66 @@
+﻿@page "/events/{EventId:guid}"
+
+@inject IArchiveEventClient ArchiveClient
+
+<PageTitle>Event Details</PageTitle>
+
+<p>
+    <a href="/events">← Back to events</a>
+</p>
+
+@if (_isLoading)
+{
+    <p>Loading event details...</p>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">
+        @_error
+    </div>
+}
+else if (_event is null)
+{
+    <div class="alert alert-warning">
+        The requested event was not found.
+    </div>
+}
+else
+{
+    <h1>Event Details</h1>
+    <EventDetailsContent Event="_event" />
+}
+
+@code {
+    [Parameter]
+    public Guid EventId { get; set; }
+
+    private ArchiveEventDetailsItem? _event;
+    private bool _isLoading;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            _event = await ArchiveClient.GetByIdAsync(EventId);
+        }
+        catch (HttpRequestException exception)
+        {
+            _error =
+                $"Mission Control Archive could not be reached: " +
+                exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _error =
+                "The Mission Control Archive request timed out.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

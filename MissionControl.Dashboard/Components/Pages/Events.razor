@@ -1,0 +1,370 @@
+﻿@page "/events"
+
+@inject IArchiveEventClient ArchiveClient
+@inject IDashboardDateTimeFormatter DateTimeFormatter
+
+<PageTitle>Events</PageTitle>
+
+<h1>Events</h1>
+
+<div class="mb-3">
+    <div class="row g-2 align-items-end mb-3">
+        <div class="col-md-3">
+            <label for="source-filter"
+                   class="form-label">
+                Source
+            </label>
+
+            <input id="source-filter"
+                   class="form-control"
+                   list="source-options"
+                   placeholder="Type or select a source"
+                   autocomplete="off"
+                   @bind="_sourceFilter"
+                   @bind:event="oninput"
+                   @onkeydown="HandleFilterKeyDown" />
+
+            <datalist id="source-options">
+                @foreach (string source in _sourceSuggestions)
+                {
+                    <option value="@source"></option>
+                }
+            </datalist>
+        </div>
+
+        <div class="col-md-5">
+            <label for="event-type-filter"
+                   class="form-label">
+                Event type
+            </label>
+
+            <input id="event-type-filter"
+                   class="form-control"
+                   list="event-type-options"
+                   placeholder="Type or select an event type"
+                   autocomplete="off"
+                   @bind="_eventTypeFilter"
+                   @bind:event="oninput"
+                   @onkeydown="HandleFilterKeyDown" />
+
+            <datalist id="event-type-options">
+                @foreach (string eventType in _eventTypeSuggestions)
+                {
+                    <option value="@eventType"></option>
+                }
+            </datalist>
+        </div>
+
+        <div class="col-md-auto">
+            <button type="button"
+                    class="btn btn-primary"
+                    disabled="@IsBusy"
+                    @onclick="ApplyFiltersAsync">
+                @(_isLoading ? "Loading..." : "Apply")
+            </button>
+        </div>
+
+        <div class="col-md-auto">
+            <button type="button"
+                    class="btn btn-outline-secondary"
+                    disabled="@IsBusy"
+                    @onclick="ClearFiltersAsync">
+                Clear
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">
+        @_error
+    </div>
+}
+else if (_isLoading)
+{
+    <p>Loading Mission Control events...</p>
+}
+else if (_events.Count == 0)
+{
+    <div class="alert alert-info">
+        No archived events were found.
+    </div>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Occurred</th>
+                <th>Source</th>
+                <th>Event type</th>
+                <th>Correlation</th>
+                <th></th>
+            </tr>
+        </thead>
+
+        <tbody>
+            @foreach (var item in _events)
+            {
+                <tr class="event-row"
+                    role="button"
+                    tabindex="0"
+                    title="Open event details"
+                    @onclick="() => OpenEventModal(item.EventId)"
+                    @onkeydown="eventArgs =>
+                                    HandleEventRowKeyDown(eventArgs, item.EventId)">
+
+                        <td>
+                            @DateTimeFormatter.Format(item.OccurredAt)
+                        </td>
+                        <td>@item.Source</td>
+                        <td>@item.EventType</td>
+                        <td>@(item.CorrelationId ?? "—")</td>
+                        <td>
+                        <a class="btn btn-sm btn-outline-primary"
+                           href="@($"events/{item.EventId:D}")"
+                           @onclick:stopPropagation="true">
+                            Full page
+                        </a>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    @if (_loadMoreError is not null)
+    {
+        <div class="alert alert-danger">
+            @_loadMoreError
+        </div>
+    }
+
+    @if (_hasMore)
+    {
+        <div class="text-center mb-3">
+            <button type="button"
+                    class="btn btn-outline-primary"
+                    disabled="@IsBusy"
+                    @onclick="LoadOlderAsync">
+                @(_isLoadingMore
+                    ? "Loading older events..."
+                    : "Load older")
+            </button>
+        </div>
+    }
+}
+
+@if (_selectedEventId is Guid selectedEventId)
+{
+    <EventDetailsModal EventId="selectedEventId"
+                       OnClosed="CloseEventModal" />
+}
+
+@code {
+    private IReadOnlyList<ArchiveEventSummaryItem> _events = [];
+
+    private IReadOnlyList<string> _sourceSuggestions = [];
+    private IReadOnlyList<string> _eventTypeSuggestions = [];
+
+    private string? _sourceFilter;
+    private string? _eventTypeFilter;
+    private Guid? _selectedEventId;
+
+    private const int PageSize = 50;
+
+    private bool _isLoading;
+    private bool _isLoadingMore;
+    private bool _hasMore;
+    private string? _error;
+    private string? _loadMoreError;
+
+    private bool IsBusy =>
+        _isLoading || _isLoadingMore;
+
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadEventsAsync(
+            refreshSuggestions: true,
+            ignoreFilters: true);
+    }
+
+    private void UpdateSuggestions(
+        IEnumerable<ArchiveEventSummaryItem> events)
+    {
+        _sourceSuggestions = events
+            .Select(item => item.Source)
+            .Where(source => !string.IsNullOrWhiteSpace(source))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(source => source, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        _eventTypeSuggestions = events
+            .Select(item => item.EventType)
+            .Where(eventType => !string.IsNullOrWhiteSpace(eventType))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(eventType => eventType, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string? NormalizeFilter(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+    }
+
+    private async Task LoadEventsAsync(
+        bool refreshSuggestions = false,
+        bool ignoreFilters = false,
+        bool append = false)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        if (append)
+        {
+            _isLoadingMore = true;
+            _loadMoreError = null;
+        }
+        else
+        {
+            _isLoading = true;
+            _error = null;
+            _loadMoreError = null;
+        }
+
+        try
+        {
+            string? source = ignoreFilters
+                ? null
+                : NormalizeFilter(_sourceFilter);
+
+            string? eventType = ignoreFilters
+                ? null
+                : NormalizeFilter(_eventTypeFilter);
+
+            ArchiveEventCursor? cursor =
+                append && _events.Count > 0
+                    ? CreateCursor(_events[^1])
+                    : null;
+
+            IReadOnlyList<ArchiveEventSummaryItem> result =
+                await ArchiveClient.GetRecentAsync(
+                    limit: PageSize + 1,
+                    source: source,
+                    eventType: eventType,
+                    before: cursor);
+
+            ArchiveEventSummaryItem[] page = result
+                .Take(PageSize)
+                .ToArray();
+
+            _hasMore = result.Count > PageSize;
+
+            _events = append
+                ? _events.Concat(page).ToArray()
+                : page;
+
+            if (refreshSuggestions)
+            {
+                UpdateSuggestions(_events);
+            }
+        }
+        catch (HttpRequestException exception)
+        {
+            SetError(
+                append,
+                $"Mission Control Archive could not be reached: " +
+                exception.Message);
+        }
+        catch (TaskCanceledException)
+        {
+            SetError(
+                append,
+                "The Mission Control Archive request timed out.");
+        }
+        finally
+        {
+            if (append)
+            {
+                _isLoadingMore = false;
+            }
+            else
+            {
+                _isLoading = false;
+            }
+        }
+    }
+
+    private static ArchiveEventCursor CreateCursor(
+        ArchiveEventSummaryItem item)
+    {
+        return new ArchiveEventCursor(
+            OccurredAt: item.OccurredAt,
+            ReceivedAt: item.ReceivedAt,
+            EventId: item.EventId);
+    }
+
+    private void SetError(
+        bool loadingMore,
+        string message)
+    {
+        if (loadingMore)
+        {
+            _loadMoreError = message;
+        }
+        else
+        {
+            _error = message;
+        }
+    }
+
+    private Task ApplyFiltersAsync()
+    {
+        return LoadEventsAsync();
+    }
+
+    private void OpenEventModal(Guid eventId)
+    {
+        _selectedEventId = eventId;
+    }
+
+    private void CloseEventModal()
+    {
+        _selectedEventId = null;
+    }
+
+    private void HandleEventRowKeyDown(
+        KeyboardEventArgs eventArgs,
+        Guid eventId)
+    {
+        if (eventArgs.Key == "Enter")
+        {
+            OpenEventModal(eventId);
+        }
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _sourceFilter = null;
+        _eventTypeFilter = null;
+
+        await LoadEventsAsync();
+    }
+
+    private Task LoadOlderAsync()
+    {
+        return LoadEventsAsync(append: true);
+    }
+
+    private Task HandleFilterKeyDown(
+        KeyboardEventArgs eventArgs)
+    {
+        return eventArgs.Key == "Enter" && !IsBusy
+            ? ApplyFiltersAsync()
+            : Task.CompletedTask;
+    }
+}

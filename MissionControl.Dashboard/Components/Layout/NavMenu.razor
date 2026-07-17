@@ -1,0 +1,69 @@
+﻿<div class="brand">
+    <a class="brand-link"
+       href="">
+        <span class="brand-mark"
+              aria-hidden="true">
+            MC
+        </span>
+
+        <span class="brand-copy">
+            <strong>Mission Control</strong>
+            <small>Operations dashboard</small>
+        </span>
+    </a>
+</div>
+
+<input type="checkbox"
+       title="Navigation menu"
+       class="navbar-toggler" />
+
+<div class="nav-scrollable"
+     onclick="document.querySelector('.navbar-toggler').click()">
+    <div class="nav-section-label">
+        Workspace
+    </div>
+
+    <nav class="nav flex-column">
+        <div class="nav-item">
+            <NavLink class="nav-link"
+                     href=""
+                     Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu"
+                      aria-hidden="true">
+                </span>
+
+                Overview
+            </NavLink>
+        </div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link"
+                     href="events">
+                <span class="bi bi-list-nested-nav-menu"
+                      aria-hidden="true">
+                </span>
+
+                Event Archive
+            </NavLink>
+        </div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link"
+                     href="services">
+                <span class="bi bi-services-nav-menu"
+                      aria-hidden="true">
+                </span>
+
+                Services
+            </NavLink>
+        </div>
+    </nav>
+
+    <div class="nav-footer">
+        <span class="nav-footer-dot"
+              aria-hidden="true">
+        </span>
+
+        Private dashboard
+    </div>
+</div>

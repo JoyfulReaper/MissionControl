@@ -226,7 +226,7 @@ public static class GitHubWebhookEndpoint
                 SchemaVersion: 1,
                 OccurredAt: occurredAt,
                 ReceivedAt: receivedAt,
-                CorrelationId: deliveryId.ToString(),
+                CorrelationId: deliveryId.ToString("N"),
                 CausationId: null,
                 Payload: JsonSerializer.SerializeToElement(
                     eventPayload,

@@ -1,4 +1,11 @@
-﻿using System.Text.Json;
+﻿/*
+ * Mission Control
+ * Copyright 2026 Kyle Givler
+ * Licensed under the MIT License
+ */
+
+
+using System.Text.Json;
 
 namespace MissionControl.Archive.Contracts;
 

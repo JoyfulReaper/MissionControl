@@ -1,0 +1,138 @@
+﻿@page "/login"
+@model MissionControl.Dashboard.Pages.LoginModel
+
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1" />
+
+    <title>Mission Control Login</title>
+
+    <style>
+            :root {
+                color-scheme: dark;
+                font-family:
+                    Inter,
+                    system-ui,
+                    sans-serif;
+            }
+
+            body {
+                margin: 0;
+                min-height: 100vh;
+                display: grid;
+                place-items: center;
+                background: #090d14;
+                color: #e8edf5;
+            }
+
+            .login-panel {
+                width: min(360px, calc(100vw - 48px));
+                padding: 32px;
+                border: 1px solid #263143;
+                border-radius: 10px;
+                background: #111824;
+            }
+
+            h1 {
+                margin: 0 0 8px;
+                font-size: 1.5rem;
+            }
+
+            p {
+                margin: 0 0 24px;
+                color: #98a6ba;
+            }
+
+            label {
+                display: block;
+                margin: 16px 0 6px;
+                font-size: 0.85rem;
+            }
+
+            input {
+                box-sizing: border-box;
+                width: 100%;
+                padding: 11px 12px;
+                border: 1px solid #344158;
+                border-radius: 6px;
+                background: #0b111a;
+                color: inherit;
+            }
+
+            button {
+                width: 100%;
+                margin-top: 24px;
+                padding: 11px;
+                border: 0;
+                border-radius: 6px;
+                background: #4d8cff;
+                color: white;
+                font-weight: 600;
+                cursor: pointer;
+            }
+
+            .error {
+                margin-top: 16px;
+                padding: 10px;
+                border: 1px solid #7b3138;
+                border-radius: 6px;
+                background: #35181c;
+                color: #ffb7bd;
+            }
+    </style>
+</head>
+
+<body>
+    <main class="login-panel">
+        <h1>Mission Control</h1>
+        <p>Authentication required.</p>
+
+        <form method="post">
+            @Html.AntiForgeryToken()
+
+            <input type="hidden"
+                   name="ReturnUrl"
+                   value="@Model.ReturnUrl" />
+
+            <label for="username">
+                Username
+            </label>
+
+            <input id="username"
+                   name="Username"
+                   value="@Model.Username"
+                   autocomplete="username"
+                   autofocus
+                   required />
+
+            <label for="password">
+                Password
+            </label>
+
+            <input id="password"
+                   name="Password"
+                   type="password"
+                   autocomplete="current-password"
+                   required />
+
+            @if (Model.InvalidCredentials)
+            {
+                <div class="error" role="alert">
+                    Invalid username or password.
+                </div>
+            }
+
+            <button type="submit">
+                Sign in
+            </button>
+        </form>
+    </main>
+</body>
+</html>

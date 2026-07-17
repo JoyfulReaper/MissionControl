@@ -1,6 +1,5 @@
 using MissionControl.Contracts;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -270,7 +269,7 @@ public sealed class GitHubWebhookHttpTests
             {
                 string longMessage = new('x', 520);
                 root["commits"]![1]!["message"] = longMessage + "\nbody";
-                root["head_commit"]![ "message"] = longMessage + "\nbody";
+                root["head_commit"]!["message"] = longMessage + "\nbody";
             });
 
         await using var factory = new GatewayTestApplicationFactory();
@@ -285,7 +284,9 @@ public sealed class GitHubWebhookHttpTests
         Assert.Equal(GitHubTestPayloads.DeliveryId, envelope.EventId);
         Assert.Equal("github.push.received", envelope.EventType);
         Assert.Equal("github", envelope.Source);
-        Assert.Equal(GitHubTestPayloads.DeliveryId.ToString(), envelope.CorrelationId);
+        Assert.Equal(
+            GitHubTestPayloads.DeliveryId.ToString("N"),
+            envelope.CorrelationId);
         Assert.Equal(1, envelope.SchemaVersion);
         Assert.Equal(GitHubTestPayloads.SecondCommitTimestamp, envelope.OccurredAt);
 

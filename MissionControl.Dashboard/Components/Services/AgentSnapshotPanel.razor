@@ -1,0 +1,122 @@
+@inject IDashboardDateTimeFormatter DateTimeFormatter
+
+<section class="snapshot-panel">
+    <div class="snapshot-copy">
+        <div class="snapshot-heading">
+            <span class="snapshot-indicator
+                @(Snapshot?.Stale == false
+                    ? "snapshot-fresh"
+                    : "snapshot-warning")">
+            </span>
+
+            <div>
+                <div class="snapshot-title">
+                    Agent snapshot
+                </div>
+
+                @if (IsLoading)
+                {
+                    <div class="snapshot-meta">
+                        Loading node status...
+                    </div>
+                }
+                else if (Snapshot is not null)
+                {
+                    <div class="snapshot-meta">
+                        Node <strong>@Snapshot.Node</strong>
+                        · Captured
+                        <strong>
+                            @(DateTimeFormatter.Format(
+                                Snapshot.CapturedAt))
+                        </strong>
+                        · Age
+                        <strong>
+                            @Snapshot.AgeSeconds seconds
+                        </strong>
+                    </div>
+                }
+                else
+                {
+                    <div class="snapshot-meta snapshot-error">
+                        @(ErrorMessage ??
+                            "No Agent snapshot is available.")
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="snapshot-chips">
+            @if (Snapshot?.Stale == true)
+            {
+                <span class="service-chip status-missing">
+                    STALE
+                </span>
+            }
+            else if (Snapshot is not null)
+            {
+                <span class="service-chip status-running">
+                    FRESH
+                </span>
+            }
+
+            <span class="service-chip @GetPublishStateClass()">
+                @GetPublishState()
+            </span>
+
+            @if (Snapshot?.LastMissionControlPublishAttemptAt is not null)
+            {
+                <span class="snapshot-publish-attempt">
+                    Last publish
+                    <strong>
+                        @(DateTimeFormatter.Format(
+                            Snapshot
+                                .LastMissionControlPublishAttemptAt
+                                .Value))
+                    </strong>
+                </span>
+            }
+        </div>
+    </div>
+
+    <button type="button"
+            class="btn btn-outline-primary"
+            disabled="@IsLoading"
+            @onclick="OnRefresh">
+        @(IsLoading ? "Refreshing..." : "Refresh")
+    </button>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public AgentSnapshotItem? Snapshot { get; set; }
+
+    [Parameter, EditorRequired]
+    public bool IsLoading { get; set; }
+
+    [Parameter, EditorRequired]
+    public string? ErrorMessage { get; set; }
+
+    [Parameter]
+    [EditorRequired]
+    public EventCallback OnRefresh { get; set; }
+
+    private string GetPublishState()
+    {
+        return Snapshot?.MissionControlPublishSucceeded switch
+        {
+            true => "EVENT PUBLISH OK",
+            false => "EVENT PUBLISH FAILED",
+            _ => "EVENT PUBLISH UNKNOWN"
+        };
+    }
+
+    private string GetPublishStateClass()
+    {
+        return Snapshot?.MissionControlPublishSucceeded switch
+        {
+            true => "status-running",
+            false => "status-stopped",
+            _ => "status-unknown"
+        };
+    }
+}

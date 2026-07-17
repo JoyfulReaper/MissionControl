@@ -1,0 +1,41 @@
+@if (Protocols.Count > 0)
+{
+    <section class="uncatalogued-panel"
+             aria-label="Uncatalogued protocol probes">
+        <div class="uncatalogued-heading">
+            <strong>Uncatalogued protocol probes</strong>
+            <span>
+                Map these probe keys to a service when they are expected.
+            </span>
+        </div>
+
+        <div class="uncatalogued-list">
+            @foreach (AgentProtocolStatusItem protocol in Protocols)
+            {
+                <div class="uncatalogued-item">
+                    <strong>@protocol.Service</strong>
+                    <span>
+                        @(protocol.Succeeded ? "Succeeded" : "Failed")
+                    </span>
+                    <span>
+                        @(FormatDuration(protocol.DurationMilliseconds))
+                    </span>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<AgentProtocolStatusItem> Protocols
+    {
+        get;
+        set;
+    }
+
+    private static string FormatDuration(double durationMilliseconds)
+    {
+        return $"{durationMilliseconds:0.#} ms";
+    }
+}

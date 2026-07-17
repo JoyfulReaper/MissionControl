@@ -1,0 +1,264 @@
+<details class="service-entry">
+    <summary>
+        <div class="service-summary-copy">
+            <strong>@Service.Name</strong>
+            <span>@Service.Summary</span>
+        </div>
+
+        <div class="service-chips">
+            <span class="service-chip @GetVisibilityClass()">
+                @Service.Visibility.ToUpperInvariant()
+            </span>
+
+            <span class="service-chip @GetContainerStateClass()">
+                @GetContainerState()
+            </span>
+
+            @if (HasProtocolServiceKey)
+            {
+                <span class="service-chip @GetProtocolStateClass()">
+                    @GetProtocolState()
+                </span>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(Service.Protocol))
+            {
+                <span class="service-chip chip-protocol">
+                    @Service.Protocol
+                </span>
+            }
+        </div>
+    </summary>
+
+    <div class="service-entry-body">
+        <div class="service-meta-grid">
+            <div class="service-meta">
+                <span>Container</span>
+                <strong>
+                    @(Container?.Name ?? Service.ContainerName ?? "—")
+                </strong>
+            </div>
+
+            <div class="service-meta">
+                <span>Endpoint</span>
+                <strong>@(Service.Endpoint ?? "—")</strong>
+            </div>
+
+            <div class="service-meta">
+                <span>Image</span>
+                <strong>@(Service.Image ?? "—")</strong>
+            </div>
+
+            <div class="service-meta">
+                <span>CPU</span>
+                <strong>
+                    @(Container is null
+                        ? "—"
+                        : $"{Container.CpuPercent:0.##}%")
+                </strong>
+            </div>
+
+            <div class="service-meta">
+                <span>Memory</span>
+                <strong>
+                    @(Container is null
+                        ? "—"
+                        : FormatMemory(Container))
+                </strong>
+            </div>
+
+            <div class="service-meta">
+                <span>Restarts</span>
+                <strong>
+                    @(Container?.RestartCount.ToString("N0") ?? "—")
+                </strong>
+            </div>
+
+            @if (HasProtocolServiceKey)
+            {
+                <div class="service-meta">
+                    <span>Probe service</span>
+                    <strong>@Service.ProtocolServiceKey</strong>
+                </div>
+
+                <div class="service-meta">
+                    <span>Live probe</span>
+                    <strong>@GetProtocolDetail()</strong>
+                </div>
+
+                <div class="service-meta">
+                    <span>Probe latency</span>
+                    <strong>
+                        @(Protocol is null
+                            ? "—"
+                            : FormatDuration(
+                                Protocol.DurationMilliseconds))
+                    </strong>
+                </div>
+            }
+        </div>
+
+        <p class="service-description">
+            @Service.Description
+        </p>
+
+        @if (Service.ApplicationUrl is not null ||
+             Service.SourceUrl is not null)
+        {
+            <div class="service-actions">
+                @if (Service.ApplicationUrl is not null)
+                {
+                    <a class="btn btn-primary"
+                       href="@Service.ApplicationUrl"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        Open service
+                    </a>
+                }
+
+                @if (Service.SourceUrl is not null)
+                {
+                    <a class="btn btn-outline-primary"
+                       href="@Service.SourceUrl"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        View source
+                    </a>
+                }
+            </div>
+        }
+    </div>
+</details>
+
+@code {
+    [Parameter, EditorRequired]
+    public required ServiceDefinition Service { get; set; }
+
+    [Parameter, EditorRequired]
+    public AgentContainerStatusItem? Container { get; set; }
+
+    [Parameter, EditorRequired]
+    public AgentProtocolStatusItem? Protocol { get; set; }
+
+    [Parameter, EditorRequired]
+    public bool IsSnapshotAvailable { get; set; }
+
+    private bool HasProtocolServiceKey =>
+        !string.IsNullOrWhiteSpace(Service.ProtocolServiceKey);
+
+    private string GetContainerState()
+    {
+        if (Container is not null)
+        {
+            return Container.State.ToUpperInvariant();
+        }
+
+        return IsSnapshotAvailable ? "MISSING" : "UNKNOWN";
+    }
+
+    private string GetContainerStateClass()
+    {
+        return GetContainerState() switch
+        {
+            "RUNNING" => "status-running",
+            "MISSING" => "status-missing",
+            "EXITED" or "STOPPED" => "status-stopped",
+            _ => "status-unknown"
+        };
+    }
+
+    private string GetProtocolState()
+    {
+        if (!IsSnapshotAvailable)
+        {
+            return "PROBE UNKNOWN";
+        }
+
+        if (Protocol is null)
+        {
+            return "PROBE MISSING";
+        }
+
+        return Protocol.Succeeded
+            ? $"REACHABLE · {FormatDuration(Protocol.DurationMilliseconds)}"
+            : "PROBE FAILED";
+    }
+
+    private string GetProtocolStateClass()
+    {
+        if (!IsSnapshotAvailable)
+        {
+            return "status-unknown";
+        }
+
+        if (Protocol is null)
+        {
+            return "status-warning";
+        }
+
+        return Protocol.Succeeded
+            ? "status-running"
+            : "status-stopped";
+    }
+
+    private string GetProtocolDetail()
+    {
+        if (!IsSnapshotAvailable)
+        {
+            return "Unavailable";
+        }
+
+        if (Protocol is null)
+        {
+            return "Missing";
+        }
+
+        return Protocol.Succeeded ? "Succeeded" : "Failed";
+    }
+
+    private string GetVisibilityClass()
+    {
+        return Service.Visibility.ToUpperInvariant() switch
+        {
+            "PUBLIC" => "visibility-public",
+            "PRIVATE" => "visibility-private",
+            _ => "visibility-internal"
+        };
+    }
+
+    private static string FormatMemory(
+        AgentContainerStatusItem container)
+    {
+        string usage = FormatBytes(container.MemoryUsageBytes);
+
+        string limit = container.MemoryLimitBytes > 0
+            ? FormatBytes(container.MemoryLimitBytes)
+            : "No limit";
+
+        string percent = container.MemoryLimitBytes > 0
+            ? $"{container.MemoryPercent:0.#}%"
+            : "—";
+
+        return $"{usage} / {limit} ({percent})";
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        int unit = 0;
+
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return $"{value:0.#} {units[unit]}";
+    }
+
+    private static string FormatDuration(double durationMilliseconds)
+    {
+        return $"{durationMilliseconds:0.#} ms";
+    }
+}
