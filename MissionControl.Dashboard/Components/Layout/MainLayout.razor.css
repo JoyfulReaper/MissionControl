@@ -125,6 +125,32 @@
     }
 }
 
+.topbar-session {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.logout-form {
+    margin: 0;
+}
+
+.logout-button {
+    padding: 0.45rem 0.75rem;
+    color: var(--mc-text-muted);
+    background: transparent;
+    border: 1px solid var(--mc-border);
+    border-radius: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+    .logout-button:hover {
+        color: var(--mc-text);
+        background: rgba(255, 255, 255, 0.04);
+    }
+
 #blazor-error-ui {
     color-scheme: light only;
     position: fixed;

@@ -19,20 +19,33 @@
 
             <AuthorizeView>
                 <Authorized Context="authentication">
-                    <div class="identity">
-                        <span class="identity-status"
-                              aria-hidden="true">
-                        </span>
+                    <div class="topbar-session">
+                        <div class="identity">
+                            <span class="identity-status"
+                                  aria-hidden="true">
+                            </span>
 
-                        <div>
-                            <div class="identity-label">
-                                Signed in
-                            </div>
+                            <div>
+                                <div class="identity-label">
+                                    Signed in
+                                </div>
 
-                            <div class="identity-name">
-                                @authentication.User.Identity?.Name
+                                <div class="identity-name">
+                                    @authentication.User.Identity?.Name
+                                </div>
                             </div>
                         </div>
+
+                        <form method="post"
+                              action="/logout"
+                              class="logout-form">
+                            <AntiforgeryToken />
+
+                            <button type="submit"
+                                    class="logout-button">
+                                Sign out
+                            </button>
+                        </form>
                     </div>
                 </Authorized>
 
