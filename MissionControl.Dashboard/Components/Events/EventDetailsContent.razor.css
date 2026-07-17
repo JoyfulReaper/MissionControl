@@ -11,3 +11,32 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
 }
+
+dl code {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 575px) {
+    dl {
+        margin-bottom: 1.5rem;
+    }
+
+    dl dt {
+        margin-bottom: 0.15rem;
+        color: var(--mc-text-muted);
+        font-size: 0.68rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+    dl dd {
+        margin-bottom: 0.9rem;
+    }
+
+    .event-payload {
+        max-height: 50vh;
+        margin-inline: -0.25rem;
+        padding: 0.85rem;
+        font-size: 0.75rem;
+    }
+}

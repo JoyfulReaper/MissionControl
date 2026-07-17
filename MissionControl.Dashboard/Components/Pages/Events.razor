@@ -5,11 +5,37 @@
 
 <PageTitle>Events</PageTitle>
 
-<h1>Events</h1>
+<header class="page-header">
+    <div class="page-eyebrow">
+        Event archive
+    </div>
 
-<div class="mb-3">
-    <div class="row g-2 align-items-end mb-3">
-        <div class="col-md-3">
+    <h1>Events</h1>
+
+    <p class="page-description">
+        Filter recent integration activity and open any event for its
+        complete metadata and payload.
+    </p>
+</header>
+
+<section class="filter-panel"
+         aria-labelledby="event-filters-title">
+    <div class="filter-heading">
+        <div>
+            <h2 id="event-filters-title">Filter events</h2>
+            <p>Press Enter in either field to apply.</p>
+        </div>
+
+        @if (HasActiveFilters)
+        {
+            <span class="active-filter-indicator">
+                Filters active
+            </span>
+        }
+    </div>
+
+    <div class="filter-grid">
+        <div>
             <label for="source-filter"
                    class="form-label">
                 Source
@@ -32,7 +58,7 @@
             </datalist>
         </div>
 
-        <div class="col-md-5">
+        <div>
             <label for="event-type-filter"
                    class="form-label">
                 Event type
@@ -55,25 +81,23 @@
             </datalist>
         </div>
 
-        <div class="col-md-auto">
+        <div class="filter-actions">
             <button type="button"
                     class="btn btn-primary"
                     disabled="@IsBusy"
                     @onclick="ApplyFiltersAsync">
                 @(_isLoading ? "Loading..." : "Apply")
             </button>
-        </div>
 
-        <div class="col-md-auto">
             <button type="button"
                     class="btn btn-outline-secondary"
-                    disabled="@IsBusy"
+                    disabled="@(IsBusy || !HasActiveFilters)"
                     @onclick="ClearFiltersAsync">
                 Clear
             </button>
         </div>
     </div>
-</div>
+</section>
 
 @if (_error is not null)
 {
@@ -83,55 +107,104 @@
 }
 else if (_isLoading)
 {
-    <p>Loading Mission Control events...</p>
+    <div class="event-list event-list-loading"
+         aria-label="Loading Mission Control events">
+        @for (int index = 0; index < 5; index++)
+        {
+            <div class="event-card event-card-loading">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        }
+    </div>
 }
 else if (_events.Count == 0)
 {
-    <div class="alert alert-info">
-        No archived events were found.
+    <div class="empty-state">
+        <h2>No events found</h2>
+        <p>
+            No archived events match the current filters.
+        </p>
+
+        @if (HasActiveFilters)
+        {
+            <button type="button"
+                    class="btn btn-outline-primary"
+                    @onclick="ClearFiltersAsync">
+                Clear filters
+            </button>
+        }
     </div>
 }
 else
 {
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Occurred</th>
-                <th>Source</th>
-                <th>Event type</th>
-                <th>Correlation</th>
-                <th></th>
-            </tr>
-        </thead>
+    <div class="event-results-heading">
+        <div>
+            <h2>Recent events</h2>
+            <span>
+                @(_events.Count.ToString("N0")) loaded
+            </span>
+        </div>
 
-        <tbody>
-            @foreach (var item in _events)
-            {
-                <tr class="event-row"
-                    role="button"
-                    tabindex="0"
-                    title="Open event details"
-                    @onclick="() => OpenEventModal(item.EventId)"
-                    @onkeydown="eventArgs =>
-                                    HandleEventRowKeyDown(eventArgs, item.EventId)">
+        <span>Newest first</span>
+    </div>
 
-                        <td>
-                            @DateTimeFormatter.Format(item.OccurredAt)
-                        </td>
-                        <td>@item.Source</td>
-                        <td>@item.EventType</td>
-                        <td>@(item.CorrelationId ?? "—")</td>
-                        <td>
-                        <a class="btn btn-sm btn-outline-primary"
-                           href="@($"events/{item.EventId:D}")"
-                           @onclick:stopPropagation="true">
-                            Full page
-                        </a>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <div class="event-list-header" aria-hidden="true">
+        <span>Occurred</span>
+        <span>Source</span>
+        <span>Event type</span>
+        <span>Correlation</span>
+        <span></span>
+    </div>
+
+    <div class="event-list">
+        @foreach (var item in _events)
+        {
+            <article class="event-card"
+                     role="button"
+                     tabindex="0"
+                     aria-label="Open @item.EventType event from @item.Source"
+                     @onclick="() => OpenEventModal(item.EventId)"
+                     @onkeydown="eventArgs =>
+                        HandleEventRowKeyDown(eventArgs, item.EventId)">
+                <div class="event-field event-occurred"
+                     data-label="Occurred">
+                    <time datetime="@item.OccurredAt.ToString("O")">
+                        @DateTimeFormatter.Format(item.OccurredAt)
+                    </time>
+                </div>
+
+                <div class="event-field"
+                     data-label="Source">
+                    <span class="event-source">@item.Source</span>
+                </div>
+
+                <div class="event-field event-type"
+                     data-label="Event type"
+                     title="@item.EventType">
+                    @item.EventType
+                </div>
+
+                <div class="event-field event-correlation"
+                     data-label="Correlation">
+                    <code title="@item.CorrelationId">
+                        @(item.CorrelationId ?? "—")
+                    </code>
+                </div>
+
+                <div class="event-action">
+                    <a href="@($"events/{item.EventId:D}")"
+                       aria-label="Open @item.EventType on its own page"
+                       @onclick:stopPropagation="true"
+                       @onkeydown:stopPropagation="true">
+                        Full page
+                        <span aria-hidden="true">→</span>
+                    </a>
+                </div>
+            </article>
+        }
+    </div>
     @if (_loadMoreError is not null)
     {
         <div class="alert alert-danger">
@@ -141,7 +214,7 @@ else
 
     @if (_hasMore)
     {
-        <div class="text-center mb-3">
+        <div class="load-more">
             <button type="button"
                     class="btn btn-outline-primary"
                     disabled="@IsBusy"
@@ -180,6 +253,10 @@ else
 
     private bool IsBusy =>
         _isLoading || _isLoadingMore;
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(_sourceFilter) ||
+        !string.IsNullOrWhiteSpace(_eventTypeFilter);
 
 
     protected override Task OnInitializedAsync()
@@ -341,7 +418,7 @@ else
         KeyboardEventArgs eventArgs,
         Guid eventId)
     {
-        if (eventArgs.Key == "Enter")
+        if (eventArgs.Key is "Enter" or " ")
         {
             OpenEventModal(eventId);
         }
