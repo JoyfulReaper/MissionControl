@@ -7,6 +7,150 @@ public sealed class SqliteDashboardUserStore(
     DashboardAuthenticationDatabase database)
     : IDashboardUserStore
 {
+    public async Task RecordSuccessfulLoginAsync(
+        long userId,
+        string? replacementPasswordHash,
+        DateTimeOffset authenticatedAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        if (userId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(userId));
+        }
+
+        const string sql =
+            """
+            UPDATE DashboardUsers
+            SET
+                FailedLoginCount = 0,
+                LockoutEndUtc = NULL,
+                PasswordHash =
+                    COALESCE(
+                        @ReplacementPasswordHash,
+                        PasswordHash),
+                UpdatedAtUtc = @AuthenticatedAtUtc
+            WHERE Id = @UserId;
+            """;
+
+        var parameters = new
+        {
+            UserId = userId,
+            ReplacementPasswordHash =
+                replacementPasswordHash,
+            AuthenticatedAtUtc =
+                FormatTimestamp(authenticatedAtUtc)
+        };
+
+        await using var connection =
+            database.CreateConnection();
+
+        await connection.OpenAsync(
+            cancellationToken);
+
+        int affectedRows =
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    sql,
+                    parameters,
+                    cancellationToken:
+                        cancellationToken));
+
+        EnsureOneUserUpdated(
+            affectedRows,
+            userId);
+    }
+
+    public async Task RecordFailedLoginAsync(
+        long userId,
+        int maxFailedAttempts,
+        DateTimeOffset attemptedAtUtc,
+        DateTimeOffset newLockoutEndUtc,
+        CancellationToken cancellationToken = default)
+    {
+        if (userId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(userId));
+        }
+
+        if (maxFailedAttempts <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxFailedAttempts));
+        }
+
+        const string sql =
+            """
+            UPDATE DashboardUsers
+            SET
+                FailedLoginCount =
+                    CASE
+                        WHEN LockoutEndUtc IS NOT NULL
+                            AND LockoutEndUtc <= @AttemptedAtUtc
+                            THEN 1
+                        ELSE FailedLoginCount + 1
+                    END,
+
+                LockoutEndUtc =
+                    CASE
+                        WHEN
+                        (
+                            CASE
+                                WHEN LockoutEndUtc IS NOT NULL
+                                    AND LockoutEndUtc <= @AttemptedAtUtc
+                                    THEN 1
+                                ELSE FailedLoginCount + 1
+                            END
+                        ) >= @MaxFailedAttempts
+                            THEN @NewLockoutEndUtc
+                        ELSE NULL
+                    END,
+
+                UpdatedAtUtc = @AttemptedAtUtc
+            WHERE Id = @UserId;
+            """;
+
+        var parameters = new
+        {
+            UserId = userId,
+            MaxFailedAttempts = maxFailedAttempts,
+            AttemptedAtUtc =
+                FormatTimestamp(attemptedAtUtc),
+            NewLockoutEndUtc =
+                FormatTimestamp(newLockoutEndUtc)
+        };
+
+        await using var connection =
+            database.CreateConnection();
+
+        await connection.OpenAsync(
+            cancellationToken);
+
+        int affectedRows =
+            await connection.ExecuteAsync(
+                new CommandDefinition(
+                    sql,
+                    parameters,
+                    cancellationToken:
+                        cancellationToken));
+
+        EnsureOneUserUpdated(
+            affectedRows,
+            userId);
+    }
+
+    private static void EnsureOneUserUpdated(
+        int affectedRows,
+    long userId)
+    {
+        if (affectedRows != 1)
+        {
+            throw new InvalidOperationException(
+                $"Dashboard user '{userId}' was not updated.");
+        }
+    }
+
     public async Task<DashboardUser?>
         FindByNormalizedUsernameAsync(
             string normalizedUsername,

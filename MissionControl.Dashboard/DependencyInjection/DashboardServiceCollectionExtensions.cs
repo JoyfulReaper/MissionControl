@@ -71,6 +71,12 @@ public static class DashboardServiceCollectionExtensions
 
         services.AddSingleton<
             DashboardUserProvisioningService>();
+
+        services.AddSingleton<TimeProvider>(
+            TimeProvider.System);
+
+        services.AddSingleton<
+            DashboardPasswordAuthenticationService>();
     }
 
     private static void AddDashboardComponents(
