@@ -24,6 +24,32 @@
         ]
       },
       {
+        "Id": "mission-control-dashboard",
+        "Name": "Mission Control Dashboard",
+        "Group": "Operations",
+        "Summary": "A private operations console for monitoring the JoyfulReaper service stack.",
+        "Description": "An authenticated Blazor dashboard for viewing Mission Control events, service status, container health, protocol probes, archive statistics, and detailed event payloads.",
+        "ContainerName": "joyful-stack-dashboard-1",
+        "Visibility": "Private",
+        "Protocol": "HTTPS / Blazor Server",
+        "Endpoint": "dashboard.kgivler.com",
+        "Image": "joyful-stack-dashboard",
+        "ApplicationUrl": "https://dashboard.kgivler.com/",
+        "SourceUrl": "https://github.com/JoyfulReaper/MissionControl",
+        "SearchTerms": [
+          "mission control",
+          "dashboard",
+          "operations",
+          "monitoring",
+          "events",
+          "archive",
+          "containers",
+          "health",
+          "blazor",
+          "private"
+        ]
+      },
+      {
         "Id": "happy-echo",
         "Name": "HappyEcho",
         "Group": "Public Services",
