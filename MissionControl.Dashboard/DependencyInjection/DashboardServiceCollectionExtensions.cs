@@ -1,3 +1,4 @@
+using JoyfulReaperLib.MissionControl;
 using JoyfulReaperLib.Sqlite;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Options;
 using MissionControl.Dashboard.Agent;
 using MissionControl.Dashboard.Archive;
 using MissionControl.Dashboard.Authentication;
+using MissionControl.Dashboard.Events;
 using MissionControl.Dashboard.Formatting;
 using MissionControl.Dashboard.Security;
 using MissionControl.Dashboard.Services;
@@ -38,8 +40,22 @@ public static class DashboardServiceCollectionExtensions
             services,
             configuration);
         AddDashboardFormatting(services);
-
+        AddMissionControlEventPublishing(
+            services,
+            configuration);
         return services;
+    }
+
+    private static void AddMissionControlEventPublishing(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddMissionControlClient(
+            configuration.GetSection(
+                MissionControlClientOptions.SectionName));
+
+        services.AddScoped<
+            DashboardLoginEventPublisher>();
     }
 
     private static void AddDashboardDataProtection(

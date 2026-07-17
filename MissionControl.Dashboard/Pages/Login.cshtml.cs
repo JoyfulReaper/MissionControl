@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using MissionControl.Dashboard.Authentication;
+using MissionControl.Dashboard.Events;
 using MissionControl.Dashboard.Security;
 using System.Globalization;
 using System.Security.Claims;
@@ -12,7 +13,9 @@ namespace MissionControl.Dashboard.Pages;
 [AllowAnonymous]
 public sealed class LoginModel(
     DashboardPasswordAuthenticationService
-        authenticationService)
+        authenticationService,
+    DashboardLoginEventPublisher
+        loginEventPublisher)
     : PageModel
 {
     [BindProperty]
@@ -112,6 +115,13 @@ public sealed class LoginModel(
             DashboardAuthenticationDefaults.Scheme,
             principal,
             properties);
+
+        await loginEventPublisher.TryPublishAsync(
+            user,
+            HttpContext.Connection
+                .RemoteIpAddress?
+                .ToString(),
+            HttpContext.RequestAborted);
 
         return LocalRedirect(ReturnUrl);
     }
