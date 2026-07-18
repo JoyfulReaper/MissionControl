@@ -1,5 +1,6 @@
 ﻿using JoyfulReaperLib.MissionControl;
 using JoyfulReaperLib.Sqlite;
+using Microsoft.Extensions.Options;
 using MissionControl.Agent.Docker;
 using MissionControl.Agent.Host;
 using MissionControl.Agent.Protocols;
@@ -27,6 +28,10 @@ public static class AgentServiceCollectionExtensions
                 options =>
                     options.IntervalSeconds > 0,
                 "Agent:IntervalSeconds must be greater than zero.")
+            .Validate(
+                options =>
+                    options.PublicationHeartbeatMinutes > 0,
+                "Agent:PublicationHeartbeatMinutes must be greater than zero.")
             .Validate(
                 options =>
                     !options.DockerEnabled ||
@@ -66,8 +71,17 @@ public static class AgentServiceCollectionExtensions
         services.AddSingleton<ProtocolProbeRunner>();
 
         services.AddSingleton(
-            new SnapshotPublicationGate(
-                TimeSpan.FromMinutes(15)));
+            serviceProvider =>
+            {
+                AgentOptions options =
+                    serviceProvider
+                        .GetRequiredService<IOptions<AgentOptions>>()
+                        .Value;
+
+                return new SnapshotPublicationGate(
+                    TimeSpan.FromMinutes(
+                        options.PublicationHeartbeatMinutes));
+            });
 
         services.AddHostedService<AgentWorker>();
 

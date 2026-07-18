@@ -9,6 +9,8 @@ public sealed class AgentOptions
 
     public int IntervalSeconds { get; init; } = 60;
 
+    public int PublicationHeartbeatMinutes { get; init; } = 15;
+
     public bool DockerEnabled { get; init; } =
         !OperatingSystem.IsWindows();
 

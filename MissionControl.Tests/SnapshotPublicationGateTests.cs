@@ -8,6 +8,39 @@ namespace MissionControl.Tests;
 
 public sealed class SnapshotPublicationGateTests
 {
+    [Fact]
+    public void FirstSnapshotIsDue()
+    {
+        var gate = new SnapshotPublicationGate(
+            TimeSpan.FromMinutes(15));
+
+        Assert.True(
+            gate.IsDue(
+                CreateSnapshot(dockerAvailable: true),
+                DateTimeOffset.UtcNow));
+    }
+
+    [Fact]
+    public void UnchangedSnapshotIsSuppressedBeforeHeartbeatAndDueAtHeartbeat()
+    {
+        var gate = new SnapshotPublicationGate(
+            TimeSpan.FromMinutes(3));
+        DateTimeOffset publishedAt = DateTimeOffset.UtcNow;
+        NodeSnapshotEvent snapshot =
+            CreateSnapshot(dockerAvailable: true);
+
+        gate.MarkPublished(snapshot, publishedAt);
+
+        Assert.False(
+            gate.IsDue(
+                snapshot,
+                publishedAt.AddMinutes(3).AddTicks(-1)));
+        Assert.True(
+            gate.IsDue(
+                snapshot,
+                publishedAt.AddMinutes(3)));
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
@@ -31,7 +64,7 @@ public sealed class SnapshotPublicationGateTests
     }
 
     [Fact]
-    public void HostMetricChangesDoNotTriggerPublication()
+    public void CpuAndMemoryChangesDoNotTriggerPublication()
     {
         var gate = new SnapshotPublicationGate(TimeSpan.FromHours(1));
         DateTimeOffset publishedAt = DateTimeOffset.UtcNow;
@@ -39,14 +72,16 @@ public sealed class SnapshotPublicationGateTests
         gate.MarkPublished(
             CreateSnapshot(
                 dockerAvailable: true,
-                cpuPercent: 10),
+                cpuPercent: 10,
+                memoryAvailableBytes: 500),
             publishedAt);
 
         Assert.False(
             gate.IsDue(
                 CreateSnapshot(
                     dockerAvailable: true,
-                    cpuPercent: 80),
+                    cpuPercent: 80,
+                    memoryAvailableBytes: 100),
                 publishedAt.AddMinutes(1)));
     }
 
@@ -314,6 +349,7 @@ public sealed class SnapshotPublicationGateTests
     private static NodeSnapshotEvent CreateSnapshot(
         bool dockerAvailable,
         double cpuPercent = 10,
+        long memoryAvailableBytes = 500,
         IReadOnlyList<ContainerMetric>? containers = null,
         IReadOnlyList<ProtocolProbeResult>? protocols = null)
     {
@@ -324,7 +360,7 @@ public sealed class SnapshotPublicationGateTests
                 LogicalProcessorCount: 4,
                 CpuPercent: cpuPercent,
                 MemoryTotalBytes: 1_000,
-                MemoryAvailableBytes: 500),
+                MemoryAvailableBytes: memoryAvailableBytes),
             Protocols: protocols ?? [],
             Containers: containers ?? [],
             DockerAvailable: dockerAvailable,
