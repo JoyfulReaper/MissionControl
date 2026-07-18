@@ -10,7 +10,6 @@ internal interface INodeSnapshotStore
 
     Task RecordPublishResultAsync(
         string node,
-        DateTimeOffset capturedAt,
         bool succeeded,
         DateTimeOffset attemptedAt,
         CancellationToken cancellationToken = default);

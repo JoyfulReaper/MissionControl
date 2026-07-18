@@ -70,7 +70,7 @@
             @if (Snapshot?.LastMissionControlPublishAttemptAt is not null)
             {
                 <span class="snapshot-publish-attempt">
-                    Last publish
+                    @PublicationStatusPresentation.AttemptTimestampLabel
                     <strong>
                         @(DateTimeFormatter.Format(
                             Snapshot
@@ -114,22 +114,14 @@
 
     private string GetPublishState()
     {
-        return Snapshot?.MissionControlPublishSucceeded switch
-        {
-            true => "EVENT PUBLISH OK",
-            false => "EVENT PUBLISH FAILED",
-            _ => "EVENT PUBLISH UNKNOWN"
-        };
+        return PublicationStatusPresentation.GetLabel(
+            Snapshot?.MissionControlPublishSucceeded);
     }
 
     private string GetPublishStateClass()
     {
-        return Snapshot?.MissionControlPublishSucceeded switch
-        {
-            true => "status-running",
-            false => "status-stopped",
-            _ => "status-unknown"
-        };
+        return PublicationStatusPresentation.GetCssClass(
+            Snapshot?.MissionControlPublishSucceeded);
     }
 
     private string GetDockerState()

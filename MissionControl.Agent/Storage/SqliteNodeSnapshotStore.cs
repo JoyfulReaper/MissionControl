@@ -37,8 +37,6 @@ internal class SqliteNodeSnapshotStore(AgentDatabase database) : INodeSnapshotSt
             ON CONFLICT(Node) DO UPDATE SET
                 CapturedAt = excluded.CapturedAt,
                 Payload = excluded.Payload,
-                PublishSucceeded = NULL,
-                LastPublishAttemptAt = NULL,
                 UpdatedAt = excluded.UpdatedAt
             WHERE excluded.CapturedAt >= NodeSnapshots.CapturedAt;
             """;
@@ -64,7 +62,6 @@ internal class SqliteNodeSnapshotStore(AgentDatabase database) : INodeSnapshotSt
 
     public async Task RecordPublishResultAsync(
         string node,
-        DateTimeOffset capturedAt,
         bool succeeded,
         DateTimeOffset attemptedAt,
         CancellationToken cancellationToken
@@ -79,14 +76,12 @@ internal class SqliteNodeSnapshotStore(AgentDatabase database) : INodeSnapshotSt
                 PublishSucceeded = @PublishSucceeded,
                 LastPublishAttemptAt = @LastPublishAttemptAt,
                 UpdatedAt = @UpdatedAt
-            WHERE Node = @Node
-              AND CapturedAt = @CapturedAt;
+            WHERE Node = @Node;
             """;
 
         var parameters = new
         {
             Node = node,
-            CapturedAt = capturedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
             PublishSucceeded = succeeded ? 1 : 0,
             LastPublishAttemptAt = attemptedAt
                 .ToUniversalTime()
@@ -98,7 +93,8 @@ internal class SqliteNodeSnapshotStore(AgentDatabase database) : INodeSnapshotSt
 
         await using var connection = database.CreateConnection();
         await connection.OpenAsync(cancellationToken);
-        await connection.ExecuteAsync(
+        int affectedRows =
+            await connection.ExecuteAsync(
             new CommandDefinition
             (
                 sql,
@@ -106,6 +102,12 @@ internal class SqliteNodeSnapshotStore(AgentDatabase database) : INodeSnapshotSt
                 cancellationToken: cancellationToken
             )
         );
+
+        if (affectedRows == 0)
+        {
+            throw new InvalidOperationException(
+                $"No stored snapshot exists for node '{node}'.");
+        }
     }
 
     public async Task<StoredNodeSnapshot?> GetAsync(

@@ -83,15 +83,99 @@ public sealed class AgentWorkerDockerFailureTests
         Assert.Null(store.SavedSnapshot);
     }
 
+    [Fact]
+    public async Task SuppressedIntervalSavesFreshMetricsWithoutRecordingAttempt()
+    {
+        var store = new RecordingSnapshotStore();
+        AgentWorker worker = CreateWorker(
+            new SuccessfulDockerMetricsCollector(),
+            store,
+            publishOutcomes: [true]);
+
+        await worker.ExecuteIterationAsync(
+            CreateOptions(),
+            CancellationToken.None);
+        await worker.ExecuteIterationAsync(
+            CreateOptions(),
+            CancellationToken.None);
+
+        Assert.Equal(2, store.SavedSnapshots.Count);
+        Assert.True(
+            store.SavedSnapshots[1].CapturedAt >=
+            store.SavedSnapshots[0].CapturedAt);
+        Assert.NotEqual(
+            store.SavedSnapshots[0].Host?.CpuPercent,
+            store.SavedSnapshots[1].Host?.CpuPercent);
+        Assert.Single(store.PublishResults);
+        Assert.True(store.PublishResults[0].Succeeded);
+        Assert.Equal(1, store.PublishObservedCount);
+    }
+
+    [Fact]
+    public async Task FailedPublicationRetriesAndSuccessSuppressesNextInterval()
+    {
+        var store = new RecordingSnapshotStore();
+        AgentWorker worker = CreateWorker(
+            new SuccessfulDockerMetricsCollector(),
+            store,
+            publishOutcomes: [false, true]);
+
+        await worker.ExecuteIterationAsync(
+            CreateOptions(),
+            CancellationToken.None);
+        await worker.ExecuteIterationAsync(
+            CreateOptions(),
+            CancellationToken.None);
+        await worker.ExecuteIterationAsync(
+            CreateOptions(),
+            CancellationToken.None);
+
+        Assert.Equal(3, store.SavedSnapshots.Count);
+        Assert.Equal(2, store.PublishObservedCount);
+        Assert.Collection(
+            store.PublishResults,
+            result => Assert.False(result.Succeeded),
+            result => Assert.True(result.Succeeded));
+    }
+
+    [Fact]
+    public async Task PublicationMetadataWriteFailureLeavesPublicationDue()
+    {
+        var store = new RecordingSnapshotStore
+        {
+            FailNextPublishResult = true
+        };
+        AgentWorker worker = CreateWorker(
+            new SuccessfulDockerMetricsCollector(),
+            store,
+            publishOutcomes: [true, true]);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => worker.ExecuteIterationAsync(
+                CreateOptions(),
+                CancellationToken.None));
+
+        await worker.ExecuteIterationAsync(
+            CreateOptions(),
+            CancellationToken.None);
+
+        Assert.Equal(2, store.PublishObservedCount);
+        Assert.Single(store.PublishResults);
+        Assert.True(store.PublishResults[0].Succeeded);
+    }
+
     private static AgentWorker CreateWorker(
         IDockerMetricsCollector dockerMetricsCollector,
-        RecordingSnapshotStore store)
+        RecordingSnapshotStore store,
+        IReadOnlyList<bool>? publishOutcomes = null)
     {
         return new AgentWorker(
             NullLogger<AgentWorker>.Instance,
             dockerMetricsCollector,
             new StubHostMetricsCollector(),
-            new StubMissionControlClient(store),
+            new StubMissionControlClient(
+                store,
+                publishOutcomes ?? [true]),
             new ProtocolProbeRunner([new SuccessfulProtocolProbe()]),
             store,
             new SnapshotPublicationGate(TimeSpan.FromHours(1)),
@@ -158,13 +242,15 @@ public sealed class AgentWorkerDockerFailureTests
     private sealed class StubHostMetricsCollector :
         IHostMetricsCollector
     {
+        private int collectionCount;
+
         public Task<HostMetric> GetMetricsAsync(
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult(
                 new HostMetric(
                     LogicalProcessorCount: 4,
-                    CpuPercent: 25,
+                    CpuPercent: 25 + collectionCount++,
                     MemoryTotalBytes: 1_000,
                     MemoryAvailableBytes: 500));
         }
@@ -184,30 +270,51 @@ public sealed class AgentWorkerDockerFailureTests
 
     private sealed class RecordingSnapshotStore : INodeSnapshotStore
     {
-        public NodeSnapshotEvent? SavedSnapshot { get; private set; }
+        public List<NodeSnapshotEvent> SavedSnapshots { get; } = [];
+
+        public List<PublishResult> PublishResults { get; } = [];
+
+        public NodeSnapshotEvent? SavedSnapshot =>
+            SavedSnapshots.LastOrDefault();
+
+        public bool FailNextPublishResult { get; set; }
 
         public bool PublishWasAfterSave { get; private set; }
+
+        public int PublishObservedCount { get; private set; }
 
         public void RecordPublishObservation()
         {
             PublishWasAfterSave = SavedSnapshot is not null;
+            PublishObservedCount++;
         }
 
         public Task SaveAsync(
             NodeSnapshotEvent snapshot,
             CancellationToken cancellationToken = default)
         {
-            SavedSnapshot = snapshot;
+            SavedSnapshots.Add(snapshot);
             return Task.CompletedTask;
         }
 
         public Task RecordPublishResultAsync(
             string node,
-            DateTimeOffset capturedAt,
             bool succeeded,
             DateTimeOffset attemptedAt,
             CancellationToken cancellationToken = default)
         {
+            if (FailNextPublishResult)
+            {
+                FailNextPublishResult = false;
+                throw new InvalidOperationException(
+                    "Publication metadata write failed.");
+            }
+
+            PublishResults.Add(
+                new PublishResult(
+                    succeeded,
+                    attemptedAt));
+
             return Task.CompletedTask;
         }
 
@@ -217,12 +324,20 @@ public sealed class AgentWorkerDockerFailureTests
         {
             return Task.FromResult<StoredNodeSnapshot?>(null);
         }
+
+        public sealed record PublishResult(
+            bool Succeeded,
+            DateTimeOffset AttemptedAt);
     }
 
     private sealed class StubMissionControlClient(
-        RecordingSnapshotStore store) :
+        RecordingSnapshotStore store,
+        IReadOnlyList<bool> outcomes) :
         IMissionControlClient
     {
+        private readonly Queue<bool> publishOutcomes =
+            new(outcomes);
+
         public Task<bool> TryPublishAsync<TPayload>(
             string eventType,
             TPayload payload,
@@ -231,7 +346,9 @@ public sealed class AgentWorkerDockerFailureTests
             CancellationToken cancellationToken)
         {
             store.RecordPublishObservation();
-            return Task.FromResult(true);
+            return Task.FromResult(
+                publishOutcomes.Count > 0 &&
+                publishOutcomes.Dequeue());
         }
     }
 }

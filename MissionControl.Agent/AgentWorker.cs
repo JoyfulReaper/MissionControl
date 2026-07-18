@@ -131,7 +131,6 @@ internal sealed class AgentWorker(
 
         await snapshotStore.RecordPublishResultAsync(
             node: snapshot.Node,
-            capturedAt: snapshot.CapturedAt,
             succeeded: published,
             attemptedAt: publicationTime,
             cancellationToken: cancellationToken);

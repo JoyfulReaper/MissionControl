@@ -73,14 +73,13 @@ public sealed class SqliteNodeSnapshotStoreTests
 
         NodeSnapshotEvent snapshot = CreateSnapshot();
         DateTimeOffset attemptedAt =
-            new(2026, 7, 15, 13, 15, 0, TimeSpan.Zero);
+            new(2026, 7, 15, 9, 15, 0, TimeSpan.FromHours(-4));
 
         await fixture.SnapshotStore.SaveAsync(
             snapshot,
             CancellationToken.None);
         await fixture.SnapshotStore.RecordPublishResultAsync(
             snapshot.Node,
-            snapshot.CapturedAt,
             succeeded: true,
             attemptedAt,
             CancellationToken.None);
@@ -91,7 +90,12 @@ public sealed class SqliteNodeSnapshotStoreTests
                 snapshot.Node);
 
         Assert.True(stored.PublishSucceeded);
-        Assert.Equal(attemptedAt, stored.LastPublishAttemptAt);
+        Assert.Equal(
+            attemptedAt.ToUniversalTime(),
+            stored.LastPublishAttemptAt);
+        Assert.Equal(
+            TimeSpan.Zero,
+            stored.LastPublishAttemptAt?.Offset);
         Assert.Equal(snapshot.Node, stored.Snapshot.Node);
         Assert.Equal(snapshot.CapturedAt, stored.Snapshot.CapturedAt);
         AssertProtocolResultsEqual(
@@ -109,7 +113,9 @@ public sealed class SqliteNodeSnapshotStoreTests
             await AgentSnapshotStoreFixture.CreateAsync();
 
         NodeSnapshotEvent snapshot = CreateSnapshot();
-        DateTimeOffset attemptedAt =
+        DateTimeOffset successfulAttemptAt =
+            new(2026, 7, 15, 13, 15, 0, TimeSpan.Zero);
+        DateTimeOffset failedAttemptAt =
             new(2026, 7, 15, 13, 20, 0, TimeSpan.Zero);
 
         await fixture.SnapshotStore.SaveAsync(
@@ -117,9 +123,13 @@ public sealed class SqliteNodeSnapshotStoreTests
             CancellationToken.None);
         await fixture.SnapshotStore.RecordPublishResultAsync(
             snapshot.Node,
-            snapshot.CapturedAt,
+            succeeded: true,
+            successfulAttemptAt,
+            CancellationToken.None);
+        await fixture.SnapshotStore.RecordPublishResultAsync(
+            snapshot.Node,
             succeeded: false,
-            attemptedAt,
+            failedAttemptAt,
             CancellationToken.None);
 
         StoredNodeSnapshot stored =
@@ -128,11 +138,11 @@ public sealed class SqliteNodeSnapshotStoreTests
                 snapshot.Node);
 
         Assert.False(stored.PublishSucceeded);
-        Assert.Equal(attemptedAt, stored.LastPublishAttemptAt);
+        Assert.Equal(failedAttemptAt, stored.LastPublishAttemptAt);
     }
 
     [Fact]
-    public async Task SavingNewerSnapshotOverwritesCurrentSnapshotAndResetsPublicationMetadata()
+    public async Task SavingNewerSnapshotPreservesSuccessfulMetadataAcrossStoreRestart()
     {
         await using var fixture =
             await AgentSnapshotStoreFixture.CreateAsync();
@@ -143,23 +153,26 @@ public sealed class SqliteNodeSnapshotStoreTests
                 capturedAt: originalSnapshot.CapturedAt.AddMinutes(5),
                 protocolSuffix: "replacement",
                 containerSuffix: "replacement");
+        DateTimeOffset attemptedAt =
+            originalSnapshot.CapturedAt.AddMinutes(1);
 
         await fixture.SnapshotStore.SaveAsync(
             originalSnapshot,
             CancellationToken.None);
         await fixture.SnapshotStore.RecordPublishResultAsync(
             originalSnapshot.Node,
-            originalSnapshot.CapturedAt,
             succeeded: true,
-            attemptedAt: originalSnapshot.CapturedAt.AddMinutes(1),
+            attemptedAt,
             CancellationToken.None);
         await fixture.SnapshotStore.SaveAsync(
             replacementSnapshot,
             CancellationToken.None);
 
+        var restartedStore =
+            new SqliteNodeSnapshotStore(fixture.Database);
         StoredNodeSnapshot stored =
             await GetRequiredSnapshotAsync(
-                fixture.SnapshotStore,
+                restartedStore,
                 replacementSnapshot.Node);
 
         Assert.Equal(
@@ -171,12 +184,88 @@ public sealed class SqliteNodeSnapshotStoreTests
         AssertContainerMetricsEqual(
             replacementSnapshot.Containers,
             stored.Snapshot.Containers);
-        Assert.Null(stored.PublishSucceeded);
-        Assert.Null(stored.LastPublishAttemptAt);
+        Assert.True(stored.PublishSucceeded);
+        Assert.Equal(attemptedAt, stored.LastPublishAttemptAt);
     }
 
     [Fact]
-    public async Task StalePublishResultDoesNotUpdateNewerSnapshot()
+    public async Task SuppressedSnapshotsPreserveFailureUntilLaterSuccess()
+    {
+        await using var fixture =
+            await AgentSnapshotStoreFixture.CreateAsync();
+
+        NodeSnapshotEvent firstSnapshot = CreateSnapshot();
+        NodeSnapshotEvent suppressedSnapshot =
+            CreateSnapshot(
+                capturedAt: firstSnapshot.CapturedAt.AddMinutes(1),
+                protocolSuffix: "suppressed",
+                containerSuffix: "suppressed");
+        NodeSnapshotEvent latestSnapshot =
+            CreateSnapshot(
+                capturedAt: firstSnapshot.CapturedAt.AddMinutes(2),
+                protocolSuffix: "latest",
+                containerSuffix: "latest");
+        DateTimeOffset failedAttemptAt =
+            firstSnapshot.CapturedAt.AddSeconds(10);
+        DateTimeOffset successfulAttemptAt =
+            firstSnapshot.CapturedAt.AddMinutes(2).AddSeconds(10);
+
+        await fixture.SnapshotStore.SaveAsync(
+            firstSnapshot,
+            CancellationToken.None);
+        await fixture.SnapshotStore.RecordPublishResultAsync(
+            firstSnapshot.Node,
+            succeeded: false,
+            failedAttemptAt,
+            CancellationToken.None);
+        await fixture.SnapshotStore.SaveAsync(
+            suppressedSnapshot,
+            CancellationToken.None);
+
+        StoredNodeSnapshot afterSuppressedSave =
+            await GetRequiredSnapshotAsync(
+                fixture.SnapshotStore,
+                firstSnapshot.Node);
+
+        Assert.Equal(
+            suppressedSnapshot.CapturedAt,
+            afterSuppressedSave.Snapshot.CapturedAt);
+        AssertProtocolResultsEqual(
+            suppressedSnapshot.Protocols,
+            afterSuppressedSave.Snapshot.Protocols);
+        Assert.False(afterSuppressedSave.PublishSucceeded);
+        Assert.Equal(
+            failedAttemptAt,
+            afterSuppressedSave.LastPublishAttemptAt);
+
+        await fixture.SnapshotStore.SaveAsync(
+            latestSnapshot,
+            CancellationToken.None);
+        await fixture.SnapshotStore.RecordPublishResultAsync(
+            latestSnapshot.Node,
+            succeeded: true,
+            successfulAttemptAt,
+            CancellationToken.None);
+
+        StoredNodeSnapshot afterSuccessfulAttempt =
+            await GetRequiredSnapshotAsync(
+                fixture.SnapshotStore,
+                firstSnapshot.Node);
+
+        Assert.Equal(
+            latestSnapshot.CapturedAt,
+            afterSuccessfulAttempt.Snapshot.CapturedAt);
+        AssertContainerMetricsEqual(
+            latestSnapshot.Containers,
+            afterSuccessfulAttempt.Snapshot.Containers);
+        Assert.True(afterSuccessfulAttempt.PublishSucceeded);
+        Assert.Equal(
+            successfulAttemptAt,
+            afterSuccessfulAttempt.LastPublishAttemptAt);
+    }
+
+    [Fact]
+    public async Task PublishResultUpdatesMetadataWithoutOverwritingNewerSnapshot()
     {
         await using var fixture =
             await AgentSnapshotStoreFixture.CreateAsync();
@@ -187,6 +276,8 @@ public sealed class SqliteNodeSnapshotStoreTests
                 capturedAt: snapshotA.CapturedAt.AddMinutes(10),
                 protocolSuffix: "snapshot-b",
                 containerSuffix: "snapshot-b");
+        DateTimeOffset attemptedAt =
+            snapshotA.CapturedAt.AddMinutes(1);
 
         await fixture.SnapshotStore.SaveAsync(
             snapshotA,
@@ -196,9 +287,8 @@ public sealed class SqliteNodeSnapshotStoreTests
             CancellationToken.None);
         await fixture.SnapshotStore.RecordPublishResultAsync(
             snapshotA.Node,
-            snapshotA.CapturedAt,
             succeeded: true,
-            attemptedAt: snapshotA.CapturedAt.AddMinutes(1),
+            attemptedAt,
             CancellationToken.None);
 
         StoredNodeSnapshot stored =
@@ -213,8 +303,8 @@ public sealed class SqliteNodeSnapshotStoreTests
         AssertContainerMetricsEqual(
             snapshotB.Containers,
             stored.Snapshot.Containers);
-        Assert.Null(stored.PublishSucceeded);
-        Assert.Null(stored.LastPublishAttemptAt);
+        Assert.True(stored.PublishSucceeded);
+        Assert.Equal(attemptedAt, stored.LastPublishAttemptAt);
     }
 
     [Fact]
@@ -248,7 +338,6 @@ public sealed class SqliteNodeSnapshotStoreTests
             CancellationToken.None);
         await fixture.SnapshotStore.RecordPublishResultAsync(
             newerSnapshot.Node,
-            newerSnapshot.CapturedAt,
             succeeded: true,
             attemptedAt,
             CancellationToken.None);
@@ -282,7 +371,7 @@ public sealed class SqliteNodeSnapshotStoreTests
     }
 
     [Fact]
-    public async Task SavingSnapshotWithSameCapturedAtReplacesPayloadAndResetsPublicationMetadata()
+    public async Task SavingSnapshotWithSameCapturedAtPreservesPublicationMetadata()
     {
         await using var fixture =
             await AgentSnapshotStoreFixture.CreateAsync();
@@ -293,15 +382,16 @@ public sealed class SqliteNodeSnapshotStoreTests
                 capturedAt: snapshotA.CapturedAt,
                 protocolSuffix: "same-time",
                 containerSuffix: "same-time");
+        DateTimeOffset attemptedAt =
+            snapshotA.CapturedAt.AddMinutes(1);
 
         await fixture.SnapshotStore.SaveAsync(
             snapshotA,
             CancellationToken.None);
         await fixture.SnapshotStore.RecordPublishResultAsync(
             snapshotA.Node,
-            snapshotA.CapturedAt,
             succeeded: true,
-            attemptedAt: snapshotA.CapturedAt.AddMinutes(1),
+            attemptedAt,
             CancellationToken.None);
         await fixture.SnapshotStore.SaveAsync(
             snapshotB,
@@ -319,8 +409,8 @@ public sealed class SqliteNodeSnapshotStoreTests
         AssertContainerMetricsEqual(
             snapshotB.Containers,
             stored.Snapshot.Containers);
-        Assert.Null(stored.PublishSucceeded);
-        Assert.Null(stored.LastPublishAttemptAt);
+        Assert.True(stored.PublishSucceeded);
+        Assert.Equal(attemptedAt, stored.LastPublishAttemptAt);
     }
 
     [Fact]
@@ -347,6 +437,20 @@ public sealed class SqliteNodeSnapshotStoreTests
         await fixture.SnapshotStore.SaveAsync(
             bravoSnapshot,
             CancellationToken.None);
+        DateTimeOffset alphaAttemptAt =
+            alphaSnapshot.CapturedAt.AddSeconds(10);
+        DateTimeOffset bravoAttemptAt =
+            bravoSnapshot.CapturedAt.AddSeconds(10);
+        await fixture.SnapshotStore.RecordPublishResultAsync(
+            alphaSnapshot.Node,
+            succeeded: true,
+            alphaAttemptAt,
+            CancellationToken.None);
+        await fixture.SnapshotStore.RecordPublishResultAsync(
+            bravoSnapshot.Node,
+            succeeded: false,
+            bravoAttemptAt,
+            CancellationToken.None);
 
         StoredNodeSnapshot alphaStored =
             await GetRequiredSnapshotAsync(
@@ -364,6 +468,10 @@ public sealed class SqliteNodeSnapshotStoreTests
         AssertContainerMetricsEqual(
             alphaSnapshot.Containers,
             alphaStored.Snapshot.Containers);
+        Assert.True(alphaStored.PublishSucceeded);
+        Assert.Equal(
+            alphaAttemptAt,
+            alphaStored.LastPublishAttemptAt);
         Assert.Equal(bravoSnapshot.CapturedAt, bravoStored.Snapshot.CapturedAt);
         AssertProtocolResultsEqual(
             bravoSnapshot.Protocols,
@@ -371,6 +479,10 @@ public sealed class SqliteNodeSnapshotStoreTests
         AssertContainerMetricsEqual(
             bravoSnapshot.Containers,
             bravoStored.Snapshot.Containers);
+        Assert.False(bravoStored.PublishSucceeded);
+        Assert.Equal(
+            bravoAttemptAt,
+            bravoStored.LastPublishAttemptAt);
     }
 
     [Fact]
@@ -422,7 +534,6 @@ public sealed class SqliteNodeSnapshotStoreTests
         await Assert.ThrowsAsync<ArgumentNullException>(
             () => fixture.SnapshotStore.RecordPublishResultAsync(
                 null!,
-                CreateSnapshot().CapturedAt,
                 succeeded: true,
                 attemptedAt: DateTimeOffset.UtcNow,
                 CancellationToken.None));
@@ -441,9 +552,27 @@ public sealed class SqliteNodeSnapshotStoreTests
         await Assert.ThrowsAsync<ArgumentException>(
             () => fixture.SnapshotStore.RecordPublishResultAsync(
                 node,
-                CreateSnapshot().CapturedAt,
                 succeeded: true,
                 attemptedAt: DateTimeOffset.UtcNow,
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task RecordPublishResultAsyncRejectsUnknownNode()
+    {
+        await using var fixture =
+            await AgentSnapshotStoreFixture.CreateAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => fixture.SnapshotStore.RecordPublishResultAsync(
+                "missing-node",
+                succeeded: true,
+                attemptedAt: DateTimeOffset.UtcNow,
+                CancellationToken.None));
+
+        Assert.Null(
+            await fixture.SnapshotStore.GetAsync(
+                "missing-node",
                 CancellationToken.None));
     }
 

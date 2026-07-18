@@ -14,6 +14,75 @@ namespace MissionControl.Tests;
 public sealed class AgentSnapshotContractTests
 {
     [Fact]
+    public async Task EndpointReturnsPreservedPublicationMetadataWithFreshMetrics()
+    {
+        await using var fixture =
+            await AgentSnapshotStoreFixture.CreateAsync();
+        DateTimeOffset capturedAt =
+            new(2026, 7, 17, 14, 0, 0, TimeSpan.Zero);
+        DateTimeOffset attemptedAt =
+            capturedAt.AddSeconds(10);
+        var firstSnapshot = new NodeSnapshotEvent(
+            Node: "node-1",
+            CapturedAt: capturedAt,
+            Host: new HostMetric(4, 10, 1_000, 500),
+            Protocols: [],
+            Containers: [],
+            DockerAvailable: true,
+            DockerError: null);
+        NodeSnapshotEvent suppressedSnapshot =
+            firstSnapshot with
+            {
+                CapturedAt = capturedAt.AddMinutes(1),
+                Host = new HostMetric(4, 80, 1_000, 250)
+            };
+
+        await fixture.SnapshotStore.SaveAsync(
+            firstSnapshot,
+            CancellationToken.None);
+        await fixture.SnapshotStore.RecordPublishResultAsync(
+            firstSnapshot.Node,
+            succeeded: true,
+            attemptedAt,
+            CancellationToken.None);
+        await fixture.SnapshotStore.SaveAsync(
+            suppressedSnapshot,
+            CancellationToken.None);
+
+        StoredNodeSnapshot stored =
+            await fixture.SnapshotStore.GetAsync(
+                firstSnapshot.Node,
+                CancellationToken.None) ??
+            throw new Xunit.Sdk.XunitException(
+                "Expected a stored snapshot.");
+        var publicSnapshot =
+            AgentSnapshotEndpointRouteBuilderExtensions
+                .CreatePublicSnapshot(
+                    stored,
+                    suppressedSnapshot.CapturedAt.AddSeconds(5),
+                    TimeSpan.FromMinutes(1));
+        string json = JsonSerializer.Serialize(
+            publicSnapshot,
+            new JsonSerializerOptions(
+                JsonSerializerDefaults.Web));
+        AgentSnapshotItem? dashboardSnapshot =
+            JsonSerializer.Deserialize<AgentSnapshotItem>(
+                json,
+                new JsonSerializerOptions(
+                    JsonSerializerDefaults.Web));
+
+        Assert.NotNull(dashboardSnapshot);
+        Assert.Equal(
+            suppressedSnapshot.CapturedAt,
+            dashboardSnapshot.CapturedAt);
+        Assert.Equal(80, dashboardSnapshot.Host?.CpuPercent);
+        Assert.True(dashboardSnapshot.MissionControlPublishSucceeded);
+        Assert.Equal(
+            attemptedAt,
+            dashboardSnapshot.LastMissionControlPublishAttemptAt);
+    }
+
+    [Fact]
     public void EndpointContractSerializesDockerUnavailabilityForDashboard()
     {
         DateTimeOffset capturedAt = DateTimeOffset.UtcNow;
@@ -84,5 +153,23 @@ public sealed class AgentSnapshotContractTests
                 isSnapshotAvailable: true,
                 dockerAvailable: null,
                 containerState: null));
+    }
+
+    [Fact]
+    public void PublicationStatusDistinguishesActualAttemptResults()
+    {
+        Assert.Equal(
+            "NO PUBLISH ATTEMPT RECORDED",
+            PublicationStatusPresentation.GetLabel(null));
+        Assert.Equal(
+            "LAST ATTEMPT SUCCEEDED",
+            PublicationStatusPresentation.GetLabel(true));
+        string failedLabel =
+            PublicationStatusPresentation.GetLabel(false);
+        Assert.Equal("LAST ATTEMPT FAILED", failedLabel);
+        Assert.DoesNotContain("SUCCEEDED", failedLabel);
+        Assert.Equal(
+            "Last publish attempt",
+            PublicationStatusPresentation.AttemptTimestampLabel);
     }
 }
