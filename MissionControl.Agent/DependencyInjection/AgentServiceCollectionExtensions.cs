@@ -99,34 +99,39 @@ public static class AgentServiceCollectionExtensions
         services
             .AddOptions<AgentStorageOptions>()
             .Bind(section)
-            .Validate(
-                options =>
-                    !string.IsNullOrWhiteSpace(
-                        options.DatabaseFileName),
-                "AgentStorage:DatabaseFileName is required.")
             .ValidateOnStart();
 
-        AgentStorageOptions storageOptions =
-            section.Get<AgentStorageOptions>() ??
-            throw new InvalidOperationException(
-                "AgentStorage configuration is invalid.");
+        services.AddSingleton<
+            IValidateOptions<AgentStorageOptions>,
+            AgentStorageOptionsValidator>();
 
-        string connectionString =
-            SqliteDatabaseInitializer.Initialize(
-                dbFileName:
-                    storageOptions.DatabaseFileName,
-                schemaSql:
-                    AgentStorageSchema.Sql,
-                basePath:
-                    storageOptions.BasePath);
-
-        services.AddSingleton(
-            new AgentDatabase(connectionString));
+        services.AddSingleton(CreateAgentDatabase);
 
         services.AddSingleton<
             INodeSnapshotStore,
             SqliteNodeSnapshotStore>();
 
         return services;
+    }
+
+    private static AgentDatabase CreateAgentDatabase(
+        IServiceProvider serviceProvider)
+    {
+        AgentStorageOptions options =
+            serviceProvider
+                .GetRequiredService<
+                    IOptions<AgentStorageOptions>>()
+                .Value;
+
+        string databasePath =
+            AgentStoragePath.ResolveDatabasePath(options);
+
+        string connectionString =
+            SqliteDatabaseInitializer.Initialize(
+                dbFileName: Path.GetFileName(databasePath),
+                schemaSql: AgentStorageSchema.Sql,
+                basePath: Path.GetDirectoryName(databasePath));
+
+        return new AgentDatabase(connectionString);
     }
 }

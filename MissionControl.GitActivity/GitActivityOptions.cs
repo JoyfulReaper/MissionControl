@@ -11,8 +11,7 @@ public sealed class GitActivityOptions
 {
     public const string SectionName = "GitActivity";
 
-    public string DatabaseFileName { get; init; } =
-        "git-activity.db";
+    public string? DatabaseFileName { get; init; }
 
     public string? BasePath { get; init; }
 
