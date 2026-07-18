@@ -5,4 +5,7 @@ public sealed record DashboardLoginSucceededEvent(
     string Username,
     string DisplayName,
     DateTimeOffset AuthenticatedAtUtc,
-    string? Remote);
+    string? Remote)
+{
+    public const string EventType = "missioncontrol.dashboard.user.login.succeeded";
+}
