@@ -46,16 +46,30 @@ internal sealed class GitActivityOptionsValidator
                 "GitActivity:ApiKey must contain at least 32 characters.");
         }
 
-        if (options.AllowedRepositories.Length == 0)
+        if (options.AllowedRepositories is null ||
+            options.AllowedRepositories.Length == 0)
         {
             failures.Add(
-                "GitActivity:AllowedRepositories must contain at least one repository.");
+                "GitActivity:AllowedRepositories must contain at least one nonblank repository.");
+        }
+        else if (options.AllowedRepositories.Any(
+                     string.IsNullOrWhiteSpace))
+        {
+            failures.Add(
+                "GitActivity:AllowedRepositories contains a blank repository entry.");
         }
 
-        if (options.AllowedBranches.Length == 0)
+        if (options.AllowedBranches is null ||
+            options.AllowedBranches.Length == 0)
         {
             failures.Add(
-                "GitActivity:AllowedBranches must contain at least one branch.");
+                "GitActivity:AllowedBranches must contain at least one nonblank branch.");
+        }
+        else if (options.AllowedBranches.Any(
+                     string.IsNullOrWhiteSpace))
+        {
+            failures.Add(
+                "GitActivity:AllowedBranches contains a blank branch entry.");
         }
 
         return failures.Count == 0

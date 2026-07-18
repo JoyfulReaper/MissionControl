@@ -42,15 +42,11 @@ public sealed class GitActivityEventProcessor
 
         _allowedRepositories = options.Value
             .AllowedRepositories
-            .Where(repositoryName =>
-                !string.IsNullOrWhiteSpace(repositoryName))
             .Select(repositoryName => repositoryName.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         _allowedBranches = options.Value
             .AllowedBranches
-            .Where(branch =>
-                !string.IsNullOrWhiteSpace(branch))
             .Select(branch => branch.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
