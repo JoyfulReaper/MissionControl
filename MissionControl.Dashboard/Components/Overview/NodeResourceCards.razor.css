@@ -1,0 +1,115 @@
+.resource-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.resource-card {
+    min-height: 11rem;
+    padding: 1.5rem;
+    background: var(--mc-surface);
+    border: 1px solid var(--mc-border);
+    border-radius: var(--mc-radius);
+    box-shadow: var(--mc-shadow);
+}
+
+.resource-card-heading {
+    display: flex;
+    margin-bottom: 1rem;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.resource-card-heading h3,
+.resource-card-heading strong {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.resource-progress {
+    height: 0.7rem;
+    overflow: hidden;
+    background: var(--mc-background);
+    border-radius: 999px;
+}
+
+.resource-progress-value {
+    height: 100%;
+    background: var(--mc-accent);
+    border-radius: inherit;
+    transition: width 180ms ease;
+}
+
+.resource-card-meta {
+    display: flex;
+    margin-top: 0.55rem;
+    justify-content: space-between;
+    gap: 1rem;
+    color: var(--mc-text-muted);
+    font-size: 0.78rem;
+}
+
+.resource-card-meta-end {
+    justify-content: end;
+}
+
+.resource-alert {
+    margin: 0;
+}
+
+.resource-card-loading span,
+.resource-card-loading strong,
+.resource-card-loading div {
+    display: block;
+    background: linear-gradient(
+        90deg,
+        var(--mc-background-elevated),
+        var(--mc-surface-hover),
+        var(--mc-background-elevated));
+    background-size: 200% 100%;
+    border-radius: 0.35rem;
+    animation: resource-loading 1.2s linear infinite;
+}
+
+.resource-card-loading span {
+    width: 25%;
+    height: 1.2rem;
+}
+
+.resource-card-loading strong {
+    width: 16%;
+    height: 1.2rem;
+    margin: -1.2rem 0 1rem auto;
+}
+
+.resource-card-loading div {
+    width: 100%;
+    height: 0.7rem;
+}
+
+@keyframes resource-loading {
+    from {
+        background-position: 200% 0;
+    }
+
+    to {
+        background-position: -200% 0;
+    }
+}
+
+@media (max-width: 650px) {
+    .resource-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .resource-card-meta {
+        align-items: start;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+
+    .resource-card-meta-end {
+        align-items: end;
+    }
+}

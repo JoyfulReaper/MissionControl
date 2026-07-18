@@ -3,5 +3,8 @@
 public sealed record NodeSnapshotEvent(
     string Node,
     DateTimeOffset CapturedAt,
+    HostMetric? Host,
     IReadOnlyList<ProtocolProbeResult> Protocols,
-    IReadOnlyList<ContainerMetric> Containers);
+    IReadOnlyList<ContainerMetric> Containers,
+    bool? DockerAvailable = null,
+    string? DockerError = null);

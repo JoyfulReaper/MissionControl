@@ -3,7 +3,13 @@ extern alias AgentApp;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using AgentApp::MissionControl.Agent;
 using AgentApp::MissionControl.Agent.DependencyInjection;
+using AgentApp::MissionControl.Agent.Docker;
+using AgentApp::MissionControl.Agent.Host;
+using AgentApp::MissionControl.Agent.Protocols;
+using AgentApp::MissionControl.Agent.Publishing;
 using AgentApp::MissionControl.Agent.Storage;
 using Xunit;
 
@@ -11,6 +17,69 @@ namespace MissionControl.Tests;
 
 public sealed class AgentServiceCollectionExtensionsTests
 {
+    [Fact]
+    public void AgentRuntimeServicesResolveThroughRealProvider()
+    {
+        string tempDirectory =
+            Path.Combine(
+                Path.GetTempPath(),
+                $"missioncontrol-agent-runtime-di-{Guid.NewGuid():N}");
+
+        try
+        {
+            IConfiguration configuration =
+                new ConfigurationBuilder()
+                    .AddInMemoryCollection(
+                    [
+                        new("Agent:NodeName", "test-node"),
+                        new("Agent:IntervalSeconds", "60"),
+                        new("Agent:DockerEnabled", "false"),
+                        new("AgentStorage:DatabaseFileName", "agent-di.db"),
+                        new("AgentStorage:BasePath", tempDirectory),
+                        new("MissionControl:Enabled", "false"),
+                        new("MissionControl:BaseUrl", "http://127.0.0.1:5190"),
+                        new("MissionControl:TimeoutMilliseconds", "1000")
+                    ])
+                    .Build();
+
+            var services = new ServiceCollection();
+            services.AddLogging();
+            services.AddMissionControlAgent(configuration);
+            services.AddAgentSnapshotStorage(configuration);
+
+            using ServiceProvider serviceProvider =
+                services.BuildServiceProvider(
+                    new ServiceProviderOptions
+                    {
+                        ValidateOnBuild = true,
+                        ValidateScopes = true
+                    });
+
+            Assert.IsType<HostMetricsCollector>(
+                serviceProvider.GetRequiredService<IHostMetricsCollector>());
+            Assert.NotNull(
+                serviceProvider.GetRequiredService<IDockerMetricsCollector>());
+            Assert.NotNull(
+                serviceProvider.GetRequiredService<ProtocolProbeRunner>());
+            Assert.NotNull(
+                serviceProvider.GetRequiredService<SnapshotPublicationGate>());
+
+            IHostedService worker = Assert.Single(
+                serviceProvider.GetServices<IHostedService>(),
+                service => service is AgentWorker);
+            Assert.IsType<AgentWorker>(worker);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+
+            if (Directory.Exists(tempDirectory))
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+        }
+    }
+
     [Fact]
     public void AddAgentSnapshotStorageRegistersSingleDatabaseAndStoreAndCreatesSchemaFile()
     {

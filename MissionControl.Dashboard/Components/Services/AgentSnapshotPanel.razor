@@ -63,10 +63,23 @@
                 @GetPublishState()
             </span>
 
+            <span class="service-chip @GetDockerStateClass()">
+                @GetDockerState()
+            </span>
+
+            @if (IsRefreshing &&
+                 !IsManualRefreshing &&
+                 Snapshot is not null)
+            {
+                <span class="service-chip status-unknown">
+                    REFRESHING
+                </span>
+            }
+
             @if (Snapshot?.LastMissionControlPublishAttemptAt is not null)
             {
                 <span class="snapshot-publish-attempt">
-                    Last publish
+                    @PublicationStatusPresentation.AttemptTimestampLabel
                     <strong>
                         @(DateTimeFormatter.Format(
                             Snapshot
@@ -76,13 +89,29 @@
                 </span>
             }
         </div>
+
+        @if (Snapshot?.DockerAvailable == false &&
+             !string.IsNullOrWhiteSpace(Snapshot.DockerError))
+        {
+            <div class="snapshot-meta snapshot-error">
+                @Snapshot.DockerError
+            </div>
+        }
+
+        @if (Snapshot is not null &&
+             !string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <div class="snapshot-meta snapshot-error">
+                @ErrorMessage
+            </div>
+        }
     </div>
 
     <button type="button"
             class="btn btn-outline-primary"
-            disabled="@IsLoading"
+            disabled="@(IsLoading || IsRefreshing)"
             @onclick="OnRefresh">
-        @(IsLoading ? "Refreshing..." : "Refresh")
+        @((IsLoading || IsManualRefreshing) ? "Refreshing..." : "Refresh")
     </button>
 </section>
 
@@ -94,6 +123,12 @@
     public bool IsLoading { get; set; }
 
     [Parameter, EditorRequired]
+    public bool IsRefreshing { get; set; }
+
+    [Parameter, EditorRequired]
+    public bool IsManualRefreshing { get; set; }
+
+    [Parameter, EditorRequired]
     public string? ErrorMessage { get; set; }
 
     [Parameter]
@@ -102,17 +137,29 @@
 
     private string GetPublishState()
     {
-        return Snapshot?.MissionControlPublishSucceeded switch
-        {
-            true => "EVENT PUBLISH OK",
-            false => "EVENT PUBLISH FAILED",
-            _ => "EVENT PUBLISH UNKNOWN"
-        };
+        return PublicationStatusPresentation.GetLabel(
+            Snapshot?.MissionControlPublishSucceeded);
     }
 
     private string GetPublishStateClass()
     {
-        return Snapshot?.MissionControlPublishSucceeded switch
+        return PublicationStatusPresentation.GetCssClass(
+            Snapshot?.MissionControlPublishSucceeded);
+    }
+
+    private string GetDockerState()
+    {
+        return Snapshot?.DockerAvailable switch
+        {
+            true => "DOCKER AVAILABLE",
+            false => "DOCKER UNAVAILABLE",
+            _ => "DOCKER UNKNOWN"
+        };
+    }
+
+    private string GetDockerStateClass()
+    {
+        return Snapshot?.DockerAvailable switch
         {
             true => "status-running",
             false => "status-stopped",

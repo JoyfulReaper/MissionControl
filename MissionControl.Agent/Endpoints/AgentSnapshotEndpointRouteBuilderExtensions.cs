@@ -60,9 +60,24 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                     StatusCodes.Status503ServiceUnavailable);
         }
 
-        DateTimeOffset now =
-            DateTimeOffset.UtcNow;
+        PublicNodeSnapshot publicSnapshot =
+            CreatePublicSnapshot(
+                storedSnapshot,
+                DateTimeOffset.UtcNow,
+                TimeSpan.FromSeconds(
+                    apiOptions.StaleAfterSeconds));
 
+        response.Headers["Cache-Control"] =
+            "public, max-age=15";
+
+        return Results.Ok(publicSnapshot);
+    }
+
+    internal static PublicNodeSnapshot CreatePublicSnapshot(
+        StoredNodeSnapshot storedSnapshot,
+        DateTimeOffset now,
+        TimeSpan staleAfter)
+    {
         TimeSpan age =
             now - storedSnapshot.Snapshot.CapturedAt;
 
@@ -71,14 +86,6 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
             age = TimeSpan.Zero;
         }
 
-        long ageSeconds =
-            (long)Math.Floor(age.TotalSeconds);
-
-        bool stale =
-            age >
-            TimeSpan.FromSeconds(
-                apiOptions.StaleAfterSeconds);
-
         PublicProtocolStatus[] protocols =
             storedSnapshot.Snapshot.Protocols
                 .Select(protocol =>
@@ -86,7 +93,15 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                         Service: protocol.Service,
                         Succeeded: protocol.Succeeded,
                         DurationMilliseconds:
-                            protocol.DurationMilliseconds))
+                            protocol.DurationMilliseconds,
+                        Endpoint:
+                            PublicDiagnosticSanitizer
+                                .SanitizeEndpoint(protocol.Endpoint),
+                        Error:
+                            PublicDiagnosticSanitizer
+                                .SanitizeError(
+                                    protocol.Error,
+                                    protocol.Succeeded)))
                 .ToArray();
 
         PublicContainerStatus[] containers =
@@ -104,31 +119,48 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                         CpuPercent:
                             container.CpuPercent,
                         RestartCount:
-                            container.RestartCount))
+                            container.RestartCount,
+                        Image:
+                            string.IsNullOrWhiteSpace(container.Image)
+                                ? null
+                                : container.Image))
                 .ToArray();
 
-        var publicSnapshot =
-            new PublicNodeSnapshot(
-                Node:
-                    storedSnapshot.Snapshot.Node,
-                CapturedAt:
-                    storedSnapshot.Snapshot.CapturedAt,
-                AgeSeconds:
-                    ageSeconds,
-                Stale:
-                    stale,
-                MissionControlPublishSucceeded:
-                    storedSnapshot.PublishSucceeded,
-                LastMissionControlPublishAttemptAt:
-                    storedSnapshot.LastPublishAttemptAt,
-                Protocols:
-                    protocols,
-                Containers:
-                    containers);
-
-        response.Headers["Cache-Control"] =
-            "public, max-age=15";
-
-        return Results.Ok(publicSnapshot);
+        return new PublicNodeSnapshot(
+            Node:
+                storedSnapshot.Snapshot.Node,
+            CapturedAt:
+                storedSnapshot.Snapshot.CapturedAt,
+            AgeSeconds:
+                (long)Math.Floor(age.TotalSeconds),
+            Stale:
+                age > staleAfter,
+            Host:
+                storedSnapshot.Snapshot.Host is null
+                    ? null
+                    : new PublicHostMetric(
+                        LogicalProcessorCount:
+                            storedSnapshot.Snapshot.Host
+                                .LogicalProcessorCount,
+                        CpuPercent:
+                            storedSnapshot.Snapshot.Host.CpuPercent,
+                        MemoryTotalBytes:
+                            storedSnapshot.Snapshot.Host
+                                .MemoryTotalBytes,
+                        MemoryAvailableBytes:
+                            storedSnapshot.Snapshot.Host
+                                .MemoryAvailableBytes),
+            MissionControlPublishSucceeded:
+                storedSnapshot.PublishSucceeded,
+            LastMissionControlPublishAttemptAt:
+                storedSnapshot.LastPublishAttemptAt,
+            Protocols:
+                protocols,
+            Containers:
+                containers,
+            DockerAvailable:
+                storedSnapshot.Snapshot.DockerAvailable,
+            DockerError:
+                storedSnapshot.Snapshot.DockerError);
     }
 }

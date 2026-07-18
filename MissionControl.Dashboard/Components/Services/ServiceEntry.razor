@@ -40,37 +40,62 @@
             </div>
 
             <div class="service-meta">
-                <span>Endpoint</span>
+                <span>
+                    @AgentDiagnosticPresentation.ConfiguredEndpointLabel
+                </span>
                 <strong>@(Service.Endpoint ?? "—")</strong>
             </div>
 
             <div class="service-meta">
-                <span>Image</span>
+                <span>
+                    @AgentDiagnosticPresentation.ObservedEndpointLabel
+                </span>
+                <strong>
+                    @AgentDiagnosticPresentation.FormatOptional(
+                        Protocol?.Endpoint)
+                </strong>
+            </div>
+
+            <div class="service-meta">
+                <span>
+                    @AgentDiagnosticPresentation.ConfiguredImageLabel
+                </span>
                 <strong>@(Service.Image ?? "—")</strong>
+            </div>
+
+            <div class="service-meta">
+                <span>
+                    @AgentDiagnosticPresentation.ObservedImageLabel
+                </span>
+                <strong>
+                    @AgentDiagnosticPresentation.FormatOptional(
+                        Container?.Image)
+                </strong>
             </div>
 
             <div class="service-meta">
                 <span>CPU</span>
                 <strong>
-                    @(Container is null
-                        ? "—"
-                        : $"{Container.CpuPercent:0.##}%")
+                    @ContainerResourcePresentation.FormatCpu(
+                        Container?.CpuPercent)
                 </strong>
             </div>
 
             <div class="service-meta">
                 <span>Memory</span>
                 <strong>
-                    @(Container is null
-                        ? "—"
-                        : FormatMemory(Container))
+                    @ContainerResourcePresentation.FormatMemory(
+                        Container?.MemoryUsageBytes,
+                        Container?.MemoryLimitBytes,
+                        Container?.MemoryPercent)
                 </strong>
             </div>
 
             <div class="service-meta">
                 <span>Restarts</span>
                 <strong>
-                    @(Container?.RestartCount.ToString("N0") ?? "—")
+                    @ContainerResourcePresentation.FormatRestartCount(
+                        Container?.RestartCount)
                 </strong>
             </div>
 
@@ -91,10 +116,24 @@
                     <strong>
                         @(Protocol is null
                             ? "—"
-                            : FormatDuration(
+                            : AgentDiagnosticPresentation.FormatDuration(
                                 Protocol.DurationMilliseconds))
                     </strong>
                 </div>
+
+                @if (Protocol is { Succeeded: false })
+                {
+                    <div class="service-meta service-meta-diagnostic">
+                        <span>
+                            @AgentDiagnosticPresentation.FailureReasonLabel
+                        </span>
+                        <strong>
+                            @AgentDiagnosticPresentation.GetFailureReason(
+                                Protocol.Succeeded,
+                                Protocol.Error)
+                        </strong>
+                    </div>
+                }
             }
         </div>
 
@@ -143,28 +182,24 @@
     [Parameter, EditorRequired]
     public bool IsSnapshotAvailable { get; set; }
 
+    [Parameter, EditorRequired]
+    public bool? DockerAvailable { get; set; }
+
     private bool HasProtocolServiceKey =>
         !string.IsNullOrWhiteSpace(Service.ProtocolServiceKey);
 
     private string GetContainerState()
     {
-        if (Container is not null)
-        {
-            return Container.State.ToUpperInvariant();
-        }
-
-        return IsSnapshotAvailable ? "MISSING" : "UNKNOWN";
+        return ContainerStatusPresentation.GetState(
+            IsSnapshotAvailable,
+            DockerAvailable,
+            Container?.State);
     }
 
     private string GetContainerStateClass()
     {
-        return GetContainerState() switch
-        {
-            "RUNNING" => "status-running",
-            "MISSING" => "status-missing",
-            "EXITED" or "STOPPED" => "status-stopped",
-            _ => "status-unknown"
-        };
+        return ContainerStatusPresentation.GetCssClass(
+            GetContainerState());
     }
 
     private string GetProtocolState()
@@ -180,7 +215,9 @@
         }
 
         return Protocol.Succeeded
-            ? $"REACHABLE · {FormatDuration(Protocol.DurationMilliseconds)}"
+            ? $"REACHABLE · " +
+              AgentDiagnosticPresentation.FormatDuration(
+                  Protocol.DurationMilliseconds)
             : "PROBE FAILED";
     }
 
@@ -226,39 +263,4 @@
         };
     }
 
-    private static string FormatMemory(
-        AgentContainerStatusItem container)
-    {
-        string usage = FormatBytes(container.MemoryUsageBytes);
-
-        string limit = container.MemoryLimitBytes > 0
-            ? FormatBytes(container.MemoryLimitBytes)
-            : "No limit";
-
-        string percent = container.MemoryLimitBytes > 0
-            ? $"{container.MemoryPercent:0.#}%"
-            : "—";
-
-        return $"{usage} / {limit} ({percent})";
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        double value = bytes;
-        int unit = 0;
-
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-
-        return $"{value:0.#} {units[unit]}";
-    }
-
-    private static string FormatDuration(double durationMilliseconds)
-    {
-        return $"{durationMilliseconds:0.#} ms";
-    }
 }

@@ -15,10 +15,24 @@
                 <div class="uncatalogued-item">
                     <strong>@container.Name</strong>
                     <span>@container.State</span>
-                    <span>@FormatMemory(container)</span>
-                    <span>@($"{container.CpuPercent:0.##}% CPU")</span>
                     <span>
-                        @(container.RestartCount.ToString("N0")) restarts
+                        Observed image:
+                        @AgentDiagnosticPresentation.FormatOptional(
+                            container.Image)
+                    </span>
+                    <span>
+                        @ContainerResourcePresentation.FormatMemory(
+                            container.MemoryUsageBytes,
+                            container.MemoryLimitBytes,
+                            container.MemoryPercent)
+                    </span>
+                    <span>
+                        @(ContainerResourcePresentation.FormatCpu(
+                            container.CpuPercent)) CPU
+                    </span>
+                    <span>
+                        @(ContainerResourcePresentation.FormatRestartCount(
+                            container.RestartCount)) restarts
                     </span>
                 </div>
             }
@@ -34,34 +48,4 @@
         set;
     }
 
-    private static string FormatMemory(
-        AgentContainerStatusItem container)
-    {
-        string usage = FormatBytes(container.MemoryUsageBytes);
-
-        string limit = container.MemoryLimitBytes > 0
-            ? FormatBytes(container.MemoryLimitBytes)
-            : "No limit";
-
-        string percent = container.MemoryLimitBytes > 0
-            ? $"{container.MemoryPercent:0.#}%"
-            : "—";
-
-        return $"{usage} / {limit} ({percent})";
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        double value = bytes;
-        int unit = 0;
-
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-
-        return $"{value:0.#} {units[unit]}";
-    }
 }

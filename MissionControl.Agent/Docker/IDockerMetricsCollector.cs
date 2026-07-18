@@ -4,6 +4,6 @@ namespace MissionControl.Agent.Docker;
 
 public interface IDockerMetricsCollector
 {
-    Task<IReadOnlyList<ContainerMetric>> GetMetricsAsync(
+    Task<DockerMetricsCollectionResult> GetMetricsAsync(
         CancellationToken cancellationToken = default);
 }

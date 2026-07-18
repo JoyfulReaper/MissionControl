@@ -20,4 +20,8 @@
     <ProjectReference Include="..\MissionControl.Observability\MissionControl.Observability.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="MissionControl.Tests" />
+  </ItemGroup>
+
 </Project>

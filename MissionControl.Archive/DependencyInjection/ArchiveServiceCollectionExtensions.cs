@@ -5,6 +5,7 @@
  */
 
 using JoyfulReaperLib.Sqlite;
+using Microsoft.Extensions.Options;
 using MissionControl.Archive.Health;
 using MissionControl.Archive.Processing;
 using MissionControl.Archive.Storage;
@@ -20,16 +21,18 @@ public static class ArchiveServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var archiveOptions = configuration
-            .GetSection(SqliteEventArchiveOptions.SectionName)
-            .Get<SqliteEventArchiveOptions>()
-            ?? new SqliteEventArchiveOptions();
+        IConfigurationSection archiveSection =
+            configuration.GetRequiredSection(
+                SqliteEventArchiveOptions.SectionName);
 
-        var archiveConnectionString =
-            SqliteDatabaseInitializer.Initialize(
-                archiveOptions.DatabaseFileName,
-                SqliteEventArchiveSchema.Sql,
-                archiveOptions.BasePath);
+        services
+            .AddOptions<SqliteEventArchiveOptions>()
+            .Bind(archiveSection)
+            .ValidateOnStart();
+
+        services.AddSingleton<
+            IValidateOptions<SqliteEventArchiveOptions>,
+            SqliteEventArchiveOptionsValidator>();
 
         services
             .AddWindowsService(options =>
@@ -38,9 +41,7 @@ public static class ArchiveServiceCollectionExtensions
             })
             .AddRabbitMqConnectionOptions(configuration)
             .AddRabbitMqConsumerOptions(configuration)
-            .AddSingleton(
-                new SqliteEventArchiveConnection(
-                    archiveConnectionString))
+            .AddSingleton(CreateArchiveConnection)
             .AddSingleton<
                 IIntegrationEventArchive,
                 SqliteEventArchive>()
@@ -62,5 +63,27 @@ public static class ArchiveServiceCollectionExtensions
                 tags: ["ready"]);
 
         return services;
+    }
+
+    private static SqliteEventArchiveConnection CreateArchiveConnection(
+        IServiceProvider serviceProvider)
+    {
+        SqliteEventArchiveOptions options =
+            serviceProvider
+                .GetRequiredService<
+                    IOptions<SqliteEventArchiveOptions>>()
+                .Value;
+
+        string databasePath =
+            SqliteEventArchivePath.ResolveDatabasePath(options);
+
+        string connectionString =
+            SqliteDatabaseInitializer.Initialize(
+                dbFileName: Path.GetFileName(databasePath),
+                schemaSql: SqliteEventArchiveSchema.Sql,
+                basePath: Path.GetDirectoryName(databasePath));
+
+        return new SqliteEventArchiveConnection(
+            connectionString);
     }
 }

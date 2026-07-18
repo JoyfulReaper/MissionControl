@@ -4,8 +4,7 @@ public sealed class SqliteEventArchiveOptions
 {
     public const string SectionName = "EventArchive";
 
-    public string DatabaseFileName { get; set; } =
-        "mission-control.db";
+    public string? DatabaseFileName { get; init; }
 
-    public string? BasePath { get; set; }
+    public string? BasePath { get; init; }
 }

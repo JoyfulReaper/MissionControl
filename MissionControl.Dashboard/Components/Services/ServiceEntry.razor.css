@@ -110,6 +110,17 @@
     text-overflow: ellipsis;
 }
 
+.service-meta-diagnostic {
+    grid-column: 1 / -1;
+}
+
+.service-meta-diagnostic strong {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+}
+
 .service-description {
     margin: 1rem 0;
     color: var(--mc-text-muted);

@@ -19,10 +19,19 @@
     </p>
 </header>
 
-<AgentSnapshotPanel Snapshot="_snapshot"
-                    IsLoading="_isLoading"
-                    ErrorMessage="_snapshotError"
+<AgentSnapshotPanel Snapshot="CurrentSnapshot"
+                    IsLoading="_agentRefresh.IsInitialLoading"
+                    IsRefreshing="_agentRefresh.IsRefreshing"
+                    IsManualRefreshing="_isManualRefresh"
+                    ErrorMessage="@_agentRefresh.RefreshWarning"
                     OnRefresh="RefreshSnapshotAsync" />
+
+@if (CatalogReloadWarning is not null)
+{
+    <div class="alert alert-warning" role="status">
+        @CatalogReloadWarning
+    </div>
+}
 
 <ServiceSummaryCards ConfiguredServices="view.ConfiguredServices"
                      RunningContainers="view.RunningContainers"
@@ -88,7 +97,8 @@ else
                     <ServiceEntry Service="item.Service"
                                   Container="item.Container"
                                   Protocol="item.Protocol"
-                                  IsSnapshotAvailable="@(_snapshot is not null)" />
+                                  IsSnapshotAvailable="@(CurrentSnapshot is not null)"
+                                  DockerAvailable="@CurrentSnapshot?.DockerAvailable" />
                 }
             </div>
         </section>

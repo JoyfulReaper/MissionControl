@@ -7,8 +7,10 @@ using Microsoft.Extensions.Options;
 using MissionControl.Dashboard.Agent;
 using MissionControl.Dashboard.Archive;
 using MissionControl.Dashboard.Authentication;
+using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Events;
 using MissionControl.Dashboard.Formatting;
+using MissionControl.Dashboard.Refresh;
 using MissionControl.Dashboard.Security;
 using MissionControl.Dashboard.Services;
 
@@ -130,6 +132,9 @@ public static class DashboardServiceCollectionExtensions
             .AddInteractiveServerComponents();
 
         services.AddCascadingAuthenticationState();
+        services.AddSingleton<
+            IDashboardPollingLoop,
+            DashboardPollingLoop>();
     }
 
     private static void AddDashboardAuthentication(
@@ -190,6 +195,17 @@ public static class DashboardServiceCollectionExtensions
         IConfiguration configuration)
     {
         services
+            .AddOptions<DashboardRefreshOptions>()
+            .Bind(
+                configuration.GetSection(
+                    DashboardRefreshOptions.SectionName))
+            .ValidateOnStart();
+
+        services.AddSingleton<
+            IValidateOptions<DashboardRefreshOptions>,
+            DashboardRefreshOptionsValidator>();
+
+        services
             .AddOptions<DashboardAuthenticationOptions>()
             .Bind(
                 configuration.GetSection(
@@ -228,10 +244,14 @@ public static class DashboardServiceCollectionExtensions
             .Bind(
                 configuration.GetSection(
                     ServiceCatalogOptions.SectionName))
-            .Validate(
-                options => options.Services.Count > 0,
-                "At least one dashboard service must be configured.")
             .ValidateOnStart();
+
+        services.AddSingleton<
+            IValidateOptions<ServiceCatalogOptions>,
+            ServiceCatalogOptionsValidator>();
+        services.AddSingleton<
+            IServiceCatalogMonitor,
+            ConfigurationServiceCatalogMonitor>();
 
         services.AddSingleton<
             IValidateOptions<DashboardDateTimeOptions>,

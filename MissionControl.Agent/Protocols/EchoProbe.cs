@@ -24,7 +24,7 @@ internal class EchoProbe : IProtocolProbe
         await stream.WriteAsync(request, cancellationToken);
         await stream.ReadExactlyAsync(response, cancellationToken);
 
-        if(!response.AsSpan().SequenceEqual(request))
+        if (!response.AsSpan().SequenceEqual(request))
         {
             throw new InvalidDataException(
                 "The Echo service did not return the exact probe payload.");

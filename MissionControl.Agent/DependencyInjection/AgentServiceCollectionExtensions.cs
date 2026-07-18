@@ -1,7 +1,10 @@
 ﻿using JoyfulReaperLib.MissionControl;
 using JoyfulReaperLib.Sqlite;
+using Microsoft.Extensions.Options;
 using MissionControl.Agent.Docker;
+using MissionControl.Agent.Host;
 using MissionControl.Agent.Protocols;
+using MissionControl.Agent.Publishing;
 using MissionControl.Agent.Storage;
 
 namespace MissionControl.Agent.DependencyInjection;
@@ -25,6 +28,10 @@ public static class AgentServiceCollectionExtensions
                 options =>
                     options.IntervalSeconds > 0,
                 "Agent:IntervalSeconds must be greater than zero.")
+            .Validate(
+                options =>
+                    options.PublicationHeartbeatMinutes > 0,
+                "Agent:PublicationHeartbeatMinutes must be greater than zero.")
             .Validate(
                 options =>
                     !options.DockerEnabled ||
@@ -54,6 +61,7 @@ public static class AgentServiceCollectionExtensions
                 MissionControlClientOptions.SectionName));
 
         services.AddSingleton<IDockerMetricsCollector, DockerMetricsCollector>();
+        services.AddSingleton<IHostMetricsCollector, HostMetricsCollector>();
 
         services.AddSingleton<IProtocolProbe, EchoProbe>();
         services.AddSingleton<IProtocolProbe, QotdProbe>();
@@ -61,6 +69,19 @@ public static class AgentServiceCollectionExtensions
         services.AddSingleton<IProtocolProbe, FingerProbe>();
         services.AddSingleton<IProtocolProbe, DaytimeProbe>();
         services.AddSingleton<ProtocolProbeRunner>();
+
+        services.AddSingleton(
+            serviceProvider =>
+            {
+                AgentOptions options =
+                    serviceProvider
+                        .GetRequiredService<IOptions<AgentOptions>>()
+                        .Value;
+
+                return new SnapshotPublicationGate(
+                    TimeSpan.FromMinutes(
+                        options.PublicationHeartbeatMinutes));
+            });
 
         services.AddHostedService<AgentWorker>();
 
@@ -78,34 +99,39 @@ public static class AgentServiceCollectionExtensions
         services
             .AddOptions<AgentStorageOptions>()
             .Bind(section)
-            .Validate(
-                options =>
-                    !string.IsNullOrWhiteSpace(
-                        options.DatabaseFileName),
-                "AgentStorage:DatabaseFileName is required.")
             .ValidateOnStart();
 
-        AgentStorageOptions storageOptions =
-            section.Get<AgentStorageOptions>() ??
-            throw new InvalidOperationException(
-                "AgentStorage configuration is invalid.");
+        services.AddSingleton<
+            IValidateOptions<AgentStorageOptions>,
+            AgentStorageOptionsValidator>();
 
-        string connectionString =
-            SqliteDatabaseInitializer.Initialize(
-                dbFileName:
-                    storageOptions.DatabaseFileName,
-                schemaSql:
-                    AgentStorageSchema.Sql,
-                basePath:
-                    storageOptions.BasePath);
-
-        services.AddSingleton(
-            new AgentDatabase(connectionString));
+        services.AddSingleton(CreateAgentDatabase);
 
         services.AddSingleton<
             INodeSnapshotStore,
             SqliteNodeSnapshotStore>();
 
         return services;
+    }
+
+    private static AgentDatabase CreateAgentDatabase(
+        IServiceProvider serviceProvider)
+    {
+        AgentStorageOptions options =
+            serviceProvider
+                .GetRequiredService<
+                    IOptions<AgentStorageOptions>>()
+                .Value;
+
+        string databasePath =
+            AgentStoragePath.ResolveDatabasePath(options);
+
+        string connectionString =
+            SqliteDatabaseInitializer.Initialize(
+                dbFileName: Path.GetFileName(databasePath),
+                schemaSql: AgentStorageSchema.Sql,
+                basePath: Path.GetDirectoryName(databasePath));
+
+        return new AgentDatabase(connectionString);
     }
 }
