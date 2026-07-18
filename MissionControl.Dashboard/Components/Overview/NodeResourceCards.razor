@@ -45,12 +45,12 @@ else if (Host is not null)
             </article>
         }
 
-        @if (Host.CpuPercent is not null)
+        @if (CpuPercent is not null)
         {
             <article class="resource-card">
                 <div class="resource-card-heading">
                     <h3>CPU</h3>
-                    <strong>@($"{Host.CpuPercent:0.#}%")</strong>
+                    <strong>@($"{CpuPercent.Value:0.#}%")</strong>
                 </div>
 
                 <div class="resource-progress"
@@ -58,9 +58,9 @@ else if (Host is not null)
                      aria-label="Host CPU usage"
                      aria-valuemin="0"
                      aria-valuemax="100"
-                     aria-valuenow="@($"{Host.CpuPercent:0.#}")">
+                     aria-valuenow="@($"{CpuPercent.Value:0.#}")">
                     <div class="resource-progress-value"
-                         style="@GetProgressStyle(Host.CpuPercent.Value)">
+                         style="@GetProgressStyle(CpuPercent.Value)">
                     </div>
                 </div>
 
@@ -94,23 +94,16 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
     public string? ErrorMessage { get; set; }
 
     private bool HasMemoryMetrics =>
-        Host?.MemoryTotalBytes is > 0 &&
-        Host.MemoryAvailableBytes is >= 0;
+        NodeResourceCalculations.HasMemoryMetrics(Host);
+
+    private double? CpuPercent =>
+        NodeResourceCalculations.GetCpuPercent(Host);
 
     private long MemoryUsedBytes =>
-        Host?.MemoryTotalBytes is not null &&
-        Host.MemoryAvailableBytes is not null
-            ? Math.Max(
-                0,
-                Host.MemoryTotalBytes.Value -
-                Host.MemoryAvailableBytes.Value)
-            : 0;
+        NodeResourceCalculations.GetMemoryUsedBytes(Host);
 
     private double MemoryPercent =>
-        Host?.MemoryTotalBytes is > 0
-            ? (double)MemoryUsedBytes /
-              Host.MemoryTotalBytes.Value * 100.0
-            : 0;
+        NodeResourceCalculations.GetMemoryPercent(Host);
 
     private static string GetProgressStyle(double percentage)
     {
@@ -120,16 +113,6 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 
     private static string FormatBytes(long bytes)
     {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        double value = Math.Max(0, bytes);
-        int unitIndex = 0;
-
-        while (value >= 1024 && unitIndex < units.Length - 1)
-        {
-            value /= 1024;
-            unitIndex++;
-        }
-
-        return $"{value:0.##} {units[unitIndex]}";
+        return NodeResourceCalculations.FormatBytes(bytes);
     }
 }

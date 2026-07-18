@@ -152,7 +152,10 @@ public sealed class SqliteNodeSnapshotStoreTests
             CreateSnapshot(
                 capturedAt: originalSnapshot.CapturedAt.AddMinutes(5),
                 protocolSuffix: "replacement",
-                containerSuffix: "replacement");
+                containerSuffix: "replacement",
+                cpuPercent: 47.75,
+                memoryTotalBytes: 17_179_869_184,
+                memoryAvailableBytes: 6_442_450_944);
         DateTimeOffset attemptedAt =
             originalSnapshot.CapturedAt.AddMinutes(1);
 
@@ -178,6 +181,9 @@ public sealed class SqliteNodeSnapshotStoreTests
         Assert.Equal(
             replacementSnapshot.CapturedAt,
             stored.Snapshot.CapturedAt);
+        Assert.Equal(
+            replacementSnapshot.Host,
+            stored.Snapshot.Host);
         AssertProtocolResultsEqual(
             replacementSnapshot.Protocols,
             stored.Snapshot.Protocols);
@@ -658,7 +664,10 @@ public sealed class SqliteNodeSnapshotStoreTests
         string node = "node-01",
         DateTimeOffset? capturedAt = null,
         string protocolSuffix = "baseline",
-        string containerSuffix = "baseline")
+        string containerSuffix = "baseline",
+        double cpuPercent = 32.2,
+        long memoryTotalBytes = 4_000_000_000,
+        long memoryAvailableBytes = 2_500_000_000)
     {
         DateTimeOffset effectiveCapturedAt =
             capturedAt ??
@@ -676,9 +685,9 @@ public sealed class SqliteNodeSnapshotStoreTests
             CapturedAt: effectiveCapturedAt,
             Host: new HostMetric(
                 LogicalProcessorCount: 4,
-                CpuPercent: 32.2,
-                MemoryTotalBytes: 4_000_000_000,
-                MemoryAvailableBytes: 2_500_000_000),
+                CpuPercent: cpuPercent,
+                MemoryTotalBytes: memoryTotalBytes,
+                MemoryAvailableBytes: memoryAvailableBytes),
             Protocols:
             [
                 new ProtocolProbeResult(
