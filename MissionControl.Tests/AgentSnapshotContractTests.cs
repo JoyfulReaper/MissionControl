@@ -263,6 +263,104 @@ public sealed class AgentSnapshotContractTests
             typeof(AgentProtocolStatusItem)
                 .GetProperty(nameof(AgentProtocolStatusItem.DurationMilliseconds))!
                 .PropertyType);
+        Assert.Equal(
+            typeof(double?),
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.CpuPercent))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(double?),
+            typeof(AgentContainerStatusItem)
+                .GetProperty(nameof(AgentContainerStatusItem.CpuPercent))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(long?),
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.MemoryUsageBytes))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(long?),
+            typeof(AgentContainerStatusItem)
+                .GetProperty(nameof(AgentContainerStatusItem.MemoryUsageBytes))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(int?),
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.RestartCount))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(int?),
+            typeof(AgentContainerStatusItem)
+                .GetProperty(nameof(AgentContainerStatusItem.RestartCount))!
+                .PropertyType);
+    }
+
+    [Fact]
+    public void NonRunningContainerSerializesThroughAgentAndDashboardContracts()
+    {
+        DateTimeOffset capturedAt = DateTimeOffset.UtcNow;
+        var stored = new StoredNodeSnapshot(
+            Snapshot: new NodeSnapshotEvent(
+                Node: "node-1",
+                CapturedAt: capturedAt,
+                Host: null,
+                Protocols: [],
+                Containers:
+                [
+                    new ContainerMetric(
+                        Name: "worker",
+                        Image: "private/internal-image:1",
+                        State: "exited",
+                        MemoryUsageBytes: null,
+                        MemoryLimitBytes: null,
+                        MemoryPercent: null,
+                        CpuPercent: null,
+                        RestartCount: 6)
+                ],
+                DockerAvailable: true,
+                DockerError: null),
+            PublishSucceeded: true,
+            LastPublishAttemptAt: capturedAt,
+            UpdatedAt: capturedAt);
+
+        PublicNodeSnapshot publicSnapshot =
+            AgentSnapshotEndpointRouteBuilderExtensions
+                .CreatePublicSnapshot(
+                    stored,
+                    capturedAt,
+                    TimeSpan.FromMinutes(1));
+        PublicContainerStatus publicContainer =
+            Assert.Single(publicSnapshot.Containers);
+
+        Assert.Equal("worker", publicContainer.Name);
+        Assert.Equal("exited", publicContainer.State);
+        Assert.Null(publicContainer.MemoryUsageBytes);
+        Assert.Null(publicContainer.MemoryLimitBytes);
+        Assert.Null(publicContainer.MemoryPercent);
+        Assert.Null(publicContainer.CpuPercent);
+        Assert.Equal(6, publicContainer.RestartCount);
+        Assert.True(publicSnapshot.DockerAvailable);
+
+        string json = JsonSerializer.Serialize(
+            publicSnapshot,
+            new JsonSerializerOptions(
+                JsonSerializerDefaults.Web));
+        Assert.DoesNotContain("internal-image", json);
+
+        AgentSnapshotItem? dashboardSnapshot =
+            JsonSerializer.Deserialize<AgentSnapshotItem>(
+                json,
+                new JsonSerializerOptions(
+                    JsonSerializerDefaults.Web));
+        AgentContainerStatusItem dashboardContainer =
+            Assert.Single(
+                Assert.IsType<AgentSnapshotItem>(
+                    dashboardSnapshot).Containers);
+
+        Assert.Equal("exited", dashboardContainer.State);
+        Assert.Null(dashboardContainer.MemoryUsageBytes);
+        Assert.Null(dashboardContainer.CpuPercent);
+        Assert.Equal(6, dashboardContainer.RestartCount);
     }
 
     [Fact]
@@ -336,6 +434,71 @@ public sealed class AgentSnapshotContractTests
                 isSnapshotAvailable: true,
                 dockerAvailable: null,
                 containerState: null));
+        Assert.Equal(
+            "UNKNOWN",
+            ContainerStatusPresentation.GetState(
+                isSnapshotAvailable: false,
+                dockerAvailable: true,
+                containerState: "running"));
+        Assert.Equal(
+            "EXITED",
+            ContainerStatusPresentation.GetState(
+                isSnapshotAvailable: true,
+                dockerAvailable: true,
+                containerState: "exited"));
+        Assert.Equal(
+            "STOPPED",
+            ContainerStatusPresentation.GetState(
+                isSnapshotAvailable: true,
+                dockerAvailable: true,
+                containerState: " stopped "));
+        Assert.Equal(
+            "status-stopped",
+            ContainerStatusPresentation.GetCssClass("EXITED"));
+        Assert.Equal(
+            "status-warning",
+            ContainerStatusPresentation.GetCssClass("PAUSED"));
+    }
+
+    [Theory]
+    [InlineData("running", "RUNNING")]
+    [InlineData("exited", "EXITED")]
+    [InlineData("stopped", "STOPPED")]
+    [InlineData("created", "CREATED")]
+    [InlineData("restarting", "RESTARTING")]
+    [InlineData("paused", "PAUSED")]
+    [InlineData("dead", "DEAD")]
+    [InlineData("removing", "REMOVING")]
+    public void KnownDockerStatesRemainAccurate(
+        string dockerState,
+        string expectedPresentation)
+    {
+        Assert.Equal(
+            expectedPresentation,
+            ContainerStatusPresentation.GetState(
+                isSnapshotAvailable: true,
+                dockerAvailable: true,
+                containerState: dockerState));
+    }
+
+    [Fact]
+    public void UnavailableContainerResourcesUseNeutralMarkers()
+    {
+        Assert.Equal(
+            "—",
+            ContainerResourcePresentation.FormatCpu(null));
+        Assert.Equal(
+            "Unavailable",
+            ContainerResourcePresentation.FormatMemory(
+                null,
+                null,
+                null));
+        Assert.Equal(
+            "—",
+            ContainerResourcePresentation.FormatRestartCount(null));
+        Assert.Equal(
+            "12.5%",
+            ContainerResourcePresentation.FormatCpu(12.5));
     }
 
     [Fact]

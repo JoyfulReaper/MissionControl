@@ -96,7 +96,7 @@ public sealed class DashboardRefreshTests
                 now.AddSeconds(30),
                 45,
                 dockerAvailable: false,
-                containerState: "restarting",
+                containerState: "exited",
                 protocolSucceeded: false,
                 publishSucceeded: false,
                 memoryAvailableBytes: 4_000_000_000)
@@ -137,7 +137,7 @@ public sealed class DashboardRefreshTests
             current.Host?.MemoryAvailableBytes);
         Assert.False(current.DockerAvailable);
         Assert.Equal(
-            "restarting",
+            "exited",
             Assert.Single(current.Containers).State);
         Assert.False(Assert.Single(current.Protocols).Succeeded);
         Assert.False(current.MissionControlPublishSucceeded);

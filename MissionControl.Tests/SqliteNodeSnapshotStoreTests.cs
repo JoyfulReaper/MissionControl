@@ -66,6 +66,71 @@ public sealed class SqliteNodeSnapshotStoreTests
     }
 
     [Fact]
+    public async Task MixedContainerStatesAndUnavailableMetricsRoundTrip()
+    {
+        await using var fixture =
+            await AgentSnapshotStoreFixture.CreateAsync();
+        DateTimeOffset capturedAt = DateTimeOffset.UtcNow;
+        var snapshot = new NodeSnapshotEvent(
+            Node: "mixed-container-node",
+            CapturedAt: capturedAt,
+            Host: null,
+            Protocols: [],
+            Containers:
+            [
+                new ContainerMetric(
+                    "api",
+                    "missioncontrol/api:1",
+                    "running",
+                    100,
+                    1_000,
+                    10,
+                    5,
+                    1),
+                new ContainerMetric(
+                    "worker",
+                    "missioncontrol/worker:1",
+                    "exited",
+                    null,
+                    null,
+                    null,
+                    null,
+                    4),
+                new ContainerMetric(
+                    "scheduler",
+                    "missioncontrol/scheduler:1",
+                    "stopped",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null)
+            ],
+            DockerAvailable: true,
+            DockerError: null);
+
+        await fixture.SnapshotStore.SaveAsync(
+            snapshot,
+            CancellationToken.None);
+
+        StoredNodeSnapshot stored =
+            await GetRequiredSnapshotAsync(
+                fixture.SnapshotStore,
+                snapshot.Node);
+
+        AssertContainerMetricsEqual(
+            snapshot.Containers,
+            stored.Snapshot.Containers);
+        Assert.True(stored.Snapshot.DockerAvailable);
+        Assert.Null(stored.Snapshot.DockerError);
+        ContainerMetric exited = stored.Snapshot.Containers[1];
+        Assert.Equal("exited", exited.State);
+        Assert.Null(exited.MemoryUsageBytes);
+        Assert.Null(exited.CpuPercent);
+        Assert.Equal(4, exited.RestartCount);
+    }
+
+    [Fact]
     public async Task RecordPublishResultAsyncStoresSuccessfulPublication()
     {
         await using var fixture =

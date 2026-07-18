@@ -24,6 +24,21 @@ internal static class ContainerStatusPresentation
 
         return string.IsNullOrWhiteSpace(containerState)
             ? "MISSING"
-            : containerState.ToUpperInvariant();
+            : containerState.Trim().ToUpperInvariant();
+    }
+
+    public static string GetCssClass(string state)
+    {
+        return state switch
+        {
+            "RUNNING" => "status-running",
+            "MISSING" => "status-missing",
+            "EXITED" or "STOPPED" or "DEAD" or "REMOVING" =>
+                "status-stopped",
+            "CREATED" or "RESTARTING" or "PAUSED" =>
+                "status-warning",
+            "UNAVAILABLE" or "UNKNOWN" => "status-unknown",
+            _ => "status-warning"
+        };
     }
 }

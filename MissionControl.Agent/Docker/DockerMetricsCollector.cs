@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Options;
 using MissionControl.Agent.Models;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -16,51 +16,17 @@ internal sealed class DockerMetricsCollector :
 
     public DockerMetricsCollector(
         IOptions<AgentOptions> options,
+        ILogger<DockerMetricsCollector> logger) :
+        this(CreateHttpClient(options.Value), logger)
+    {
+    }
+
+    internal DockerMetricsCollector(
+        HttpClient httpClient,
         ILogger<DockerMetricsCollector> logger)
     {
+        _httpClient = httpClient;
         _logger = logger;
-
-        var agentOptions = options.Value;
-        var socketPath = agentOptions.DockerSocketPath;
-
-        var handler = new SocketsHttpHandler
-        {
-            ConnectCallback = async (_, cancellationToken) =>
-            {
-                var socket = new Socket(
-                    AddressFamily.Unix,
-                    SocketType.Stream,
-                    ProtocolType.Unspecified);
-
-                try
-                {
-                    var endpoint =
-                        new UnixDomainSocketEndPoint(socketPath);
-
-                    await socket.ConnectAsync(
-                        endpoint,
-                        cancellationToken);
-
-                    return new NetworkStream(
-                        socket,
-                        ownsSocket: true);
-                }
-                catch
-                {
-                    socket.Dispose();
-                    throw;
-                }
-            }
-        };
-
-        _httpClient = new HttpClient(
-            handler,
-            disposeHandler: true)
-        {
-            BaseAddress = new Uri("http://docker"),
-            Timeout = TimeSpan.FromSeconds(
-                agentOptions.DockerTimeoutSeconds)
-        };
     }
 
     public async Task<DockerMetricsCollectionResult>
@@ -110,138 +76,154 @@ internal sealed class DockerMetricsCollector :
         CollectMetricsAsync(
             CancellationToken cancellationToken)
     {
-        var apiPrefix = await GetApiPrefixAsync(
+        string apiPrefix = await GetApiPrefixAsync(
             cancellationToken);
 
-        using var document = await GetJsonAsync(
-            $"{apiPrefix}/containers/json?all=false",
+        using JsonDocument document = await GetJsonAsync(
+            $"{apiPrefix}/containers/json?all=true",
             cancellationToken);
 
         var metrics = new List<ContainerMetric>();
 
-        foreach (var container in
+        foreach (JsonElement container in
                  document.RootElement.EnumerateArray())
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var id = GetString(container, "Id");
-            var name = GetContainerName(container);
-            var image = GetString(container, "Image");
-            var state = GetString(container, "State");
+            string id = GetString(container, "Id");
 
             if (string.IsNullOrWhiteSpace(id))
             {
                 continue;
             }
 
-            try
+            string name = GetContainerName(container);
+            string image = GetString(container, "Image");
+            string state = NormalizeState(
+                GetString(container, "State"));
+            int? restartCount =
+                GetRestartCount(container);
+
+            if (restartCount is null)
             {
-                var metric = await GetContainerMetricAsync(
+                restartCount = await TryGetRestartCountAsync(
                     apiPrefix,
                     id,
                     name,
-                    image,
-                    state,
                     cancellationToken);
+            }
 
-                metrics.Add(metric);
-            }
-            catch (OperationCanceledException)
-                when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (OperationCanceledException)
-                when (!cancellationToken.IsCancellationRequested)
-            {
-                _logger.LogWarning(
-                    "Timed out while collecting Docker metrics for container {Container}.",
-                    name);
-            }
-            catch (HttpRequestException exception)
-            {
-                _logger.LogWarning(
-                    exception,
-                    "Docker returned an error while collecting metrics for container {Container}.",
-                    name);
-            }
-            catch (JsonException exception)
-            {
-                _logger.LogWarning(
-                    exception,
-                    "Docker returned invalid metric data for container {Container}.",
-                    name);
-            }
-            catch (Exception exception)
-            {
-                _logger.LogWarning(
-                    exception,
-                    "Docker metric collection failed for container {Container}.",
-                    name);
-            }
+            ResourceMetrics resourceMetrics =
+                string.Equals(
+                    state,
+                    "running",
+                    StringComparison.Ordinal)
+                    ? await TryGetResourceMetricsAsync(
+                        apiPrefix,
+                        id,
+                        name,
+                        cancellationToken)
+                    : ResourceMetrics.Unavailable;
+
+            metrics.Add(
+                new ContainerMetric(
+                    Name: name,
+                    Image: image,
+                    State: state,
+                    MemoryUsageBytes:
+                        resourceMetrics.MemoryUsageBytes,
+                    MemoryLimitBytes:
+                        resourceMetrics.MemoryLimitBytes,
+                    MemoryPercent:
+                        resourceMetrics.MemoryPercent,
+                    CpuPercent:
+                        resourceMetrics.CpuPercent,
+                    RestartCount: restartCount));
         }
 
         return metrics;
     }
 
-    private async Task<ContainerMetric>
-        GetContainerMetricAsync(
+    private async Task<int?> TryGetRestartCountAsync(
+        string apiPrefix,
+        string id,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using JsonDocument inspectDocument = await GetJsonAsync(
+                $"{apiPrefix}/containers/{id}/json",
+                cancellationToken);
+
+            return GetRestartCount(
+                inspectDocument.RootElement);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Docker restart count is unavailable for container {Container}.",
+                name);
+
+            return null;
+        }
+    }
+
+    private async Task<ResourceMetrics>
+        TryGetResourceMetricsAsync(
             string apiPrefix,
             string id,
             string name,
-            string image,
-            string state,
             CancellationToken cancellationToken)
     {
-        using var statsDocument = await GetJsonAsync(
-            $"{apiPrefix}/containers/{id}/stats" +
-            "?stream=false&one-shot=true",
-            cancellationToken);
-
-        using var inspectDocument = await GetJsonAsync(
-            $"{apiPrefix}/containers/{id}/json",
-            cancellationToken);
-
-        var stats = statsDocument.RootElement;
-        var inspect = inspectDocument.RootElement;
-
-        var memoryUsageBytes =
-            CalculateMemoryUsage(stats);
-
-        var memoryLimitBytes =
-            GetNestedInt64(
-                stats,
-                "memory_stats",
-                "limit");
-
-        var memoryPercent =
-            memoryLimitBytes > 0
-                ? memoryUsageBytes /
-                  (double)memoryLimitBytes * 100.0
-                : 0.0;
-
-        var cpuPercent =
-            CalculateCpuPercent(stats);
-
-        var restartCountValue =
-            GetInt64(inspect, "RestartCount");
-
-        var restartCount = restartCountValue switch
+        try
         {
-            < 0 => 0,
-            > int.MaxValue => int.MaxValue,
-            _ => (int)restartCountValue
-        };
+            using JsonDocument statsDocument = await GetJsonAsync(
+                $"{apiPrefix}/containers/{id}/stats" +
+                "?stream=false&one-shot=true",
+                cancellationToken);
 
-        return new ContainerMetric(
-            Name: name,
-            Image: image,
-            State: state,
-            MemoryUsageBytes: memoryUsageBytes,
-            MemoryLimitBytes: memoryLimitBytes,
-            MemoryPercent: memoryPercent,
-            CpuPercent: cpuPercent,
-            RestartCount: restartCount);
+            JsonElement stats = statsDocument.RootElement;
+            long? memoryUsageBytes =
+                CalculateMemoryUsage(stats);
+            long? memoryLimitBytes =
+                GetOptionalNestedInt64(
+                    stats,
+                    "memory_stats",
+                    "limit");
+            double? memoryPercent =
+                memoryUsageBytes is not null &&
+                memoryLimitBytes is > 0
+                    ? memoryUsageBytes.Value /
+                      (double)memoryLimitBytes.Value * 100.0
+                    : null;
+
+            return new ResourceMetrics(
+                MemoryUsageBytes: memoryUsageBytes,
+                MemoryLimitBytes: memoryLimitBytes,
+                MemoryPercent: memoryPercent,
+                CpuPercent: CalculateCpuPercent(stats));
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Docker resource metrics are unavailable for container {Container}.",
+                name);
+
+            return ResourceMetrics.Unavailable;
+        }
     }
 
     private async Task<string> GetApiPrefixAsync(
@@ -252,11 +234,11 @@ internal sealed class DockerMetricsCollector :
             return _apiPrefix;
         }
 
-        using var document = await GetJsonAsync(
+        using JsonDocument document = await GetJsonAsync(
             "/version",
             cancellationToken);
 
-        var apiVersion = GetString(
+        string apiVersion = GetString(
             document.RootElement,
             "ApiVersion");
 
@@ -275,14 +257,15 @@ internal sealed class DockerMetricsCollector :
         string requestUri,
         CancellationToken cancellationToken)
     {
-        using var response = await _httpClient.GetAsync(
-            requestUri,
-            HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken);
+        using HttpResponseMessage response =
+            await _httpClient.GetAsync(
+                requestUri,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
 
         response.EnsureSuccessStatusCode();
 
-        await using var stream =
+        await using Stream stream =
             await response.Content.ReadAsStreamAsync(
                 cancellationToken);
 
@@ -291,107 +274,157 @@ internal sealed class DockerMetricsCollector :
             cancellationToken: cancellationToken);
     }
 
-    private static long CalculateMemoryUsage(
+    private static HttpClient CreateHttpClient(
+        AgentOptions agentOptions)
+    {
+        string socketPath = agentOptions.DockerSocketPath;
+        var handler = new SocketsHttpHandler
+        {
+            ConnectCallback = async (_, cancellationToken) =>
+            {
+                var socket = new Socket(
+                    AddressFamily.Unix,
+                    SocketType.Stream,
+                    ProtocolType.Unspecified);
+
+                try
+                {
+                    var endpoint =
+                        new UnixDomainSocketEndPoint(socketPath);
+
+                    await socket.ConnectAsync(
+                        endpoint,
+                        cancellationToken);
+
+                    return new NetworkStream(
+                        socket,
+                        ownsSocket: true);
+                }
+                catch
+                {
+                    socket.Dispose();
+                    throw;
+                }
+            }
+        };
+
+        return new HttpClient(
+            handler,
+            disposeHandler: true)
+        {
+            BaseAddress = new Uri("http://docker"),
+            Timeout = TimeSpan.FromSeconds(
+                agentOptions.DockerTimeoutSeconds)
+        };
+    }
+
+    private static long? CalculateMemoryUsage(
         JsonElement stats)
     {
         if (!stats.TryGetProperty(
                 "memory_stats",
-                out var memoryStats))
+                out JsonElement memoryStats))
         {
-            return 0;
+            return null;
         }
 
-        var totalUsage =
-            GetInt64(memoryStats, "usage");
+        long? totalUsage =
+            GetOptionalInt64(memoryStats, "usage");
+
+        if (totalUsage is null)
+        {
+            return null;
+        }
 
         long cache = 0;
 
         if (memoryStats.TryGetProperty(
                 "stats",
-                out var memoryDetails))
+                out JsonElement memoryDetails))
         {
-            cache = GetInt64(
-                memoryDetails,
-                "inactive_file");
-
-            if (cache == 0)
-            {
-                cache = GetInt64(
+            cache =
+                GetOptionalInt64(
                     memoryDetails,
-                    "total_inactive_file");
-            }
+                    "inactive_file") ??
+                GetOptionalInt64(
+                    memoryDetails,
+                    "total_inactive_file") ??
+                0;
         }
 
-        return Math.Max(0, totalUsage - cache);
+        return Math.Max(0, totalUsage.Value - cache);
     }
 
-    private static double CalculateCpuPercent(
+    private static double? CalculateCpuPercent(
         JsonElement stats)
     {
         if (!stats.TryGetProperty(
                 "cpu_stats",
-                out var currentCpu) ||
+                out JsonElement currentCpu) ||
             !stats.TryGetProperty(
                 "precpu_stats",
-                out var previousCpu))
+                out JsonElement previousCpu))
         {
-            return 0;
+            return null;
         }
 
-        var currentContainerUsage =
-            GetNestedInt64(
+        long? currentContainerUsage =
+            GetOptionalNestedInt64(
                 currentCpu,
                 "cpu_usage",
                 "total_usage");
-
-        var previousContainerUsage =
-            GetNestedInt64(
+        long? previousContainerUsage =
+            GetOptionalNestedInt64(
                 previousCpu,
                 "cpu_usage",
                 "total_usage");
-
-        var currentSystemUsage =
-            GetInt64(
+        long? currentSystemUsage =
+            GetOptionalInt64(
                 currentCpu,
                 "system_cpu_usage");
-
-        var previousSystemUsage =
-            GetInt64(
+        long? previousSystemUsage =
+            GetOptionalInt64(
                 previousCpu,
                 "system_cpu_usage");
 
-        var containerDelta =
-            currentContainerUsage -
-            previousContainerUsage;
+        if (currentContainerUsage is null ||
+            previousContainerUsage is null ||
+            currentSystemUsage is null ||
+            previousSystemUsage is null)
+        {
+            return null;
+        }
 
-        var systemDelta =
-            currentSystemUsage -
-            previousSystemUsage;
+        long containerDelta =
+            currentContainerUsage.Value -
+            previousContainerUsage.Value;
+        long systemDelta =
+            currentSystemUsage.Value -
+            previousSystemUsage.Value;
 
         if (containerDelta <= 0 || systemDelta <= 0)
         {
             return 0;
         }
 
-        var onlineCpuCount =
-            GetInt64(currentCpu, "online_cpus");
+        long onlineCpuCount =
+            GetOptionalInt64(currentCpu, "online_cpus") ??
+            0;
 
         if (onlineCpuCount <= 0 &&
             currentCpu.TryGetProperty(
                 "cpu_usage",
-                out var cpuUsage) &&
+                out JsonElement cpuUsage) &&
             cpuUsage.TryGetProperty(
                 "percpu_usage",
-                out var perCpuUsage) &&
+                out JsonElement perCpuUsage) &&
             perCpuUsage.ValueKind == JsonValueKind.Array)
         {
             onlineCpuCount =
                 perCpuUsage.GetArrayLength();
         }
 
-        onlineCpuCount = Math.Max(
-            1,
-            onlineCpuCount);
+        onlineCpuCount = Math.Max(1, onlineCpuCount);
 
         return containerDelta /
                (double)systemDelta *
@@ -404,26 +437,48 @@ internal sealed class DockerMetricsCollector :
     {
         if (container.TryGetProperty(
                 "Names",
-                out var names) &&
+                out JsonElement names) &&
             names.ValueKind == JsonValueKind.Array)
         {
-            foreach (var nameElement in
+            foreach (JsonElement nameElement in
                      names.EnumerateArray())
             {
-                var name = nameElement.GetString();
+                string? name = nameElement.GetString();
 
                 if (!string.IsNullOrWhiteSpace(name))
                 {
-                    return name.TrimStart('/');
+                    return name.Trim().TrimStart('/');
                 }
             }
         }
 
-        var id = GetString(container, "Id");
+        string id = GetString(container, "Id");
 
         return id.Length > 12
             ? id[..12]
             : id;
+    }
+
+    private static string NormalizeState(string state)
+    {
+        return string.IsNullOrWhiteSpace(state)
+            ? "unknown"
+            : state.Trim().ToLowerInvariant();
+    }
+
+    private static int? GetRestartCount(
+        JsonElement element)
+    {
+        long? value =
+            GetOptionalInt64(element, "RestartCount");
+
+        return value switch
+        {
+            null => null,
+            < 0 => 0,
+            > int.MaxValue => int.MaxValue,
+            _ => (int)value.Value
+        };
     }
 
     private static string GetString(
@@ -432,40 +487,40 @@ internal sealed class DockerMetricsCollector :
     {
         return element.TryGetProperty(
                    propertyName,
-                   out var property)
+                   out JsonElement property)
             ? property.GetString() ?? string.Empty
             : string.Empty;
     }
 
-    private static long GetInt64(
+    private static long? GetOptionalInt64(
         JsonElement element,
         string propertyName)
     {
         if (!element.TryGetProperty(
                 propertyName,
-                out var property))
+                out JsonElement property))
         {
-            return 0;
+            return null;
         }
 
-        return property.TryGetInt64(out var value)
+        return property.TryGetInt64(out long value)
             ? value
-            : 0;
+            : null;
     }
 
-    private static long GetNestedInt64(
+    private static long? GetOptionalNestedInt64(
         JsonElement element,
         string parentProperty,
         string childProperty)
     {
         if (!element.TryGetProperty(
                 parentProperty,
-                out var parent))
+                out JsonElement parent))
         {
-            return 0;
+            return null;
         }
 
-        return GetInt64(
+        return GetOptionalInt64(
             parent,
             childProperty);
     }
@@ -473,5 +528,15 @@ internal sealed class DockerMetricsCollector :
     public void Dispose()
     {
         _httpClient.Dispose();
+    }
+
+    private sealed record ResourceMetrics(
+        long? MemoryUsageBytes,
+        long? MemoryLimitBytes,
+        double? MemoryPercent,
+        double? CpuPercent)
+    {
+        public static ResourceMetrics Unavailable { get; } =
+            new(null, null, null, null);
     }
 }

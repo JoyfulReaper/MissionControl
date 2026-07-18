@@ -162,5 +162,5 @@ internal sealed class SnapshotPublicationGate
         string Name,
         string Image,
         string State,
-        int RestartCount);
+        int? RestartCount);
 }
