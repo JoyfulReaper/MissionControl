@@ -41,18 +41,11 @@ internal static class ContainerResourcePresentation
         return $"{usage} / {limit} ({percentage})";
     }
 
-    public static string FormatMemorySummary(
-        long? usageBytes,
-        double? percent)
+    public static string FormatMemorySummary(long? usageBytes)
     {
-        if (percent is not null)
-        {
-            return $"{percent.Value:0.#}%";
-        }
-
         return usageBytes is null
             ? UnavailableMarker
-            : FormatBytes(usageBytes.Value);
+            : $"{Math.Max(0, usageBytes.Value) / (1024d * 1024d):0.#} MB";
     }
 
     public static string FormatRestartCount(int? restartCount)

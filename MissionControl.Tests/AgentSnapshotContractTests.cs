@@ -666,18 +666,15 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(
             "—",
             ContainerResourcePresentation.FormatMemorySummary(
-                null,
                 null));
         Assert.Equal(
-            "17.6%",
+            "94.6 MB",
             ContainerResourcePresentation.FormatMemorySummary(
-                99_194_880,
-                17.56));
+                99_194_880));
         Assert.Equal(
             "1 MB",
             ContainerResourcePresentation.FormatMemorySummary(
-                1_048_576,
-                null));
+                1_048_576));
     }
 
     [Fact]
