@@ -50,6 +50,12 @@
     letter-spacing: 0.05em;
 }
 
+.chip-resource {
+    color: var(--mc-text);
+    background: var(--mc-background-elevated);
+    font-variant-numeric: tabular-nums;
+}
+
 .status-running,
 .visibility-public {
     color: var(--mc-accent);

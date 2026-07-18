@@ -6,6 +6,19 @@
         </div>
 
         <div class="service-chips">
+            <span class="service-chip chip-resource"
+                  title="Container CPU usage">
+                CPU @ContainerResourcePresentation.FormatCpu(
+                    Container?.CpuPercent)
+            </span>
+
+            <span class="service-chip chip-resource"
+                  title="Container memory usage">
+                MEM @ContainerResourcePresentation.FormatMemorySummary(
+                    Container?.MemoryUsageBytes,
+                    Container?.MemoryPercent)
+            </span>
+
             <span class="service-chip @GetVisibilityClass()">
                 @Service.Visibility.ToUpperInvariant()
             </span>
