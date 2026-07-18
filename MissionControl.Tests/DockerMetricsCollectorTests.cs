@@ -5,6 +5,7 @@ using AgentApp::MissionControl.Agent.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace MissionControl.Tests;
@@ -14,6 +15,7 @@ public sealed class DockerMetricsCollectorTests
     [Fact]
     public async Task InventoryIncludesRunningExitedAndStoppedContainers()
     {
+        int statsRequestCount = 0;
         var handler = new FakeDockerHandler(
             requestUri => requestUri switch
             {
@@ -49,16 +51,21 @@ public sealed class DockerMetricsCollectorTests
                 "/v1.45/containers/stopped-id/json" =>
                     Json("""{ "RestartCount": 7 }"""),
                 "/v1.45/containers/running-id/stats?stream=false&one-shot=true" =>
-                    Json(CreateStatsJson()),
+                    Json(++statsRequestCount == 1
+                        ? CreateStatsJson(100, 1_000)
+                        : CreateStatsJson(300, 2_000)),
                 _ => throw new Xunit.Sdk.XunitException(
                     $"Unexpected Docker request: {requestUri}")
             });
         using DockerMetricsCollector collector =
             CreateCollector(handler);
 
+        DockerMetricsCollectionResult first =
+            await collector.GetMetricsAsync(CancellationToken.None);
         DockerMetricsCollectionResult result =
             await collector.GetMetricsAsync(CancellationToken.None);
 
+        Assert.Null(first.Containers[0].CpuPercent);
         Assert.True(result.Succeeded);
         Assert.Null(result.Error);
         Assert.Equal(3, result.Containers.Count);
@@ -105,6 +112,7 @@ public sealed class DockerMetricsCollectorTests
     [Fact]
     public async Task RunningStatsFailureRetainsContainerAndDoesNotRemoveOthers()
     {
+        int healthyStatsRequestCount = 0;
         var handler = new FakeDockerHandler(
             requestUri => requestUri switch
             {
@@ -134,13 +142,16 @@ public sealed class DockerMetricsCollectorTests
                 "/v1.45/containers/unavailable-id/stats?stream=false&one-shot=true" =>
                     Error(HttpStatusCode.InternalServerError),
                 "/v1.45/containers/healthy-id/stats?stream=false&one-shot=true" =>
-                    Json(CreateStatsJson()),
+                    Json(++healthyStatsRequestCount == 1
+                        ? CreateStatsJson(100, 1_000)
+                        : CreateStatsJson(300, 2_000)),
                 _ => throw new Xunit.Sdk.XunitException(
                     $"Unexpected Docker request: {requestUri}")
             });
         using DockerMetricsCollector collector =
             CreateCollector(handler);
 
+        await collector.GetMetricsAsync(CancellationToken.None);
         DockerMetricsCollectionResult result =
             await collector.GetMetricsAsync(CancellationToken.None);
 
@@ -157,6 +168,282 @@ public sealed class DockerMetricsCollectorTests
         Assert.Equal("healthy", healthy.Name);
         Assert.Equal(900, healthy.MemoryUsageBytes);
         Assert.Equal(40, healthy.CpuPercent);
+    }
+
+    [Fact]
+    public async Task OneShotStatsUseCrossCycleCpuBaseline()
+    {
+        FakeDockerHandler handler = CreateSingleContainerHandler(
+            statsRequest => Json(statsRequest == 1
+                ? CreateStatsJson(100, 1_000)
+                : CreateStatsJson(300, 2_000)));
+        using DockerMetricsCollector collector =
+            CreateCollector(handler);
+
+        ContainerMetric first = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+        ContainerMetric second = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+
+        Assert.Equal(900, first.MemoryUsageBytes);
+        Assert.Equal(45, first.MemoryPercent);
+        Assert.Null(first.CpuPercent);
+        Assert.Equal(900, second.MemoryUsageBytes);
+        Assert.Equal(40, second.CpuPercent);
+        Assert.Equal(
+            2,
+            handler.RequestUris.Count(requestUri =>
+                requestUri.EndsWith(
+                    "/stats?stream=false&one-shot=true",
+                    StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task ValidIdleCpuSampleReturnsZero()
+    {
+        FakeDockerHandler handler = CreateSingleContainerHandler(
+            statsRequest => Json(statsRequest == 1
+                ? CreateStatsJson(100, 1_000)
+                : CreateStatsJson(100, 2_000)));
+        using DockerMetricsCollector collector =
+            CreateCollector(handler);
+
+        await collector.GetMetricsAsync(CancellationToken.None);
+        ContainerMetric idle = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+
+        Assert.Equal(0, idle.CpuPercent);
+    }
+
+    [Fact]
+    public async Task LargeCpuCountersDoNotOverflow()
+    {
+        FakeDockerHandler handler = CreateSingleContainerHandler(
+            statsRequest => Json(statsRequest == 1
+                ? CreateStatsJson(
+                    ulong.MaxValue - 1_000,
+                    ulong.MaxValue - 10_000,
+                    onlineCpuCount: 8)
+                : CreateStatsJson(
+                    ulong.MaxValue - 500,
+                    ulong.MaxValue - 5_000,
+                    onlineCpuCount: 8)));
+        using DockerMetricsCollector collector =
+            CreateCollector(handler);
+
+        await collector.GetMetricsAsync(CancellationToken.None);
+        ContainerMetric measured = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+
+        Assert.Equal(80, measured.CpuPercent);
+    }
+
+    [Theory]
+    [InlineData(6, 0, 60)]
+    [InlineData(null, 4, 40)]
+    public async Task CpuCountUsesOnlineCpusThenPerCpuFallback(
+        int? onlineCpuCount,
+        int perCpuCount,
+        double expectedPercent)
+    {
+        FakeDockerHandler handler = CreateSingleContainerHandler(
+            statsRequest => Json(CreateStatsJson(
+                containerUsage:
+                    statsRequest == 1 ? 100UL : 200UL,
+                systemUsage:
+                    statsRequest == 1 ? 1_000UL : 2_000UL,
+                onlineCpuCount:
+                    onlineCpuCount is null
+                        ? null
+                        : (ulong)onlineCpuCount.Value,
+                perCpuCount: perCpuCount)));
+        using DockerMetricsCollector collector =
+            CreateCollector(handler);
+
+        await collector.GetMetricsAsync(CancellationToken.None);
+        ContainerMetric measured = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+
+        Assert.Equal(
+            expectedPercent,
+            Assert.IsType<double>(measured.CpuPercent),
+            precision: 10);
+    }
+
+    [Fact]
+    public async Task MalformedCpuDataDoesNotAffectOtherContainersOrMemory()
+    {
+        int brokenStatsCount = 0;
+        int healthyStatsCount = 0;
+        var handler = new FakeDockerHandler(
+            requestUri => requestUri switch
+            {
+                "/version" => Json("""{ "ApiVersion": "1.45" }"""),
+                "/v1.45/containers/json?all=true" => Json("""
+                    [
+                      {
+                        "Id": "broken-id",
+                        "Names": ["/broken"],
+                        "Image": "example/broken:1",
+                        "State": "running",
+                        "RestartCount": 0
+                      },
+                      {
+                        "Id": "healthy-id",
+                        "Names": ["/healthy"],
+                        "Image": "example/healthy:1",
+                        "State": "running",
+                        "RestartCount": 0
+                      }
+                    ]
+                    """),
+                "/v1.45/containers/broken-id/stats?stream=false&one-shot=true" =>
+                    Json(++brokenStatsCount switch
+                    {
+                        1 => CreateStatsJson(100, 1_000),
+                        2 => CreateStatsJson(
+                            300,
+                            2_000,
+                            includeSystemUsage: false),
+                        _ => CreateStatsJson(500, 3_000)
+                    }),
+                "/v1.45/containers/healthy-id/stats?stream=false&one-shot=true" =>
+                    Json(++healthyStatsCount == 1
+                        ? CreateStatsJson(100, 1_000)
+                        : CreateStatsJson(300, 2_000)),
+                _ => throw new Xunit.Sdk.XunitException(
+                    $"Unexpected Docker request: {requestUri}")
+            });
+        using DockerMetricsCollector collector =
+            CreateCollector(handler);
+
+        await collector.GetMetricsAsync(CancellationToken.None);
+        DockerMetricsCollectionResult second =
+            await collector.GetMetricsAsync(CancellationToken.None);
+
+        ContainerMetric broken = second.Containers[0];
+        ContainerMetric healthy = second.Containers[1];
+        Assert.Equal(900, broken.MemoryUsageBytes);
+        Assert.Equal(45, broken.MemoryPercent);
+        Assert.Null(broken.CpuPercent);
+        Assert.Equal(40, healthy.CpuPercent);
+
+        ContainerMetric recovered = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers,
+            container => container.Name == "broken");
+        Assert.Equal(40, recovered.CpuPercent);
+    }
+
+    [Fact]
+    public async Task FailedStatsRequestDoesNotCorruptCpuBaseline()
+    {
+        FakeDockerHandler handler = CreateSingleContainerHandler(
+            statsRequest => statsRequest switch
+            {
+                1 => Json(CreateStatsJson(100, 1_000)),
+                2 => Error(HttpStatusCode.InternalServerError),
+                _ => Json(CreateStatsJson(500, 3_000))
+            });
+        using DockerMetricsCollector collector =
+            CreateCollector(handler);
+
+        await collector.GetMetricsAsync(CancellationToken.None);
+        ContainerMetric failed = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+        ContainerMetric recovered = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+
+        AssertResourceMetricsUnavailable(failed);
+        Assert.Equal(40, recovered.CpuPercent);
+    }
+
+    [Fact]
+    public async Task ReplacementWithSameNameStartsNewCpuBaseline()
+    {
+        FakeDockerHandler handler = CreateSingleContainerHandler(
+            statsRequest => Json(CreateStatsJson(
+                (ulong)statsRequest * 100,
+                (ulong)statsRequest * 1_000)),
+            inventoryRequest => inventoryRequest == 1
+                ? "old-id"
+                : "new-id");
+        using DockerMetricsCollector collector =
+            CreateCollector(handler);
+
+        ContainerMetric original = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+        ContainerMetric replacement = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+        ContainerMetric measuredReplacement = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+
+        Assert.Null(original.CpuPercent);
+        Assert.Null(replacement.CpuPercent);
+        Assert.Equal(20, measuredReplacement.CpuPercent);
+    }
+
+    [Fact]
+    public async Task DeletedContainerCpuBaselineIsPruned()
+    {
+        FakeDockerHandler handler = CreateSingleContainerHandler(
+            statsRequest => Json(CreateStatsJson(
+                (ulong)statsRequest * 100,
+                (ulong)statsRequest * 1_000)),
+            inventoryRequest => inventoryRequest == 2
+                ? null
+                : "running-id");
+        using DockerMetricsCollector collector =
+            CreateCollector(handler);
+
+        await collector.GetMetricsAsync(CancellationToken.None);
+        Assert.Empty(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+        ContainerMetric reappeared = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+        ContainerMetric measured = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+
+        Assert.Null(reappeared.CpuPercent);
+        Assert.Equal(20, measured.CpuPercent);
+    }
+
+    [Fact]
+    public async Task CpuCounterResetStartsNewBaseline()
+    {
+        FakeDockerHandler handler = CreateSingleContainerHandler(
+            statsRequest => Json(statsRequest switch
+            {
+                1 => CreateStatsJson(1_000, 5_000),
+                2 => CreateStatsJson(100, 1_000),
+                _ => CreateStatsJson(300, 2_000)
+            }));
+        using DockerMetricsCollector collector =
+            CreateCollector(handler);
+
+        await collector.GetMetricsAsync(CancellationToken.None);
+        ContainerMetric reset = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+        ContainerMetric recovered = Assert.Single(
+            (await collector.GetMetricsAsync(
+                CancellationToken.None)).Containers);
+
+        Assert.Null(reset.CpuPercent);
+        Assert.Equal(40, recovered.CpuPercent);
     }
 
     [Fact]
@@ -262,6 +549,57 @@ public sealed class DockerMetricsCollectorTests
                 cancellationSource.Token));
     }
 
+    private static FakeDockerHandler CreateSingleContainerHandler(
+        Func<int, HttpResponseMessage> statsResponseFactory,
+        Func<int, string?>? containerIdFactory = null)
+    {
+        int inventoryRequestCount = 0;
+        int statsRequestCount = 0;
+
+        return new FakeDockerHandler(
+            requestUri =>
+            {
+                if (requestUri == "/version")
+                {
+                    return Json("""{ "ApiVersion": "1.45" }""");
+                }
+
+                if (requestUri ==
+                    "/v1.45/containers/json?all=true")
+                {
+                    string? containerId = containerIdFactory is null
+                        ? "running-id"
+                        : containerIdFactory(
+                            ++inventoryRequestCount);
+
+                    return containerId is null
+                        ? Json("[]")
+                        : Json($$"""
+                            [
+                              {
+                                "Id": "{{containerId}}",
+                                "Names": ["/api"],
+                                "Image": "example/api:1",
+                                "State": "running",
+                                "RestartCount": 0
+                              }
+                            ]
+                            """);
+                }
+
+                if (requestUri.EndsWith(
+                        "/stats?stream=false&one-shot=true",
+                        StringComparison.Ordinal))
+                {
+                    return statsResponseFactory(
+                        ++statsRequestCount);
+                }
+
+                throw new Xunit.Sdk.XunitException(
+                    $"Unexpected Docker request: {requestUri}");
+            });
+    }
+
     private static DockerMetricsCollector CreateCollector(
         HttpMessageHandler handler)
     {
@@ -307,32 +645,55 @@ public sealed class DockerMetricsCollectorTests
         };
     }
 
-    private static string CreateStatsJson()
+    private static string CreateStatsJson(
+        ulong containerUsage,
+        ulong systemUsage,
+        ulong? onlineCpuCount = 2,
+        int perCpuCount = 0,
+        bool includeSystemUsage = true)
     {
-        return """
+        var cpuUsage = new Dictionary<string, object>
+        {
+            ["total_usage"] = containerUsage
+        };
+
+        if (perCpuCount > 0)
+        {
+            cpuUsage["percpu_usage"] =
+                Enumerable.Repeat(0UL, perCpuCount).ToArray();
+        }
+
+        var cpuStats = new Dictionary<string, object>
+        {
+            ["cpu_usage"] = cpuUsage
+        };
+
+        if (includeSystemUsage)
+        {
+            cpuStats["system_cpu_usage"] = systemUsage;
+        }
+
+        if (onlineCpuCount is not null)
+        {
+            cpuStats["online_cpus"] = onlineCpuCount.Value;
+        }
+
+        return JsonSerializer.Serialize(
+            new Dictionary<string, object>
             {
-              "memory_stats": {
-                "usage": 1000,
-                "limit": 2000,
-                "stats": {
-                  "inactive_file": 100
-                }
-              },
-              "cpu_stats": {
-                "cpu_usage": {
-                  "total_usage": 300
+                ["memory_stats"] = new
+                {
+                    usage = 1_000,
+                    limit = 2_000,
+                    stats = new
+                    {
+                        inactive_file = 100
+                    }
                 },
-                "system_cpu_usage": 2000,
-                "online_cpus": 2
-              },
-              "precpu_stats": {
-                "cpu_usage": {
-                  "total_usage": 100
-                },
-                "system_cpu_usage": 1000
-              }
-            }
-            """;
+                ["cpu_stats"] = cpuStats,
+                ["precpu_stats"] =
+                    new Dictionary<string, object>()
+            });
     }
 
     private sealed class FakeDockerHandler(

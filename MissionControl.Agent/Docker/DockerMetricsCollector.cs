@@ -11,6 +11,9 @@ internal sealed class DockerMetricsCollector :
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<DockerMetricsCollector> _logger;
+    private readonly Dictionary<string, CpuSample> _cpuBaselines =
+        new(StringComparer.Ordinal);
+    private readonly SemaphoreSlim _collectionLock = new(1, 1);
 
     private string? _apiPrefix;
 
@@ -33,6 +36,8 @@ internal sealed class DockerMetricsCollector :
         GetMetricsAsync(
             CancellationToken cancellationToken = default)
     {
+        await _collectionLock.WaitAsync(cancellationToken);
+
         try
         {
             IReadOnlyList<ContainerMetric> containers =
@@ -70,6 +75,10 @@ internal sealed class DockerMetricsCollector :
                 Containers: [],
                 Error: "Docker metric collection is unavailable.");
         }
+        finally
+        {
+            _collectionLock.Release();
+        }
     }
 
     private async Task<IReadOnlyList<ContainerMetric>>
@@ -84,6 +93,8 @@ internal sealed class DockerMetricsCollector :
             cancellationToken);
 
         var metrics = new List<ContainerMetric>();
+        var runningContainerIds = new HashSet<string>(
+            StringComparer.Ordinal);
 
         foreach (JsonElement container in
                  document.RootElement.EnumerateArray())
@@ -113,17 +124,23 @@ internal sealed class DockerMetricsCollector :
                     cancellationToken);
             }
 
-            ResourceMetrics resourceMetrics =
-                string.Equals(
-                    state,
-                    "running",
-                    StringComparison.Ordinal)
-                    ? await TryGetResourceMetricsAsync(
-                        apiPrefix,
-                        id,
-                        name,
-                        cancellationToken)
-                    : ResourceMetrics.Unavailable;
+            bool isRunning = string.Equals(
+                state,
+                "running",
+                StringComparison.Ordinal);
+
+            if (isRunning)
+            {
+                runningContainerIds.Add(id);
+            }
+
+            ResourceMetrics resourceMetrics = isRunning
+                ? await TryGetResourceMetricsAsync(
+                    apiPrefix,
+                    id,
+                    name,
+                    cancellationToken)
+                : ResourceMetrics.Unavailable;
 
             metrics.Add(
                 new ContainerMetric(
@@ -140,6 +157,8 @@ internal sealed class DockerMetricsCollector :
                         resourceMetrics.CpuPercent,
                     RestartCount: restartCount));
         }
+
+        PruneCpuBaselines(runningContainerIds);
 
         return metrics;
     }
@@ -208,7 +227,7 @@ internal sealed class DockerMetricsCollector :
                 MemoryUsageBytes: memoryUsageBytes,
                 MemoryLimitBytes: memoryLimitBytes,
                 MemoryPercent: memoryPercent,
-                CpuPercent: CalculateCpuPercent(stats));
+                CpuPercent: CalculateCpuPercent(id, stats));
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
@@ -355,60 +374,78 @@ internal sealed class DockerMetricsCollector :
         return Math.Max(0, totalUsage.Value - cache);
     }
 
-    private static double? CalculateCpuPercent(
+    private double? CalculateCpuPercent(
+        string containerId,
         JsonElement stats)
     {
-        if (!stats.TryGetProperty(
-                "cpu_stats",
-                out JsonElement currentCpu) ||
-            !stats.TryGetProperty(
-                "precpu_stats",
-                out JsonElement previousCpu))
+        CpuSample? currentSample = GetCpuSample(stats);
+
+        if (currentSample is null)
         {
             return null;
         }
 
-        long? currentContainerUsage =
-            GetOptionalNestedInt64(
-                currentCpu,
-                "cpu_usage",
-                "total_usage");
-        long? previousContainerUsage =
-            GetOptionalNestedInt64(
-                previousCpu,
-                "cpu_usage",
-                "total_usage");
-        long? currentSystemUsage =
-            GetOptionalInt64(
-                currentCpu,
-                "system_cpu_usage");
-        long? previousSystemUsage =
-            GetOptionalInt64(
-                previousCpu,
-                "system_cpu_usage");
+        bool hasPreviousSample = _cpuBaselines.TryGetValue(
+            containerId,
+            out CpuSample previousSample);
 
-        if (currentContainerUsage is null ||
-            previousContainerUsage is null ||
-            currentSystemUsage is null ||
-            previousSystemUsage is null)
+        _cpuBaselines[containerId] = currentSample.Value;
+
+        if (!hasPreviousSample)
         {
             return null;
         }
 
-        long containerDelta =
-            currentContainerUsage.Value -
-            previousContainerUsage.Value;
-        long systemDelta =
-            currentSystemUsage.Value -
-            previousSystemUsage.Value;
+        if (currentSample.Value.ContainerUsage <
+                previousSample.ContainerUsage ||
+            currentSample.Value.SystemUsage <=
+                previousSample.SystemUsage)
+        {
+            return null;
+        }
 
-        if (containerDelta <= 0 || systemDelta <= 0)
+        ulong containerDelta =
+            currentSample.Value.ContainerUsage -
+            previousSample.ContainerUsage;
+        ulong systemDelta =
+            currentSample.Value.SystemUsage -
+            previousSample.SystemUsage;
+
+        if (containerDelta == 0)
         {
             return 0;
         }
 
-        long onlineCpuCount =
-            GetOptionalInt64(currentCpu, "online_cpus") ??
+        return containerDelta /
+               (double)systemDelta *
+               currentSample.Value.OnlineCpuCount *
+               100.0;
+    }
+
+    private static CpuSample? GetCpuSample(JsonElement stats)
+    {
+        if (!stats.TryGetProperty(
+                "cpu_stats",
+                out JsonElement currentCpu))
+        {
+            return null;
+        }
+
+        ulong? containerUsage = GetOptionalNestedUInt64(
+            currentCpu,
+            "cpu_usage",
+            "total_usage");
+        ulong? systemUsage = GetOptionalUInt64(
+            currentCpu,
+            "system_cpu_usage");
+
+        if (containerUsage is null || systemUsage is null)
+        {
+            return null;
+        }
+
+        ulong onlineCpuCount =
+            GetOptionalUInt64(currentCpu, "online_cpus") ??
             0;
 
         if (onlineCpuCount <= 0 &&
@@ -420,16 +457,29 @@ internal sealed class DockerMetricsCollector :
                 out JsonElement perCpuUsage) &&
             perCpuUsage.ValueKind == JsonValueKind.Array)
         {
-            onlineCpuCount =
+            onlineCpuCount = (ulong)
                 perCpuUsage.GetArrayLength();
         }
 
-        onlineCpuCount = Math.Max(1, onlineCpuCount);
+        onlineCpuCount = Math.Max(1UL, onlineCpuCount);
 
-        return containerDelta /
-               (double)systemDelta *
-               onlineCpuCount *
-               100.0;
+        return new CpuSample(
+            containerUsage.Value,
+            systemUsage.Value,
+            onlineCpuCount);
+    }
+
+    private void PruneCpuBaselines(
+        IReadOnlySet<string> runningContainerIds)
+    {
+        foreach (string containerId in
+                 _cpuBaselines.Keys.ToArray())
+        {
+            if (!runningContainerIds.Contains(containerId))
+            {
+                _cpuBaselines.Remove(containerId);
+            }
+        }
     }
 
     private static string GetContainerName(
@@ -525,10 +575,49 @@ internal sealed class DockerMetricsCollector :
             childProperty);
     }
 
+    private static ulong? GetOptionalUInt64(
+        JsonElement element,
+        string propertyName)
+    {
+        if (!element.TryGetProperty(
+                propertyName,
+                out JsonElement property))
+        {
+            return null;
+        }
+
+        return property.TryGetUInt64(out ulong value)
+            ? value
+            : null;
+    }
+
+    private static ulong? GetOptionalNestedUInt64(
+        JsonElement element,
+        string parentProperty,
+        string childProperty)
+    {
+        if (!element.TryGetProperty(
+                parentProperty,
+                out JsonElement parent))
+        {
+            return null;
+        }
+
+        return GetOptionalUInt64(
+            parent,
+            childProperty);
+    }
+
     public void Dispose()
     {
         _httpClient.Dispose();
+        _collectionLock.Dispose();
     }
+
+    private readonly record struct CpuSample(
+        ulong ContainerUsage,
+        ulong SystemUsage,
+        ulong OnlineCpuCount);
 
     private sealed record ResourceMetrics(
         long? MemoryUsageBytes,
