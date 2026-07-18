@@ -11,6 +11,7 @@ public partial class Services : IAsyncDisposable
 {
     private string? _filter;
     private AgentSnapshotRefreshController _agentRefresh = null!;
+    private ServiceCatalogReloadController? _catalogReload;
     private readonly CancellationTokenSource _disposeSource = new();
     private Task? _pollingTask;
     private bool _isManualRefresh;
@@ -19,25 +20,64 @@ public partial class Services : IAsyncDisposable
     private AgentSnapshotItem? CurrentSnapshot =>
         _agentRefresh?.CurrentSnapshot;
 
-    [Inject]
-    private IAgentSnapshotClient AgentClient { get; set; } = null!;
+    internal AgentSnapshotItem? SnapshotForTesting => CurrentSnapshot;
+
+    internal string? FilterForTesting
+    {
+        get => _filter;
+        set => _filter = value;
+    }
+
+    internal IReadOnlyList<ServiceDefinition> CurrentCatalog =>
+        _catalogReload?.Services ?? CatalogOptions.Value.Services;
+
+    internal string? CatalogReloadWarning =>
+        _catalogReload?.ReloadWarning;
 
     [Inject]
-    private IOptions<DashboardRefreshOptions> RefreshOptions { get; set; } =
+    internal IAgentSnapshotClient AgentClient { get; set; } = null!;
+
+    [Inject]
+    internal IOptions<DashboardRefreshOptions> RefreshOptions { get; set; } =
         null!;
 
     [Inject]
-    private TimeProvider TimeProvider { get; set; } = null!;
+    internal TimeProvider TimeProvider { get; set; } = null!;
 
     [Inject]
-    private IDashboardPollingLoop PollingLoop { get; set; } = null!;
+    internal IDashboardPollingLoop PollingLoop { get; set; } = null!;
 
     [Inject]
-    private IOptions<ServiceCatalogOptions> CatalogOptions { get; set; } =
+    internal IOptions<ServiceCatalogOptions> CatalogOptions { get; set; } =
         null!;
+
+    [Inject]
+    internal IServiceCatalogMonitor CatalogMonitor { get; set; } = null!;
+
+    [Inject]
+    internal IValidateOptions<ServiceCatalogOptions> CatalogValidator
+    {
+        get;
+        set;
+    } = null!;
+
+    [Inject]
+    internal ILogger<ServiceCatalogReloadController> CatalogLogger
+    {
+        get;
+        set;
+    } = null!;
 
     protected override async Task OnInitializedAsync()
     {
+        _catalogReload = new ServiceCatalogReloadController(
+            CatalogOptions.Value,
+            CatalogMonitor,
+            CatalogValidator,
+            CatalogLogger,
+            DispatchCatalogUpdateAsync,
+            NotifyCatalogStateChanged);
+
         _agentRefresh = new AgentSnapshotRefreshController(
             AgentClient,
             TimeProvider,
@@ -81,14 +121,14 @@ public partial class Services : IAsyncDisposable
 
         if (!_disposed && !cancellationToken.IsCancellationRequested)
         {
-            await InvokeAsync(StateHasChanged);
+            await DispatchComponentStateChangeAsync();
         }
     }
 
     private ServicesView CreateView()
     {
         IReadOnlyList<ServiceDefinition> services =
-            CatalogOptions.Value.Services;
+            CurrentCatalog;
 
         Dictionary<string, AgentContainerStatusItem> containersByName =
             (CurrentSnapshot?.Containers ?? [])
@@ -177,6 +217,12 @@ public partial class Services : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+
+        if (_catalogReload is not null)
+        {
+            await _catalogReload.DisposeAsync();
+        }
+
         await _disposeSource.CancelAsync();
 
         if (_pollingTask is not null)
@@ -191,6 +237,22 @@ public partial class Services : IAsyncDisposable
         }
 
         _disposeSource.Dispose();
+    }
+
+    protected virtual Task DispatchCatalogUpdateAsync(
+        Func<Task> update)
+    {
+        return InvokeAsync(update);
+    }
+
+    protected virtual void NotifyCatalogStateChanged()
+    {
+        StateHasChanged();
+    }
+
+    protected virtual Task DispatchComponentStateChangeAsync()
+    {
+        return InvokeAsync(StateHasChanged);
     }
 
     private bool MatchesFilter(ServiceDefinition service)

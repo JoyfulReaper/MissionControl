@@ -26,6 +26,13 @@
                     ErrorMessage="@_agentRefresh.RefreshWarning"
                     OnRefresh="RefreshSnapshotAsync" />
 
+@if (CatalogReloadWarning is not null)
+{
+    <div class="alert alert-warning" role="status">
+        @CatalogReloadWarning
+    </div>
+}
+
 <ServiceSummaryCards ConfiguredServices="view.ConfiguredServices"
                      RunningContainers="view.RunningContainers"
                      PublicServices="view.PublicServices"

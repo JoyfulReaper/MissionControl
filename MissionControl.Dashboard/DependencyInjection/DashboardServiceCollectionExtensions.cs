@@ -244,10 +244,14 @@ public static class DashboardServiceCollectionExtensions
             .Bind(
                 configuration.GetSection(
                     ServiceCatalogOptions.SectionName))
-            .Validate(
-                options => options.Services.Count > 0,
-                "At least one dashboard service must be configured.")
             .ValidateOnStart();
+
+        services.AddSingleton<
+            IValidateOptions<ServiceCatalogOptions>,
+            ServiceCatalogOptionsValidator>();
+        services.AddSingleton<
+            IServiceCatalogMonitor,
+            ConfigurationServiceCatalogMonitor>();
 
         services.AddSingleton<
             IValidateOptions<DashboardDateTimeOptions>,

@@ -67,7 +67,7 @@ The Dashboard requires an authenticated user and provides:
 
 Agent data on Overview and Services refreshes automatically. Event data also polls automatically. Freshness is recalculated locally between requests. When a later refresh fails, the last successful Agent or event data remains visible with a warning. If older events are loaded, polling preserves the current list and shows a “new events available” action instead of replacing the user’s position.
 
-The service catalog is loaded from the required `MissionControl.Dashboard/services.json` file. Dashboard authentication uses a local SQLite user database and persisted ASP.NET Core Data Protection keys.
+The service catalog is loaded from the required `MissionControl.Dashboard/services.json` file and reloads automatically. An invalid reload keeps the last valid catalog visible and displays a warning until a later valid update succeeds. Dashboard authentication uses a local SQLite user database and persisted ASP.NET Core Data Protection keys.
 
 ## Requirements
 
@@ -333,7 +333,7 @@ docker build -f Dockerfile.dashboard -t mission-control-dashboard .
 docker build -f Dockerfile.gitactivity -t mission-control-gitactivity .
 ```
 
-There is no checked-in Compose file and no Agent Dockerfile.
+There is no Compose file checked into this repository and no Agent Dockerfile. Production Compose orchestration is maintained externally and is not part of the MissionControl repository.
 
 - Archive sets `EventArchive__BasePath=/app/data` and declares `/app/data` as a volume; mount persistent storage there.
 - Dashboard declares `/app/data` for its authentication database and Data Protection keys.
@@ -376,5 +376,5 @@ dotnet format MissionControl.slnx --verify-no-changes
 - Agent storage retains only the latest snapshot per node; it is not a historical metrics database.
 - Linux `/proc` supplies the implemented host CPU and memory metrics, and Docker collection currently targets a Unix socket.
 - Host uptime is not collected by the Agent.
-- The repository does not include Compose orchestration or an Agent container image.
+- The repository does not include its externally maintained Compose orchestration or an Agent container image.
 - Automated tests avoid external infrastructure; a real Gateway → RabbitMQ → Archive/GitActivity smoke test is still recommended for deployment validation.
