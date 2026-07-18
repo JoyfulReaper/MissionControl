@@ -30,7 +30,8 @@ public static class DashboardApplicationExtensions
         app.UseAntiforgery();
         app.MapRazorPages();
 
-        app.MapStaticAssets();
+        app.MapStaticAssets()
+            .AllowAnonymous();
 
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
