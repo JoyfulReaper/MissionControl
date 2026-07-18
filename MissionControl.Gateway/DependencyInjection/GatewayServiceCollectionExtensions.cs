@@ -56,12 +56,19 @@ public static class GatewayServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        IConfigurationSection rabbitMqSection =
+            configuration.GetRequiredSection(
+                RabbitMqOptions.SectionName);
+
         services
             .AddOptions<RabbitMqOptions>()
-            .Bind(configuration.GetSection(RabbitMqOptions.SectionName))
+            .Bind(rabbitMqSection)
             .Validate(
                 options => !string.IsNullOrWhiteSpace(options.HostName),
                 "RabbitMQ hostname is required.")
+            .Validate(
+                options => options.Port is > 0 and <= 65535,
+                "RabbitMQ port must be between 1 and 65535.")
             .Validate(
                 options => !string.IsNullOrWhiteSpace(options.UserName),
                 "RabbitMQ username is required.")
@@ -71,6 +78,11 @@ public static class GatewayServiceCollectionExtensions
             .Validate(
                 options => !string.IsNullOrWhiteSpace(options.VirtualHost),
                 "RabbitMQ virtual host is required.")
+            .Validate(
+                options =>
+                    !string.IsNullOrWhiteSpace(
+                        options.ClientProvidedName),
+                "RabbitMQ client-provided name is required.")
             .ValidateOnStart();
 
         return services;

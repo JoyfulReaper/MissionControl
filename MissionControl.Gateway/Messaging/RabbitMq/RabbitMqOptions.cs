@@ -10,7 +10,7 @@ public sealed class RabbitMqOptions
 {
     public const string SectionName = "RabbitMq";
 
-    public required string HostName { get; init; } = "localhost";
+    public required string HostName { get; init; } = string.Empty;
 
     public int Port { get; init; } = 5672;
 
@@ -18,8 +18,8 @@ public sealed class RabbitMqOptions
 
     public required string Password { get; init; } = string.Empty;
 
-    public string VirtualHost { get; init; } = "/mission-control";
+    public string VirtualHost { get; init; } = string.Empty;
 
     public string ClientProvidedName { get; init; } =
-        "mission-control-gateway";
+        string.Empty;
 }
