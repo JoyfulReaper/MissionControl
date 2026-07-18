@@ -23,7 +23,11 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /app/publish .
 
-ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_URLS=http://+:8080 \
+    EventArchive__DatabaseFileName=mission-control.db \
+    EventArchive__BasePath=/app/data
+
+VOLUME ["/app/data"]
 
 EXPOSE 8080
 
