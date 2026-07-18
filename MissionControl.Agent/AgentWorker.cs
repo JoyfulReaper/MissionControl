@@ -1,6 +1,7 @@
 using JoyfulReaperLib.MissionControl;
 using Microsoft.Extensions.Options;
 using MissionControl.Agent.Docker;
+using MissionControl.Agent.Host;
 using MissionControl.Agent.Models;
 using MissionControl.Agent.Protocols;
 using MissionControl.Agent.Publishing;
@@ -11,6 +12,7 @@ namespace MissionControl.Agent;
 internal sealed class AgentWorker(
     ILogger<AgentWorker> logger,
     IDockerMetricsCollector dockerMetricsCollector,
+    IHostMetricsCollector hostMetricsCollector,
     IMissionControlClient missionControlClient,
     ProtocolProbeRunner protocolProbeRunner,
     INodeSnapshotStore snapshotStore,
@@ -56,11 +58,18 @@ internal sealed class AgentWorker(
                             stoppingToken)
                         : Task.FromResult<IReadOnlyList<ProtocolProbeResult>>([]);
 
-                await Task.WhenAll(containerTask, protocolTask);
+                Task<HostMetric?> hostTask =
+                    CollectHostMetricsAsync(stoppingToken);
+
+                await Task.WhenAll(
+                    containerTask,
+                    protocolTask,
+                    hostTask);
 
                 var snapshot = new NodeSnapshotEvent(
                     Node: agentOptions.NodeName,
                     CapturedAt: DateTimeOffset.UtcNow,
+                    Host: await hostTask,
                     Protocols: await protocolTask,
                     Containers: await containerTask);
 
@@ -172,5 +181,28 @@ internal sealed class AgentWorker(
     {
         return await dockerMetricsCollector.GetMetricsAsync(
             cancellationToken);
+    }
+
+    private async Task<HostMetric?> CollectHostMetricsAsync(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await hostMetricsCollector.GetMetricsAsync(
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Host metric collection failed.");
+
+            return null;
+        }
     }
 }

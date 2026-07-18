@@ -1,6 +1,7 @@
 ﻿using JoyfulReaperLib.MissionControl;
 using JoyfulReaperLib.Sqlite;
 using MissionControl.Agent.Docker;
+using MissionControl.Agent.Host;
 using MissionControl.Agent.Protocols;
 using MissionControl.Agent.Publishing;
 using MissionControl.Agent.Storage;
@@ -55,6 +56,7 @@ public static class AgentServiceCollectionExtensions
                 MissionControlClientOptions.SectionName));
 
         services.AddSingleton<IDockerMetricsCollector, DockerMetricsCollector>();
+        services.AddSingleton<IHostMetricsCollector, HostMetricsCollector>();
 
         services.AddSingleton<IProtocolProbe, EchoProbe>();
         services.AddSingleton<IProtocolProbe, QotdProbe>();

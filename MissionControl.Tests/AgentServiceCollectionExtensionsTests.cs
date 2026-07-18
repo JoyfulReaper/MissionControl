@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using AgentApp::MissionControl.Agent.DependencyInjection;
+using AgentApp::MissionControl.Agent.Host;
 using AgentApp::MissionControl.Agent.Storage;
 using Xunit;
 
@@ -11,6 +12,44 @@ namespace MissionControl.Tests;
 
 public sealed class AgentServiceCollectionExtensionsTests
 {
+    [Fact]
+    public void AddMissionControlAgentRegistersHostMetricsCollector()
+    {
+        IConfiguration configuration =
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                [
+                    new KeyValuePair<string, string?>(
+                        "Agent:NodeName",
+                        "test-node"),
+                    new KeyValuePair<string, string?>(
+                        "Agent:IntervalSeconds",
+                        "60"),
+                    new KeyValuePair<string, string?>(
+                        "Agent:DockerEnabled",
+                        "false")
+                ])
+                .Build();
+
+        var services = new ServiceCollection();
+
+        services.AddMissionControlAgent(configuration);
+
+        ServiceDescriptor registration =
+            Assert.Single(
+                services,
+                descriptor =>
+                    descriptor.ServiceType ==
+                    typeof(IHostMetricsCollector));
+
+        Assert.Equal(
+            typeof(HostMetricsCollector),
+            registration.ImplementationType);
+        Assert.Equal(
+            ServiceLifetime.Singleton,
+            registration.Lifetime);
+    }
+
     [Fact]
     public void AddAgentSnapshotStorageRegistersSingleDatabaseAndStoreAndCreatesSchemaFile()
     {
