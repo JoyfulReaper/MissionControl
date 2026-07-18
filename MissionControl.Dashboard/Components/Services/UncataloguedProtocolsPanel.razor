@@ -18,8 +18,23 @@
                         @(protocol.Succeeded ? "Succeeded" : "Failed")
                     </span>
                     <span>
-                        @(FormatDuration(protocol.DurationMilliseconds))
+                        @AgentDiagnosticPresentation.FormatDuration(
+                            protocol.DurationMilliseconds)
                     </span>
+                    <span>
+                        Observed endpoint:
+                        @AgentDiagnosticPresentation.FormatOptional(
+                            protocol.Endpoint)
+                    </span>
+                    @if (!protocol.Succeeded)
+                    {
+                        <span class="uncatalogued-diagnostic">
+                            Reason:
+                            @AgentDiagnosticPresentation.GetFailureReason(
+                                protocol.Succeeded,
+                                protocol.Error)
+                        </span>
+                    }
                 </div>
             }
         </div>
@@ -34,8 +49,4 @@
         set;
     }
 
-    private static string FormatDuration(double durationMilliseconds)
-    {
-        return $"{durationMilliseconds:0.#} ms";
-    }
 }

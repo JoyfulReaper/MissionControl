@@ -93,7 +93,15 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                         Service: protocol.Service,
                         Succeeded: protocol.Succeeded,
                         DurationMilliseconds:
-                            protocol.DurationMilliseconds))
+                            protocol.DurationMilliseconds,
+                        Endpoint:
+                            PublicDiagnosticSanitizer
+                                .SanitizeEndpoint(protocol.Endpoint),
+                        Error:
+                            PublicDiagnosticSanitizer
+                                .SanitizeError(
+                                    protocol.Error,
+                                    protocol.Succeeded)))
                 .ToArray();
 
         PublicContainerStatus[] containers =
@@ -111,7 +119,11 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                         CpuPercent:
                             container.CpuPercent,
                         RestartCount:
-                            container.RestartCount))
+                            container.RestartCount,
+                        Image:
+                            string.IsNullOrWhiteSpace(container.Image)
+                                ? null
+                                : container.Image))
                 .ToArray();
 
         return new PublicNodeSnapshot(

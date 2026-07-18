@@ -99,7 +99,10 @@ public sealed class DashboardRefreshTests
                 containerState: "exited",
                 protocolSucceeded: false,
                 publishSucceeded: false,
-                memoryAvailableBytes: 4_000_000_000)
+                memoryAvailableBytes: 4_000_000_000,
+                containerImage: "missioncontrol/api:2",
+                protocolEndpoint: "api.internal:17",
+                protocolError: "Connection refused")
         ]);
         var controller = new AgentSnapshotRefreshController(
             client,
@@ -140,6 +143,15 @@ public sealed class DashboardRefreshTests
             "exited",
             Assert.Single(current.Containers).State);
         Assert.False(Assert.Single(current.Protocols).Succeeded);
+        Assert.Equal(
+            "api.internal:17",
+            Assert.Single(current.Protocols).Endpoint);
+        Assert.Equal(
+            "Connection refused",
+            Assert.Single(current.Protocols).Error);
+        Assert.Equal(
+            "missioncontrol/api:2",
+            Assert.Single(current.Containers).Image);
         Assert.False(current.MissionControlPublishSucceeded);
         Assert.Equal(0, current.AgeSeconds);
         Assert.False(current.Stale);
@@ -444,7 +456,10 @@ public sealed class DashboardRefreshTests
         string containerState = "running",
         bool protocolSucceeded = true,
         bool? publishSucceeded = true,
-        long memoryAvailableBytes = 6_442_450_944)
+        long memoryAvailableBytes = 6_442_450_944,
+        string? containerImage = "missioncontrol/api:1",
+        string? protocolEndpoint = "api.internal:7",
+        string? protocolError = null)
     {
         return new AgentSnapshotItem(
             Node: "node-1",
@@ -464,7 +479,9 @@ public sealed class DashboardRefreshTests
                 new AgentProtocolStatusItem(
                     "echo",
                     protocolSucceeded,
-                    12.5)
+                    12,
+                    protocolEndpoint,
+                    protocolError)
             ],
             Containers:
             [
@@ -475,7 +492,8 @@ public sealed class DashboardRefreshTests
                     2_000_000,
                     50,
                     10,
-                    2)
+                    2,
+                    containerImage)
             ],
             DockerAvailable: dockerAvailable,
             DockerError: dockerAvailable == false

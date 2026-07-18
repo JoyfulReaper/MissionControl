@@ -30,7 +30,7 @@
 
 .uncatalogued-item {
     display: grid;
-    grid-template-columns: minmax(10rem, 1.5fr) repeat(4, minmax(0, 1fr));
+    grid-template-columns: minmax(10rem, 1.5fr) repeat(5, minmax(0, 1fr));
     gap: 0.75rem;
     padding: 0.65rem 0.75rem;
     background: var(--mc-background-elevated);

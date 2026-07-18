@@ -118,6 +118,9 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(45.99, publicContainer.MemoryPercent);
         Assert.Equal(12.75, publicContainer.CpuPercent);
         Assert.Equal(3, publicContainer.RestartCount);
+        Assert.Equal(
+            "missioncontrol/agent:3.0",
+            publicContainer.Image);
         Assert.Collection(
             publicSnapshot.Protocols,
             protocol =>
@@ -125,12 +128,16 @@ public sealed class AgentSnapshotContractTests
                 Assert.Equal("echo", protocol.Service);
                 Assert.True(protocol.Succeeded);
                 Assert.Equal(123, protocol.DurationMilliseconds);
+                Assert.Equal("localhost:7", protocol.Endpoint);
+                Assert.Null(protocol.Error);
             },
             protocol =>
             {
                 Assert.Equal("qotd", protocol.Service);
                 Assert.False(protocol.Succeeded);
                 Assert.Equal(456, protocol.DurationMilliseconds);
+                Assert.Equal("localhost:17", protocol.Endpoint);
+                Assert.Equal("Connection refused", protocol.Error);
             });
         Assert.True(publicSnapshot.MissionControlPublishSucceeded);
         Assert.Equal(
@@ -165,6 +172,9 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(2_147_483_648, dashboardContainer.MemoryLimitBytes);
         Assert.Equal(45.99, dashboardContainer.MemoryPercent);
         Assert.Equal(12.75, dashboardContainer.CpuPercent);
+        Assert.Equal(
+            "missioncontrol/agent:3.0",
+            dashboardContainer.Image);
         Assert.Collection(
             dashboardSnapshot.Protocols,
             protocol =>
@@ -172,12 +182,16 @@ public sealed class AgentSnapshotContractTests
                 Assert.Equal("echo", protocol.Service);
                 Assert.True(protocol.Succeeded);
                 Assert.Equal(123, protocol.DurationMilliseconds);
+                Assert.Equal("localhost:7", protocol.Endpoint);
+                Assert.Null(protocol.Error);
             },
             protocol =>
             {
                 Assert.Equal("qotd", protocol.Service);
                 Assert.False(protocol.Succeeded);
                 Assert.Equal(456, protocol.DurationMilliseconds);
+                Assert.Equal("localhost:17", protocol.Endpoint);
+                Assert.Equal("Connection refused", protocol.Error);
             });
     }
 
@@ -259,9 +273,29 @@ public sealed class AgentSnapshotContractTests
                 .GetProperty(nameof(PublicProtocolStatus.DurationMilliseconds))!
                 .PropertyType);
         Assert.Equal(
-            typeof(double),
+            typeof(long),
             typeof(AgentProtocolStatusItem)
                 .GetProperty(nameof(AgentProtocolStatusItem.DurationMilliseconds))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(string),
+            typeof(PublicProtocolStatus)
+                .GetProperty(nameof(PublicProtocolStatus.Endpoint))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(string),
+            typeof(AgentProtocolStatusItem)
+                .GetProperty(nameof(AgentProtocolStatusItem.Endpoint))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(string),
+            typeof(PublicProtocolStatus)
+                .GetProperty(nameof(PublicProtocolStatus.Error))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(string),
+            typeof(AgentProtocolStatusItem)
+                .GetProperty(nameof(AgentProtocolStatusItem.Error))!
                 .PropertyType);
         Assert.Equal(
             typeof(double?),
@@ -292,6 +326,16 @@ public sealed class AgentSnapshotContractTests
             typeof(int?),
             typeof(AgentContainerStatusItem)
                 .GetProperty(nameof(AgentContainerStatusItem.RestartCount))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(string),
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.Image))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(string),
+            typeof(AgentContainerStatusItem)
+                .GetProperty(nameof(AgentContainerStatusItem.Image))!
                 .PropertyType);
     }
 
@@ -339,13 +383,18 @@ public sealed class AgentSnapshotContractTests
         Assert.Null(publicContainer.MemoryPercent);
         Assert.Null(publicContainer.CpuPercent);
         Assert.Equal(6, publicContainer.RestartCount);
+        Assert.Equal(
+            "private/internal-image:1",
+            publicContainer.Image);
         Assert.True(publicSnapshot.DockerAvailable);
 
         string json = JsonSerializer.Serialize(
             publicSnapshot,
             new JsonSerializerOptions(
                 JsonSerializerDefaults.Web));
-        Assert.DoesNotContain("internal-image", json);
+        Assert.Contains(
+            "\"image\":\"private/internal-image:1\"",
+            json);
 
         AgentSnapshotItem? dashboardSnapshot =
             JsonSerializer.Deserialize<AgentSnapshotItem>(
@@ -361,6 +410,121 @@ public sealed class AgentSnapshotContractTests
         Assert.Null(dashboardContainer.MemoryUsageBytes);
         Assert.Null(dashboardContainer.CpuPercent);
         Assert.Equal(6, dashboardContainer.RestartCount);
+        Assert.Equal(
+            "private/internal-image:1",
+            dashboardContainer.Image);
+    }
+
+    [Fact]
+    public void LargeLongDurationAndDiagnosticFieldsSurviveJsonRoundTrip()
+    {
+        const long duration = 9_007_199_254_740_993;
+        DateTimeOffset capturedAt = DateTimeOffset.UtcNow;
+        var stored = new StoredNodeSnapshot(
+            Snapshot: new NodeSnapshotEvent(
+                Node: "node-1",
+                CapturedAt: capturedAt,
+                Host: null,
+                Protocols:
+                [
+                    new ProtocolProbeResult(
+                        "qotd",
+                        "example.internal:17",
+                        false,
+                        duration,
+                        "SocketException: Connection refused")
+                ],
+                Containers: [],
+                DockerAvailable: true,
+                DockerError: null),
+            PublishSucceeded: true,
+            LastPublishAttemptAt: capturedAt,
+            UpdatedAt: capturedAt);
+        PublicNodeSnapshot publicSnapshot =
+            AgentSnapshotEndpointRouteBuilderExtensions
+                .CreatePublicSnapshot(
+                    stored,
+                    capturedAt,
+                    TimeSpan.FromMinutes(1));
+
+        string json = JsonSerializer.Serialize(
+            publicSnapshot,
+            new JsonSerializerOptions(
+                JsonSerializerDefaults.Web));
+
+        Assert.Contains($"\"durationMilliseconds\":{duration}", json);
+        Assert.Contains(
+            "\"endpoint\":\"example.internal:17\"",
+            json);
+        Assert.Contains(
+            "\"error\":\"Connection refused\"",
+            json);
+
+        AgentSnapshotItem dashboardSnapshot =
+            Assert.IsType<AgentSnapshotItem>(
+                JsonSerializer.Deserialize<AgentSnapshotItem>(
+                    json,
+                    new JsonSerializerOptions(
+                        JsonSerializerDefaults.Web)));
+        AgentProtocolStatusItem protocol =
+            Assert.Single(dashboardSnapshot.Protocols);
+
+        Assert.Equal(duration, protocol.DurationMilliseconds);
+        Assert.Equal("example.internal:17", protocol.Endpoint);
+        Assert.Equal("Connection refused", protocol.Error);
+    }
+
+    [Fact]
+    public void DashboardDeserializesOlderPayloadWithoutOptionalDiagnostics()
+    {
+        const string json =
+            """
+            {
+              "node": "older-agent",
+              "capturedAt": "2026-07-18T12:00:00+00:00",
+              "ageSeconds": 5,
+              "stale": false,
+              "host": null,
+              "missionControlPublishSucceeded": null,
+              "lastMissionControlPublishAttemptAt": null,
+              "protocols": [
+                {
+                  "service": "echo",
+                  "succeeded": true,
+                  "durationMilliseconds": 42
+                }
+              ],
+              "containers": [
+                {
+                  "name": "api",
+                  "state": "running",
+                  "memoryUsageBytes": 100,
+                  "memoryLimitBytes": 1000,
+                  "memoryPercent": 10,
+                  "cpuPercent": 2,
+                  "restartCount": 0
+                }
+              ],
+              "dockerAvailable": true,
+              "dockerError": null
+            }
+            """;
+
+        AgentSnapshotItem snapshot =
+            Assert.IsType<AgentSnapshotItem>(
+                JsonSerializer.Deserialize<AgentSnapshotItem>(
+                    json,
+                    new JsonSerializerOptions(
+                        JsonSerializerDefaults.Web)));
+        AgentProtocolStatusItem protocol =
+            Assert.Single(snapshot.Protocols);
+        AgentContainerStatusItem container =
+            Assert.Single(snapshot.Containers);
+
+        Assert.Equal(42, protocol.DurationMilliseconds);
+        Assert.Null(protocol.Endpoint);
+        Assert.Null(protocol.Error);
+        Assert.Null(container.Image);
     }
 
     [Fact]
@@ -499,6 +663,52 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(
             "12.5%",
             ContainerResourcePresentation.FormatCpu(12.5));
+    }
+
+    [Fact]
+    public void DashboardDiagnosticPresentationIsExplicitAndNeutral()
+    {
+        Assert.NotEqual(
+            AgentDiagnosticPresentation.ConfiguredEndpointLabel,
+            AgentDiagnosticPresentation.ObservedEndpointLabel);
+        Assert.NotEqual(
+            AgentDiagnosticPresentation.ConfiguredImageLabel,
+            AgentDiagnosticPresentation.ObservedImageLabel);
+        Assert.Equal(
+            "probe.internal:17",
+            AgentDiagnosticPresentation.FormatOptional(
+                "probe.internal:17"));
+        Assert.Equal(
+            "observed/image:1",
+            AgentDiagnosticPresentation.FormatOptional(
+                "observed/image:1"));
+        Assert.Equal(
+            "—",
+            AgentDiagnosticPresentation.FormatOptional(null));
+        Assert.Equal(
+            "9,007,199,254,740,993 ms",
+            AgentDiagnosticPresentation.FormatDuration(
+                9_007_199_254_740_993));
+        Assert.Equal(
+            "0 ms",
+            AgentDiagnosticPresentation.FormatDuration(0));
+        Assert.Equal(
+            "42 ms",
+            AgentDiagnosticPresentation.FormatDuration(42));
+        Assert.Equal(
+            "Connection refused",
+            AgentDiagnosticPresentation.GetFailureReason(
+                succeeded: false,
+                "Connection refused"));
+        Assert.Equal(
+            AgentDiagnosticPresentation.MissingFailureReason,
+            AgentDiagnosticPresentation.GetFailureReason(
+                succeeded: false,
+                error: null));
+        Assert.Null(
+            AgentDiagnosticPresentation.GetFailureReason(
+                succeeded: true,
+                "stale error"));
     }
 
     [Fact]

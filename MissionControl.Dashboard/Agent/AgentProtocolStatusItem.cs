@@ -3,4 +3,6 @@
 public sealed record AgentProtocolStatusItem(
     string Service,
     bool Succeeded,
-    double DurationMilliseconds);
+    long DurationMilliseconds,
+    string? Endpoint = null,
+    string? Error = null);

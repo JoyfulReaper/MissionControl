@@ -171,6 +171,95 @@ public sealed class SnapshotPublicationGateTests
                 publishedAt.AddMinutes(1)));
     }
 
+    [Fact]
+    public void ProtocolEndpointChangeIsOperationalChange()
+    {
+        var gate = new SnapshotPublicationGate(TimeSpan.FromHours(1));
+        DateTimeOffset publishedAt = DateTimeOffset.UtcNow;
+
+        gate.MarkPublished(
+            CreateSnapshot(
+                dockerAvailable: true,
+                protocols:
+                [
+                    CreateProtocol("old.internal:7")
+                ]),
+            publishedAt);
+
+        Assert.True(
+            gate.IsDue(
+                CreateSnapshot(
+                    dockerAvailable: true,
+                    protocols:
+                    [
+                        CreateProtocol("new.internal:7")
+                    ]),
+                publishedAt.AddMinutes(1)));
+    }
+
+    [Fact]
+    public void ProtocolErrorWordingAndDurationDoNotTriggerPublication()
+    {
+        var gate = new SnapshotPublicationGate(TimeSpan.FromHours(1));
+        DateTimeOffset publishedAt = DateTimeOffset.UtcNow;
+
+        gate.MarkPublished(
+            CreateSnapshot(
+                dockerAvailable: true,
+                protocols:
+                [
+                    CreateProtocol(
+                        "api.internal:7",
+                        succeeded: false,
+                        duration: 10,
+                        error: "Connection refused")
+                ]),
+            publishedAt);
+
+        Assert.False(
+            gate.IsDue(
+                CreateSnapshot(
+                    dockerAvailable: true,
+                    protocols:
+                    [
+                        CreateProtocol(
+                            "api.internal:7",
+                            succeeded: false,
+                            duration: 999,
+                            error: "Connection was refused by the host")
+                    ]),
+                publishedAt.AddMinutes(1)));
+    }
+
+    [Fact]
+    public void ContainerImageChangeIsOperationalChange()
+    {
+        var gate = new SnapshotPublicationGate(TimeSpan.FromHours(1));
+        DateTimeOffset publishedAt = DateTimeOffset.UtcNow;
+        ContainerMetric published =
+            CreateContainer("api", "running") with
+            {
+                Image = "missioncontrol/api:1"
+            };
+        ContainerMetric current = published with
+        {
+            Image = "missioncontrol/api:2"
+        };
+
+        gate.MarkPublished(
+            CreateSnapshot(
+                dockerAvailable: true,
+                containers: [published]),
+            publishedAt);
+
+        Assert.True(
+            gate.IsDue(
+                CreateSnapshot(
+                    dockerAvailable: true,
+                    containers: [current]),
+                publishedAt.AddMinutes(1)));
+    }
+
     private static void AssertOperationalChange(
         IReadOnlyList<ContainerMetric> publishedContainers,
         IReadOnlyList<ContainerMetric> currentContainers)
@@ -208,10 +297,25 @@ public sealed class SnapshotPublicationGateTests
             RestartCount: restartCount);
     }
 
+    private static ProtocolProbeResult CreateProtocol(
+        string endpoint,
+        bool succeeded = true,
+        long duration = 10,
+        string? error = null)
+    {
+        return new ProtocolProbeResult(
+            Service: "echo",
+            Endpoint: endpoint,
+            Succeeded: succeeded,
+            DurationMilliseconds: duration,
+            Error: error);
+    }
+
     private static NodeSnapshotEvent CreateSnapshot(
         bool dockerAvailable,
         double cpuPercent = 10,
-        IReadOnlyList<ContainerMetric>? containers = null)
+        IReadOnlyList<ContainerMetric>? containers = null,
+        IReadOnlyList<ProtocolProbeResult>? protocols = null)
     {
         return new NodeSnapshotEvent(
             Node: "node-1",
@@ -221,7 +325,7 @@ public sealed class SnapshotPublicationGateTests
                 CpuPercent: cpuPercent,
                 MemoryTotalBytes: 1_000,
                 MemoryAvailableBytes: 500),
-            Protocols: [],
+            Protocols: protocols ?? [],
             Containers: containers ?? [],
             DockerAvailable: dockerAvailable,
             DockerError: dockerAvailable

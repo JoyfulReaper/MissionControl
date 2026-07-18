@@ -40,13 +40,37 @@
             </div>
 
             <div class="service-meta">
-                <span>Endpoint</span>
+                <span>
+                    @AgentDiagnosticPresentation.ConfiguredEndpointLabel
+                </span>
                 <strong>@(Service.Endpoint ?? "—")</strong>
             </div>
 
             <div class="service-meta">
-                <span>Image</span>
+                <span>
+                    @AgentDiagnosticPresentation.ObservedEndpointLabel
+                </span>
+                <strong>
+                    @AgentDiagnosticPresentation.FormatOptional(
+                        Protocol?.Endpoint)
+                </strong>
+            </div>
+
+            <div class="service-meta">
+                <span>
+                    @AgentDiagnosticPresentation.ConfiguredImageLabel
+                </span>
                 <strong>@(Service.Image ?? "—")</strong>
+            </div>
+
+            <div class="service-meta">
+                <span>
+                    @AgentDiagnosticPresentation.ObservedImageLabel
+                </span>
+                <strong>
+                    @AgentDiagnosticPresentation.FormatOptional(
+                        Container?.Image)
+                </strong>
             </div>
 
             <div class="service-meta">
@@ -92,10 +116,24 @@
                     <strong>
                         @(Protocol is null
                             ? "—"
-                            : FormatDuration(
+                            : AgentDiagnosticPresentation.FormatDuration(
                                 Protocol.DurationMilliseconds))
                     </strong>
                 </div>
+
+                @if (Protocol is { Succeeded: false })
+                {
+                    <div class="service-meta service-meta-diagnostic">
+                        <span>
+                            @AgentDiagnosticPresentation.FailureReasonLabel
+                        </span>
+                        <strong>
+                            @AgentDiagnosticPresentation.GetFailureReason(
+                                Protocol.Succeeded,
+                                Protocol.Error)
+                        </strong>
+                    </div>
+                }
             }
         </div>
 
@@ -177,7 +215,9 @@
         }
 
         return Protocol.Succeeded
-            ? $"REACHABLE · {FormatDuration(Protocol.DurationMilliseconds)}"
+            ? $"REACHABLE · " +
+              AgentDiagnosticPresentation.FormatDuration(
+                  Protocol.DurationMilliseconds)
             : "PROBE FAILED";
     }
 
@@ -223,8 +263,4 @@
         };
     }
 
-    private static string FormatDuration(double durationMilliseconds)
-    {
-        return $"{durationMilliseconds:0.#} ms";
-    }
 }

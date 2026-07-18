@@ -7,4 +7,5 @@ public sealed record PublicContainerStatus(
     long? MemoryLimitBytes,
     double? MemoryPercent,
     double? CpuPercent,
-    int? RestartCount);
+    int? RestartCount,
+    string? Image = null);

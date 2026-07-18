@@ -16,6 +16,11 @@
                     <strong>@container.Name</strong>
                     <span>@container.State</span>
                     <span>
+                        Observed image:
+                        @AgentDiagnosticPresentation.FormatOptional(
+                            container.Image)
+                    </span>
+                    <span>
                         @ContainerResourcePresentation.FormatMemory(
                             container.MemoryUsageBytes,
                             container.MemoryLimitBytes,

@@ -3,4 +3,6 @@
 public sealed record PublicProtocolStatus(
     string Service,
     bool Succeeded,
-    long DurationMilliseconds);
+    long DurationMilliseconds,
+    string? Endpoint = null,
+    string? Error = null);

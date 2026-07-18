@@ -131,6 +131,128 @@ public sealed class SqliteNodeSnapshotStoreTests
     }
 
     [Fact]
+    public async Task CurrentDiagnosticFieldsRoundTripExactly()
+    {
+        await using var fixture =
+            await AgentSnapshotStoreFixture.CreateAsync();
+        DateTimeOffset capturedAt = DateTimeOffset.UtcNow;
+        var snapshot = new NodeSnapshotEvent(
+            Node: "diagnostic-node",
+            CapturedAt: capturedAt,
+            Host: null,
+            Protocols:
+            [
+                new ProtocolProbeResult(
+                    Service: "qotd",
+                    Endpoint: "example.internal:17",
+                    Succeeded: false,
+                    DurationMilliseconds: 9_007_199_254_740_993,
+                    Error: "SocketException: Connection refused")
+            ],
+            Containers:
+            [
+                new ContainerMetric(
+                    Name: "worker",
+                    Image: "missioncontrol/worker:6",
+                    State: "exited",
+                    MemoryUsageBytes: null,
+                    MemoryLimitBytes: null,
+                    MemoryPercent: null,
+                    CpuPercent: null,
+                    RestartCount: 3)
+            ],
+            DockerAvailable: true,
+            DockerError: null);
+
+        await fixture.SnapshotStore.SaveAsync(
+            snapshot,
+            CancellationToken.None);
+
+        StoredNodeSnapshot stored =
+            await GetRequiredSnapshotAsync(
+                fixture.SnapshotStore,
+                snapshot.Node);
+
+        AssertProtocolResultsEqual(
+            snapshot.Protocols,
+            stored.Snapshot.Protocols);
+        AssertContainerMetricsEqual(
+            snapshot.Containers,
+            stored.Snapshot.Containers);
+    }
+
+    [Fact]
+    public async Task OlderSnapshotJsonWithoutOptionalDiagnosticsRemainsReadable()
+    {
+        await using var fixture =
+            await AgentSnapshotStoreFixture.CreateAsync();
+        NodeSnapshotEvent seed = CreateSnapshot(
+            node: "legacy-diagnostic-node");
+
+        await fixture.SnapshotStore.SaveAsync(
+            seed,
+            CancellationToken.None);
+
+        const string legacyPayload =
+            """
+            {
+              "node": "legacy-diagnostic-node",
+              "capturedAt": "2026-07-18T12:00:00+00:00",
+              "host": null,
+              "protocols": [
+                {
+                  "service": "echo",
+                  "succeeded": true,
+                  "durationMilliseconds": 25
+                }
+              ],
+              "containers": [
+                {
+                  "name": "api",
+                  "state": "running",
+                  "memoryUsageBytes": 10,
+                  "memoryLimitBytes": 100,
+                  "memoryPercent": 10,
+                  "cpuPercent": 1,
+                  "restartCount": 0
+                }
+              ],
+              "dockerAvailable": true,
+              "dockerError": null
+            }
+            """;
+        await using SqliteConnection connection =
+            fixture.Database.CreateConnection();
+        await connection.OpenAsync();
+        await connection.ExecuteAsync(
+            """
+            UPDATE NodeSnapshots
+            SET Payload = @Payload
+            WHERE Node = @Node;
+            """,
+            new
+            {
+                Payload = legacyPayload,
+                Node = seed.Node
+            });
+
+        StoredNodeSnapshot stored =
+            await GetRequiredSnapshotAsync(
+                fixture.SnapshotStore,
+                seed.Node);
+        ProtocolProbeResult protocol =
+            Assert.Single(stored.Snapshot.Protocols);
+        ContainerMetric container =
+            Assert.Single(stored.Snapshot.Containers);
+
+        Assert.Equal(25, protocol.DurationMilliseconds);
+        Assert.Null(protocol.Endpoint);
+        Assert.Null(protocol.Error);
+        Assert.Null(container.Image);
+        Assert.True(stored.Snapshot.DockerAvailable);
+    }
+
+    [Fact]
     public async Task RecordPublishResultAsyncStoresSuccessfulPublication()
     {
         await using var fixture =
