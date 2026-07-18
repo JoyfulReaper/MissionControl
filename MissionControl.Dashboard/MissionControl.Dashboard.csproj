@@ -13,4 +13,8 @@
 	<PackageReference Include="JoyfulReaperLib.MissionControl" Version="0.0.1" />
 </ItemGroup>
 
+<ItemGroup>
+	<InternalsVisibleTo Include="MissionControl.Tests" />
+</ItemGroup>
+
 </Project>

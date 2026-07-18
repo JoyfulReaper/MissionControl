@@ -63,6 +63,10 @@
                 @GetPublishState()
             </span>
 
+            <span class="service-chip @GetDockerStateClass()">
+                @GetDockerState()
+            </span>
+
             @if (Snapshot?.LastMissionControlPublishAttemptAt is not null)
             {
                 <span class="snapshot-publish-attempt">
@@ -76,6 +80,14 @@
                 </span>
             }
         </div>
+
+        @if (Snapshot?.DockerAvailable == false &&
+             !string.IsNullOrWhiteSpace(Snapshot.DockerError))
+        {
+            <div class="snapshot-meta snapshot-error">
+                @Snapshot.DockerError
+            </div>
+        }
     </div>
 
     <button type="button"
@@ -113,6 +125,26 @@
     private string GetPublishStateClass()
     {
         return Snapshot?.MissionControlPublishSucceeded switch
+        {
+            true => "status-running",
+            false => "status-stopped",
+            _ => "status-unknown"
+        };
+    }
+
+    private string GetDockerState()
+    {
+        return Snapshot?.DockerAvailable switch
+        {
+            true => "DOCKER AVAILABLE",
+            false => "DOCKER UNAVAILABLE",
+            _ => "DOCKER UNKNOWN"
+        };
+    }
+
+    private string GetDockerStateClass()
+    {
+        return Snapshot?.DockerAvailable switch
         {
             true => "status-running",
             false => "status-stopped",

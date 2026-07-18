@@ -143,17 +143,18 @@
     [Parameter, EditorRequired]
     public bool IsSnapshotAvailable { get; set; }
 
+    [Parameter, EditorRequired]
+    public bool? DockerAvailable { get; set; }
+
     private bool HasProtocolServiceKey =>
         !string.IsNullOrWhiteSpace(Service.ProtocolServiceKey);
 
     private string GetContainerState()
     {
-        if (Container is not null)
-        {
-            return Container.State.ToUpperInvariant();
-        }
-
-        return IsSnapshotAvailable ? "MISSING" : "UNKNOWN";
+        return ContainerStatusPresentation.GetState(
+            IsSnapshotAvailable,
+            DockerAvailable,
+            Container?.State);
     }
 
     private string GetContainerStateClass()
@@ -162,6 +163,7 @@
         {
             "RUNNING" => "status-running",
             "MISSING" => "status-missing",
+            "UNAVAILABLE" => "status-unknown",
             "EXITED" or "STOPPED" => "status-stopped",
             _ => "status-unknown"
         };

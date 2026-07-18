@@ -88,7 +88,8 @@ else
                     <ServiceEntry Service="item.Service"
                                   Container="item.Container"
                                   Protocol="item.Protocol"
-                                  IsSnapshotAvailable="@(_snapshot is not null)" />
+                                  IsSnapshotAvailable="@(_snapshot is not null)"
+                                  DockerAvailable="@_snapshot?.DockerAvailable" />
                 }
             </div>
         </section>

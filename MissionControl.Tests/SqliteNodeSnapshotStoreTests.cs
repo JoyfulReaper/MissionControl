@@ -53,6 +53,12 @@ public sealed class SqliteNodeSnapshotStoreTests
         AssertContainerMetricsEqual(
             snapshot.Containers,
             stored.Snapshot.Containers);
+        Assert.Equal(
+            snapshot.DockerAvailable,
+            stored.Snapshot.DockerAvailable);
+        Assert.Equal(
+            snapshot.DockerError,
+            stored.Snapshot.DockerError);
         Assert.Null(stored.PublishSucceeded);
         Assert.Null(stored.LastPublishAttemptAt);
         Assert.Equal(TimeSpan.Zero, stored.UpdatedAt.Offset);
@@ -579,7 +585,9 @@ public sealed class SqliteNodeSnapshotStoreTests
                     MemoryPercent: 12.5,
                     CpuPercent: 3.2,
                     RestartCount: 4)
-            ]);
+            ],
+            DockerAvailable: false,
+            DockerError: "Docker metric collection is unavailable.");
     }
 
     private static async Task<StoredNodeSnapshot> GetRequiredSnapshotAsync(

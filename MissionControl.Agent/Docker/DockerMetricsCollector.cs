@@ -63,9 +63,52 @@ internal sealed class DockerMetricsCollector :
         };
     }
 
-    public async Task<IReadOnlyList<ContainerMetric>>
+    public async Task<DockerMetricsCollectionResult>
         GetMetricsAsync(
             CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            IReadOnlyList<ContainerMetric> containers =
+                await CollectMetricsAsync(cancellationToken);
+
+            return new DockerMetricsCollectionResult(
+                Succeeded: true,
+                Containers: containers,
+                Error: null);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Docker metric collection timed out.");
+
+            return new DockerMetricsCollectionResult(
+                Succeeded: false,
+                Containers: [],
+                Error: "Docker metric collection timed out.");
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Docker metric collection is unavailable.");
+
+            return new DockerMetricsCollectionResult(
+                Succeeded: false,
+                Containers: [],
+                Error: "Docker metric collection is unavailable.");
+        }
+    }
+
+    private async Task<IReadOnlyList<ContainerMetric>>
+        CollectMetricsAsync(
+            CancellationToken cancellationToken)
     {
         var apiPrefix = await GetApiPrefixAsync(
             cancellationToken);
@@ -104,6 +147,11 @@ internal sealed class DockerMetricsCollector :
                 metrics.Add(metric);
             }
             catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
                 when (!cancellationToken.IsCancellationRequested)
             {
                 _logger.LogWarning(
@@ -122,6 +170,13 @@ internal sealed class DockerMetricsCollector :
                 _logger.LogWarning(
                     exception,
                     "Docker returned invalid metric data for container {Container}.",
+                    name);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Docker metric collection failed for container {Container}.",
                     name);
             }
         }

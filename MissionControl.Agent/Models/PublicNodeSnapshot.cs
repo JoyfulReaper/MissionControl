@@ -9,4 +9,6 @@ public sealed record PublicNodeSnapshot(
     bool? MissionControlPublishSucceeded,
     DateTimeOffset? LastMissionControlPublishAttemptAt,
     IReadOnlyList<PublicProtocolStatus> Protocols,
-    IReadOnlyList<PublicContainerStatus> Containers);
+    IReadOnlyList<PublicContainerStatus> Containers,
+    bool? DockerAvailable = null,
+    string? DockerError = null);

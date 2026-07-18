@@ -46,69 +46,9 @@ internal sealed class AgentWorker(
         {
             try
             {
-                Task<IReadOnlyList<ContainerMetric>> containerTask =
-                    agentOptions.DockerEnabled
-                        ? CollectDockerMetricsAsync(stoppingToken)
-                        : Task.FromResult<IReadOnlyList<ContainerMetric>>([]);
-
-                Task<IReadOnlyList<ProtocolProbeResult>> protocolTask =
-                    agentOptions.Probes.Length > 0
-                        ? RunProtocolProbesAsync(
-                            agentOptions,
-                            stoppingToken)
-                        : Task.FromResult<IReadOnlyList<ProtocolProbeResult>>([]);
-
-                Task<HostMetric?> hostTask =
-                    CollectHostMetricsAsync(stoppingToken);
-
-                await Task.WhenAll(
-                    containerTask,
-                    protocolTask,
-                    hostTask);
-
-                var snapshot = new NodeSnapshotEvent(
-                    Node: agentOptions.NodeName,
-                    CapturedAt: DateTimeOffset.UtcNow,
-                    Host: await hostTask,
-                    Protocols: await protocolTask,
-                    Containers: await containerTask);
-
-                await snapshotStore.SaveAsync(
-                    snapshot,
+                await ExecuteIterationAsync(
+                    agentOptions,
                     stoppingToken);
-
-                DateTimeOffset publicationTime =
-                    DateTimeOffset.UtcNow;
-
-                if (!publicationGate.IsDue(
-                        snapshot,
-                        publicationTime))
-                {
-                    logger.LogDebug(
-                        "Node snapshot for {NodeName} was saved but publication was suppressed because no operational state changed.",
-                        snapshot.Node);
-
-                    continue;
-                }
-
-                bool published =
-                    await PublishSnapshotAsync(
-                        snapshot,
-                        stoppingToken);
-
-                await snapshotStore.RecordPublishResultAsync(
-                    node: snapshot.Node,
-                    capturedAt: snapshot.CapturedAt,
-                    succeeded: published,
-                    attemptedAt: publicationTime,
-                    cancellationToken: stoppingToken);
-
-                if (published)
-                {
-                    publicationGate.MarkPublished(
-                        snapshot,
-                        publicationTime);
-                }
             }
             catch (OperationCanceledException)
                 when (stoppingToken.IsCancellationRequested)
@@ -124,6 +64,84 @@ internal sealed class AgentWorker(
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    internal async Task ExecuteIterationAsync(
+        AgentOptions agentOptions,
+        CancellationToken cancellationToken)
+    {
+        Task<DockerMetricsCollectionResult> dockerTask =
+            agentOptions.DockerEnabled
+                ? CollectDockerMetricsAsync(cancellationToken)
+                : Task.FromResult(
+                    new DockerMetricsCollectionResult(
+                        Succeeded: false,
+                        Containers: [],
+                        Error: "Docker metric collection is disabled."));
+
+        Task<IReadOnlyList<ProtocolProbeResult>> protocolTask =
+            agentOptions.Probes.Length > 0
+                ? RunProtocolProbesAsync(
+                    agentOptions,
+                    cancellationToken)
+                : Task.FromResult<IReadOnlyList<ProtocolProbeResult>>([]);
+
+        Task<HostMetric?> hostTask =
+            CollectHostMetricsAsync(cancellationToken);
+
+        await Task.WhenAll(
+            dockerTask,
+            protocolTask,
+            hostTask);
+
+        DockerMetricsCollectionResult docker =
+            await dockerTask;
+
+        var snapshot = new NodeSnapshotEvent(
+            Node: agentOptions.NodeName,
+            CapturedAt: DateTimeOffset.UtcNow,
+            Host: await hostTask,
+            Protocols: await protocolTask,
+            Containers: docker.Containers,
+            DockerAvailable: docker.Succeeded,
+            DockerError: docker.Error);
+
+        await snapshotStore.SaveAsync(
+            snapshot,
+            cancellationToken);
+
+        DateTimeOffset publicationTime =
+            DateTimeOffset.UtcNow;
+
+        if (!publicationGate.IsDue(
+                snapshot,
+                publicationTime))
+        {
+            logger.LogDebug(
+                "Node snapshot for {NodeName} was saved but publication was suppressed because no operational state changed.",
+                snapshot.Node);
+
+            return;
+        }
+
+        bool published =
+            await PublishSnapshotAsync(
+                snapshot,
+                cancellationToken);
+
+        await snapshotStore.RecordPublishResultAsync(
+            node: snapshot.Node,
+            capturedAt: snapshot.CapturedAt,
+            succeeded: published,
+            attemptedAt: publicationTime,
+            cancellationToken: cancellationToken);
+
+        if (published)
+        {
+            publicationGate.MarkPublished(
+                snapshot,
+                publicationTime);
+        }
     }
 
     private async Task<bool> PublishSnapshotAsync(
@@ -175,12 +193,42 @@ internal sealed class AgentWorker(
                 cancellationToken);
     }
 
-    private async Task<IReadOnlyList<ContainerMetric>>
+    private async Task<DockerMetricsCollectionResult>
         CollectDockerMetricsAsync(
             CancellationToken cancellationToken)
     {
-        return await dockerMetricsCollector.GetMetricsAsync(
-            cancellationToken);
+        try
+        {
+            return await dockerMetricsCollector.GetMetricsAsync(
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Docker metric collection timed out.");
+
+            return new DockerMetricsCollectionResult(
+                Succeeded: false,
+                Containers: [],
+                Error: "Docker metric collection timed out.");
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Docker metric collection is unavailable.");
+
+            return new DockerMetricsCollectionResult(
+                Succeeded: false,
+                Containers: [],
+                Error: "Docker metric collection is unavailable.");
+        }
     }
 
     private async Task<HostMetric?> CollectHostMetricsAsync(

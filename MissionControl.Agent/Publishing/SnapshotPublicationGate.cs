@@ -66,6 +66,7 @@ internal sealed class SnapshotPublicationGate
 
     private sealed record SnapshotFingerprint(
         string Node,
+        bool? DockerAvailable,
         ProtocolFingerprint[] Protocols,
         ContainerFingerprint[] Containers)
     {
@@ -104,6 +105,7 @@ internal sealed class SnapshotPublicationGate
 
             return new SnapshotFingerprint(
                 snapshot.Node,
+                snapshot.DockerAvailable,
                 protocols,
                 containers);
         }
@@ -120,6 +122,7 @@ internal sealed class SnapshotPublicationGate
                        Node,
                        other.Node,
                        StringComparison.Ordinal) &&
+                   DockerAvailable == other.DockerAvailable &&
                    Protocols.SequenceEqual(
                        other.Protocols) &&
                    Containers.SequenceEqual(
@@ -133,6 +136,8 @@ internal sealed class SnapshotPublicationGate
             hash.Add(
                 Node,
                 StringComparer.Ordinal);
+
+            hash.Add(DockerAvailable);
 
             foreach (ProtocolFingerprint protocol in Protocols)
             {

@@ -9,7 +9,9 @@ public sealed record AgentSnapshotItem(
     bool? MissionControlPublishSucceeded,
     DateTimeOffset? LastMissionControlPublishAttemptAt,
     IReadOnlyList<AgentProtocolStatusItem> Protocols,
-    IReadOnlyList<AgentContainerStatusItem> Containers);
+    IReadOnlyList<AgentContainerStatusItem> Containers,
+    bool? DockerAvailable = null,
+    string? DockerError = null);
 
 public sealed record HostMetricItem(
     int LogicalProcessorCount,
