@@ -1,9 +1,9 @@
 using JoyfulReaperLib.MissionControl;
 using Microsoft.Extensions.Options;
 using MissionControl.Agent.Docker;
-using MissionControl.Agent.Host;
 using MissionControl.Agent.Models;
 using MissionControl.Agent.Protocols;
+using MissionControl.Agent.Publishing;
 using MissionControl.Agent.Storage;
 
 namespace MissionControl.Agent;
@@ -11,10 +11,10 @@ namespace MissionControl.Agent;
 internal sealed class AgentWorker(
     ILogger<AgentWorker> logger,
     IDockerMetricsCollector dockerMetricsCollector,
-    IHostMetricsCollector hostMetricsCollector,
     IMissionControlClient missionControlClient,
     ProtocolProbeRunner protocolProbeRunner,
     INodeSnapshotStore snapshotStore,
+    SnapshotPublicationGate publicationGate,
     IOptions<AgentOptions> options) : BackgroundService
 {
     private const string SnapshotEventType =
@@ -56,21 +56,31 @@ internal sealed class AgentWorker(
                             stoppingToken)
                         : Task.FromResult<IReadOnlyList<ProtocolProbeResult>>([]);
 
-                Task<HostMetric?> hostTask =
-                    CollectHostMetricsAsync(stoppingToken);
-
-                await Task.WhenAll(containerTask, protocolTask, hostTask);
+                await Task.WhenAll(containerTask, protocolTask);
 
                 var snapshot = new NodeSnapshotEvent(
                     Node: agentOptions.NodeName,
                     CapturedAt: DateTimeOffset.UtcNow,
-                    Host: await hostTask,
                     Protocols: await protocolTask,
                     Containers: await containerTask);
 
                 await snapshotStore.SaveAsync(
                     snapshot,
                     stoppingToken);
+
+                DateTimeOffset publicationTime =
+                    DateTimeOffset.UtcNow;
+
+                if (!publicationGate.IsDue(
+                        snapshot,
+                        publicationTime))
+                {
+                    logger.LogDebug(
+                        "Node snapshot for {NodeName} was saved but publication was suppressed because no operational state changed.",
+                        snapshot.Node);
+
+                    continue;
+                }
 
                 bool published =
                     await PublishSnapshotAsync(
@@ -81,8 +91,15 @@ internal sealed class AgentWorker(
                     node: snapshot.Node,
                     capturedAt: snapshot.CapturedAt,
                     succeeded: published,
-                    attemptedAt: DateTimeOffset.UtcNow,
+                    attemptedAt: publicationTime,
                     cancellationToken: stoppingToken);
+
+                if (published)
+                {
+                    publicationGate.MarkPublished(
+                        snapshot,
+                        publicationTime);
+                }
             }
             catch (OperationCanceledException)
                 when (stoppingToken.IsCancellationRequested)
@@ -155,28 +172,5 @@ internal sealed class AgentWorker(
     {
         return await dockerMetricsCollector.GetMetricsAsync(
             cancellationToken);
-    }
-
-    private async Task<HostMetric?> CollectHostMetricsAsync(
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await hostMetricsCollector.GetMetricsAsync(
-                cancellationToken);
-        }
-        catch (OperationCanceledException)
-            when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            logger.LogWarning(
-                exception,
-                "Host metric collection failed.");
-
-            return null;
-        }
     }
 }
