@@ -67,6 +67,15 @@
                 @GetDockerState()
             </span>
 
+            @if (IsRefreshing &&
+                 !IsManualRefreshing &&
+                 Snapshot is not null)
+            {
+                <span class="service-chip status-unknown">
+                    REFRESHING
+                </span>
+            }
+
             @if (Snapshot?.LastMissionControlPublishAttemptAt is not null)
             {
                 <span class="snapshot-publish-attempt">
@@ -88,13 +97,21 @@
                 @Snapshot.DockerError
             </div>
         }
+
+        @if (Snapshot is not null &&
+             !string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <div class="snapshot-meta snapshot-error">
+                @ErrorMessage
+            </div>
+        }
     </div>
 
     <button type="button"
             class="btn btn-outline-primary"
-            disabled="@IsLoading"
+            disabled="@(IsLoading || IsRefreshing)"
             @onclick="OnRefresh">
-        @(IsLoading ? "Refreshing..." : "Refresh")
+        @((IsLoading || IsManualRefreshing) ? "Refreshing..." : "Refresh")
     </button>
 </section>
 
@@ -104,6 +121,12 @@
 
     [Parameter, EditorRequired]
     public bool IsLoading { get; set; }
+
+    [Parameter, EditorRequired]
+    public bool IsRefreshing { get; set; }
+
+    [Parameter, EditorRequired]
+    public bool IsManualRefreshing { get; set; }
 
     [Parameter, EditorRequired]
     public string? ErrorMessage { get; set; }

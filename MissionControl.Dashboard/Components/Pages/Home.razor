@@ -1,8 +1,13 @@
 ﻿@page "/"
 
+@implements IAsyncDisposable
+
 @inject IArchiveEventClient ArchiveClient
 @inject IAgentSnapshotClient AgentClient
 @inject IDashboardDateTimeFormatter DateTimeFormatter
+@inject IOptions<DashboardRefreshOptions> RefreshOptions
+@inject TimeProvider TimeProvider
+@inject IDashboardPollingLoop PollingLoop
 
 <PageTitle>Mission Control</PageTitle>
 
@@ -127,18 +132,32 @@
             </h2>
         </div>
 
-        @if (_agentSnapshot is not null)
+        @if (CurrentSnapshot is not null)
         {
             <div class="latest-event">
-                Node
-                <strong>@_agentSnapshot.Node</strong>
+                Node <strong>@CurrentSnapshot.Node</strong>
+                · Captured
+                <strong>
+                    @DateTimeFormatter.Format(CurrentSnapshot.CapturedAt)
+                </strong>
+                · Age
+                <strong>@CurrentSnapshot.AgeSeconds seconds</strong>
+                · @(CurrentSnapshot.Stale ? "Stale" : "Fresh")
             </div>
         }
     </div>
 
-    <NodeResourceCards Host="_agentSnapshot?.Host"
-                       IsLoading="_resourceIsLoading"
-                       ErrorMessage="@_resourceError" />
+    @if (CurrentSnapshot is not null &&
+         !string.IsNullOrWhiteSpace(_agentRefresh.RefreshWarning))
+    {
+        <div class="alert alert-warning">
+            @_agentRefresh.RefreshWarning
+        </div>
+    }
+
+    <NodeResourceCards Host="CurrentSnapshot?.Host"
+                       IsLoading="_agentRefresh.IsInitialLoading"
+                       ErrorMessage="@ResourceError" />
 </section>
 
 <div class="row g-4 mt-1">
@@ -181,17 +200,40 @@
 @code 
 {
     private ArchiveStatisticsItem? _statistics;
-    private AgentSnapshotItem? _agentSnapshot;
     private bool _isLoading = true;
-    private bool _resourceIsLoading = true;
     private string? _error;
-    private string? _resourceError;
+    private AgentSnapshotRefreshController _agentRefresh = null!;
+    private readonly CancellationTokenSource _disposeSource = new();
+    private Task? _pollingTask;
+    private bool _disposed;
+
+    private AgentSnapshotItem? CurrentSnapshot =>
+        _agentRefresh?.CurrentSnapshot;
+
+    private string? ResourceError =>
+        CurrentSnapshot?.Host is null
+            ? _agentRefresh.RefreshWarning ??
+              NodeResourceCalculations.UnavailableMessage
+            : null;
 
     protected override async Task OnInitializedAsync()
     {
+        _agentRefresh = new AgentSnapshotRefreshController(
+            AgentClient,
+            TimeProvider,
+            TimeSpan.FromSeconds(
+                RefreshOptions.Value.SnapshotStaleAfterSeconds));
+
         await Task.WhenAll(
             LoadArchiveStatisticsAsync(),
-            LoadAgentSnapshotAsync());
+            _agentRefresh.RefreshAsync(
+                _disposeSource.Token));
+
+        _pollingTask = PollingLoop.RunAsync(
+            TimeSpan.FromSeconds(
+                RefreshOptions.Value.AgentSnapshotRefreshSeconds),
+            RefreshAgentSnapshotAsync,
+            _disposeSource.Token);
     }
 
     private async Task LoadArchiveStatisticsAsync()
@@ -218,31 +260,33 @@
         }
     }
 
-    private async Task LoadAgentSnapshotAsync()
+    private async Task RefreshAgentSnapshotAsync(
+        CancellationToken cancellationToken)
     {
-        try
-        {
-            _agentSnapshot =
-                await AgentClient.GetSnapshotAsync();
+        await _agentRefresh.RefreshAsync(cancellationToken);
 
-            if (_agentSnapshot.Host is null)
+        if (!_disposed && !cancellationToken.IsCancellationRequested)
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        await _disposeSource.CancelAsync();
+
+        if (_pollingTask is not null)
+        {
+            try
             {
-                _resourceError =
-                    "This Agent snapshot does not include host resource metrics yet.";
+                await _pollingTask;
+            }
+            catch (OperationCanceledException)
+            {
             }
         }
-        catch (Exception exception)
-            when (exception is
-                HttpRequestException or
-                TaskCanceledException or
-                InvalidOperationException)
-        {
-            _resourceError =
-                $"Node resource usage is unavailable: {exception.Message}";
-        }
-        finally
-        {
-            _resourceIsLoading = false;
-        }
+
+        _disposeSource.Dispose();
     }
 }

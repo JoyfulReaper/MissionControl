@@ -4,6 +4,9 @@ namespace MissionControl.Dashboard.Components.Overview;
 
 internal static class NodeResourceCalculations
 {
+    public const string UnavailableMessage =
+        "Host resource metrics are unavailable for this snapshot.";
+
     public static double? GetCpuPercent(HostMetricItem? host)
     {
         return host?.CpuPercent;
@@ -13,6 +16,12 @@ internal static class NodeResourceCalculations
     {
         return host?.MemoryTotalBytes is > 0 &&
                host.MemoryAvailableBytes is >= 0;
+    }
+
+    public static bool HasResourceMetrics(HostMetricItem? host)
+    {
+        return GetCpuPercent(host) is not null ||
+               HasMemoryMetrics(host);
     }
 
     public static long GetMemoryUsedBytes(HostMetricItem? host)

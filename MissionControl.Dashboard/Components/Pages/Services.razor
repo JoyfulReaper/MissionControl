@@ -19,9 +19,11 @@
     </p>
 </header>
 
-<AgentSnapshotPanel Snapshot="_snapshot"
-                    IsLoading="_isLoading"
-                    ErrorMessage="@_snapshotError"
+<AgentSnapshotPanel Snapshot="CurrentSnapshot"
+                    IsLoading="_agentRefresh.IsInitialLoading"
+                    IsRefreshing="_agentRefresh.IsRefreshing"
+                    IsManualRefreshing="_isManualRefresh"
+                    ErrorMessage="@_agentRefresh.RefreshWarning"
                     OnRefresh="RefreshSnapshotAsync" />
 
 <ServiceSummaryCards ConfiguredServices="view.ConfiguredServices"
@@ -88,8 +90,8 @@ else
                     <ServiceEntry Service="item.Service"
                                   Container="item.Container"
                                   Protocol="item.Protocol"
-                                  IsSnapshotAvailable="@(_snapshot is not null)"
-                                  DockerAvailable="@_snapshot?.DockerAvailable" />
+                                  IsSnapshotAvailable="@(CurrentSnapshot is not null)"
+                                  DockerAvailable="@CurrentSnapshot?.DockerAvailable" />
                 }
             </div>
         </section>

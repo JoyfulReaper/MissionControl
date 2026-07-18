@@ -126,5 +126,23 @@ public sealed class NodeResourceCalculationsTests
         Assert.Equal(
             0,
             NodeResourceCalculations.GetMemoryPercent(null));
+        Assert.False(
+            NodeResourceCalculations.HasResourceMetrics(null));
+    }
+
+    [Fact]
+    public void NonNullHostWithoutCpuOrMemoryHasNoResourceMetrics()
+    {
+        var host = new HostMetricItem(
+            LogicalProcessorCount: 8,
+            CpuPercent: null,
+            MemoryTotalBytes: null,
+            MemoryAvailableBytes: null);
+
+        Assert.False(
+            NodeResourceCalculations.HasResourceMetrics(host));
+        Assert.Equal(
+            "Host resource metrics are unavailable for this snapshot.",
+            NodeResourceCalculations.UnavailableMessage);
     }
 }

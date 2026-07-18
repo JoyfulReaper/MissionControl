@@ -1,59 +1,87 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
 using MissionControl.Dashboard.Agent;
+using MissionControl.Dashboard.Configuration;
+using MissionControl.Dashboard.Refresh;
 using MissionControl.Dashboard.Services;
 
 namespace MissionControl.Dashboard.Components.Pages;
 
-public partial class Services
+public partial class Services : IAsyncDisposable
 {
-    private AgentSnapshotItem? _snapshot;
-    private bool _isLoading = true;
-    private string? _snapshotError;
     private string? _filter;
+    private AgentSnapshotRefreshController _agentRefresh = null!;
+    private readonly CancellationTokenSource _disposeSource = new();
+    private Task? _pollingTask;
+    private bool _isManualRefresh;
+    private bool _disposed;
+
+    private AgentSnapshotItem? CurrentSnapshot =>
+        _agentRefresh?.CurrentSnapshot;
 
     [Inject]
     private IAgentSnapshotClient AgentClient { get; set; } = null!;
 
     [Inject]
+    private IOptions<DashboardRefreshOptions> RefreshOptions { get; set; } =
+        null!;
+
+    [Inject]
+    private TimeProvider TimeProvider { get; set; } = null!;
+
+    [Inject]
+    private IDashboardPollingLoop PollingLoop { get; set; } = null!;
+
+    [Inject]
     private IOptions<ServiceCatalogOptions> CatalogOptions { get; set; } =
         null!;
 
-    protected override Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync()
     {
-        return LoadSnapshotAsync();
+        _agentRefresh = new AgentSnapshotRefreshController(
+            AgentClient,
+            TimeProvider,
+            TimeSpan.FromSeconds(
+                RefreshOptions.Value.SnapshotStaleAfterSeconds));
+
+        await _agentRefresh.RefreshAsync(
+            _disposeSource.Token);
+
+        _pollingTask = PollingLoop.RunAsync(
+            TimeSpan.FromSeconds(
+                RefreshOptions.Value.AgentSnapshotRefreshSeconds),
+            RefreshSnapshotFromPollingAsync,
+            _disposeSource.Token);
     }
 
     private async Task RefreshSnapshotAsync()
     {
-        if (_isLoading)
+        if (_agentRefresh.IsRefreshing)
         {
             return;
         }
 
-        _isLoading = true;
-        _snapshotError = null;
+        _isManualRefresh = true;
 
-        await LoadSnapshotAsync();
-    }
-
-    private async Task LoadSnapshotAsync()
-    {
         try
         {
-            _snapshot = await AgentClient.GetSnapshotAsync();
-        }
-        catch (Exception exception)
-            when (exception is
-                HttpRequestException or
-                TaskCanceledException or
-                InvalidOperationException)
-        {
-            _snapshotError = exception.Message;
+            await _agentRefresh.RefreshAsync(
+                _disposeSource.Token);
         }
         finally
         {
-            _isLoading = false;
+            _isManualRefresh = false;
+        }
+    }
+
+    private async Task RefreshSnapshotFromPollingAsync(
+        CancellationToken cancellationToken)
+    {
+        await _agentRefresh.RefreshAsync(cancellationToken);
+
+        if (!_disposed && !cancellationToken.IsCancellationRequested)
+        {
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -63,7 +91,7 @@ public partial class Services
             CatalogOptions.Value.Services;
 
         Dictionary<string, AgentContainerStatusItem> containersByName =
-            (_snapshot?.Containers ?? [])
+            (CurrentSnapshot?.Containers ?? [])
                 .GroupBy(
                     container => container.Name,
                     StringComparer.OrdinalIgnoreCase)
@@ -73,7 +101,7 @@ public partial class Services
                     StringComparer.OrdinalIgnoreCase);
 
         Dictionary<string, AgentProtocolStatusItem> protocolsByService =
-            (_snapshot?.Protocols ?? [])
+            (CurrentSnapshot?.Protocols ?? [])
                 .GroupBy(
                     protocol => protocol.Service,
                     StringComparer.OrdinalIgnoreCase)
@@ -112,13 +140,13 @@ public partial class Services
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         AgentContainerStatusItem[] uncataloguedContainers =
-            (_snapshot?.Containers ?? [])
+            (CurrentSnapshot?.Containers ?? [])
                 .Where(container =>
                     !cataloguedContainerNames.Contains(container.Name))
                 .ToArray();
 
         AgentProtocolStatusItem[] uncataloguedProtocols =
-            (_snapshot?.Protocols ?? [])
+            (CurrentSnapshot?.Protocols ?? [])
                 .Where(protocol =>
                     !cataloguedProtocolKeys.Contains(protocol.Service))
                 .ToArray();
@@ -137,13 +165,32 @@ public partial class Services
                     service.Visibility,
                     "Public",
                     StringComparison.OrdinalIgnoreCase)),
-            _snapshot?.Containers.Count ?? 0,
-            _snapshot?.Protocols.Count(protocol => protocol.Succeeded) ?? 0,
-            _snapshot?.Protocols.Count(protocol => !protocol.Succeeded) ?? 0,
+            CurrentSnapshot?.Containers.Count ?? 0,
+            CurrentSnapshot?.Protocols.Count(protocol => protocol.Succeeded) ?? 0,
+            CurrentSnapshot?.Protocols.Count(protocol => !protocol.Succeeded) ?? 0,
             filteredServices.Length,
             uncataloguedContainers,
             uncataloguedProtocols,
             groups);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        await _disposeSource.CancelAsync();
+
+        if (_pollingTask is not null)
+        {
+            try
+            {
+                await _pollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _disposeSource.Dispose();
     }
 
     private bool MatchesFilter(ServiceDefinition service)

@@ -11,7 +11,7 @@
         }
     </div>
 }
-else if (Host is not null)
+else if (Host is not null && HasResourceMetrics)
 {
     <div class="resource-grid">
         @if (HasMemoryMetrics)
@@ -76,6 +76,13 @@ else if (Host is not null)
         }
     </div>
 }
+else if (Host is not null)
+{
+    <div class="alert alert-warning resource-alert">
+        @(ErrorMessage ??
+            NodeResourceCalculations.UnavailableMessage)
+    </div>
+}
 else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 {
     <div class="alert alert-warning resource-alert">
@@ -98,6 +105,9 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
 
     private double? CpuPercent =>
         NodeResourceCalculations.GetCpuPercent(Host);
+
+    private bool HasResourceMetrics =>
+        NodeResourceCalculations.HasResourceMetrics(Host);
 
     private long MemoryUsedBytes =>
         NodeResourceCalculations.GetMemoryUsedBytes(Host);
