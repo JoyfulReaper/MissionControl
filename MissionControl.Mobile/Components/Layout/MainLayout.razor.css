@@ -75,3 +75,8 @@ main {
         padding-right: 1.5rem !important;
     }
 }
+
+.mobile-live-status {
+    color: var(--mc-text-muted);
+    font-size: 0.75rem;
+}

@@ -81,6 +81,36 @@ public sealed class MobileAgentSnapshotState(
         }
     }
 
+    public async Task RunPollingAsync(
+        TimeSpan interval,
+        CancellationToken cancellationToken)
+    {
+        if (interval <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(interval),
+                "The polling interval must be greater than zero.");
+        }
+
+        using var timer = new PeriodicTimer(interval);
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(
+                       cancellationToken))
+            {
+                await RefreshAsync(
+                    isManualRefresh: false,
+                    cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            // Normal application or layout shutdown.
+        }
+    }
+
     public void Dispose()
     {
         _refreshGate.Dispose();

@@ -1,4 +1,6 @@
 ﻿@inherits LayoutComponentBase
+@implements IAsyncDisposable
+@inject MobileAgentSnapshotState SnapshotState
 
 <div class="page">
     <div class="sidebar">
@@ -7,7 +9,9 @@
 
     <main>
         <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+            <span class="mobile-live-status">
+                Live status · refreshes every 30 seconds
+            </span>
         </div>
 
         <article class="content px-4">
@@ -15,3 +19,33 @@
         </article>
     </main>
 </div>
+
+@code {
+    private static readonly TimeSpan PollingInterval =
+        TimeSpan.FromSeconds(30);
+
+    private readonly CancellationTokenSource _disposeSource =
+        new();
+
+    private Task? _pollingTask;
+
+    protected override void OnInitialized()
+    {
+        _pollingTask =
+            SnapshotState.RunPollingAsync(
+                PollingInterval,
+                _disposeSource.Token);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposeSource.Cancel();
+
+        if (_pollingTask is not null)
+        {
+            await _pollingTask;
+        }
+
+        _disposeSource.Dispose();
+    }
+}
