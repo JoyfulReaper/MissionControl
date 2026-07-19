@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
+using MissionControl.Contracts.Agent;
 using MissionControl.Contracts.Services;
 using MissionControl.Dashboard.Agent;
 using MissionControl.Dashboard.Configuration;
@@ -131,7 +132,7 @@ public partial class Services : IAsyncDisposable
         IReadOnlyList<ServiceDefinition> services =
             CurrentCatalog;
 
-        Dictionary<string, AgentContainerStatusItem> containersByName =
+        Dictionary<string, PublicContainerStatus> containersByName =
             (CurrentSnapshot?.Containers ?? [])
                 .GroupBy(
                     container => container.Name,
@@ -141,7 +142,7 @@ public partial class Services : IAsyncDisposable
                     group => group.First(),
                     StringComparer.OrdinalIgnoreCase);
 
-        Dictionary<string, AgentProtocolStatusItem> protocolsByService =
+        Dictionary<string, PublicProtocolStatus> protocolsByService =
             (CurrentSnapshot?.Protocols ?? [])
                 .GroupBy(
                     protocol => protocol.Service,
@@ -180,13 +181,13 @@ public partial class Services : IAsyncDisposable
             .Select(service => service.ProtocolServiceKey!)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        AgentContainerStatusItem[] uncataloguedContainers =
+        PublicContainerStatus[] uncataloguedContainers =
             (CurrentSnapshot?.Containers ?? [])
                 .Where(container =>
                     !cataloguedContainerNames.Contains(container.Name))
                 .ToArray();
 
-        AgentProtocolStatusItem[] uncataloguedProtocols =
+        PublicProtocolStatus[] uncataloguedProtocols =
             (CurrentSnapshot?.Protocols ?? [])
                 .Where(protocol =>
                     !cataloguedProtocolKeys.Contains(protocol.Service))
@@ -277,9 +278,9 @@ public partial class Services : IAsyncDisposable
                service.SearchTerms.Any(term => Contains(term, filter));
     }
 
-    private static AgentContainerStatusItem? FindContainer(
+    private static PublicContainerStatus? FindContainer(
         ServiceDefinition service,
-        IReadOnlyDictionary<string, AgentContainerStatusItem> containers)
+        IReadOnlyDictionary<string, PublicContainerStatus> containers)
     {
         return !string.IsNullOrWhiteSpace(service.ContainerName) &&
                containers.TryGetValue(service.ContainerName, out var container)
@@ -287,9 +288,9 @@ public partial class Services : IAsyncDisposable
             : null;
     }
 
-    private static AgentProtocolStatusItem? FindProtocol(
+    private static PublicProtocolStatus? FindProtocol(
         ServiceDefinition service,
-        IReadOnlyDictionary<string, AgentProtocolStatusItem> protocols)
+        IReadOnlyDictionary<string, PublicProtocolStatus> protocols)
     {
         return !string.IsNullOrWhiteSpace(service.ProtocolServiceKey) &&
                protocols.TryGetValue(service.ProtocolServiceKey, out var protocol)
@@ -306,8 +307,8 @@ public partial class Services : IAsyncDisposable
 
     private sealed record ServiceItemView(
         ServiceDefinition Service,
-        AgentContainerStatusItem? Container,
-        AgentProtocolStatusItem? Protocol);
+        PublicContainerStatus? Container,
+        PublicProtocolStatus? Protocol);
 
     private sealed record ServiceGroupView(
         string Name,
@@ -321,7 +322,7 @@ public partial class Services : IAsyncDisposable
         int SuccessfulProbes,
         int FailedProbes,
         int MatchingServices,
-        IReadOnlyList<AgentContainerStatusItem> UncataloguedContainers,
-        IReadOnlyList<AgentProtocolStatusItem> UncataloguedProtocols,
+        IReadOnlyList<PublicContainerStatus> UncataloguedContainers,
+        IReadOnlyList<PublicProtocolStatus> UncataloguedProtocols,
         IReadOnlyList<ServiceGroupView> Groups);
 }

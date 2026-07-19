@@ -1,4 +1,4 @@
-namespace MissionControl.Dashboard.Components.Services;
+namespace MissionControl.UI.Components.Services;
 
 internal static class ContainerStatusPresentation
 {
@@ -37,7 +37,8 @@ internal static class ContainerStatusPresentation
                 "status-stopped",
             "CREATED" or "RESTARTING" or "PAUSED" =>
                 "status-warning",
-            "UNAVAILABLE" or "UNKNOWN" => "status-unknown",
+            "UNAVAILABLE" or "UNKNOWN" =>
+                "status-unknown",
             _ => "status-warning"
         };
     }

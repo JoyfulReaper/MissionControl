@@ -186,10 +186,10 @@
     public required ServiceDefinition Service { get; set; }
 
     [Parameter, EditorRequired]
-    public AgentContainerStatusItem? Container { get; set; }
+    public PublicContainerStatus? Container { get; set; }
 
     [Parameter, EditorRequired]
-    public AgentProtocolStatusItem? Protocol { get; set; }
+    public PublicProtocolStatus? Protocol { get; set; }
 
     [Parameter, EditorRequired]
     public bool IsSnapshotAvailable { get; set; }

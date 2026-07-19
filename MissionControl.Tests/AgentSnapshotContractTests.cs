@@ -1,9 +1,7 @@
 extern alias AgentApp;
-extern alias DashboardApp;
 using AgentApp::MissionControl.Agent.Endpoints;
 using AgentApp::MissionControl.Agent.Models;
 using AgentApp::MissionControl.Agent.Storage;
-using DashboardApp::MissionControl.Dashboard.Components.Services;
 using MissionControl.Contracts.Agent;
 using MissionControl.UI.Components.Services;
 using System.Net.Http.Json;
@@ -165,7 +163,7 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(
             attemptedAt,
             dashboardSnapshot.LastMissionControlPublishAttemptAt);
-        AgentContainerStatusItem dashboardContainer =
+        PublicContainerStatus dashboardContainer =
             Assert.Single(dashboardSnapshot.Containers);
         Assert.Equal(987_654_321, dashboardContainer.MemoryUsageBytes);
         Assert.Equal(2_147_483_648, dashboardContainer.MemoryLimitBytes);
@@ -273,8 +271,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(long),
-            typeof(AgentProtocolStatusItem)
-                .GetProperty(nameof(AgentProtocolStatusItem.DurationMilliseconds))!
+            typeof(PublicProtocolStatus)
+                .GetProperty(nameof(PublicProtocolStatus.DurationMilliseconds))!
                 .PropertyType);
         Assert.Equal(
             typeof(string),
@@ -283,8 +281,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(string),
-            typeof(AgentProtocolStatusItem)
-                .GetProperty(nameof(AgentProtocolStatusItem.Endpoint))!
+            typeof(PublicProtocolStatus)
+                .GetProperty(nameof(PublicProtocolStatus.Endpoint))!
                 .PropertyType);
         Assert.Equal(
             typeof(string),
@@ -293,8 +291,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(string),
-            typeof(AgentProtocolStatusItem)
-                .GetProperty(nameof(AgentProtocolStatusItem.Error))!
+            typeof(PublicProtocolStatus)
+                .GetProperty(nameof(PublicProtocolStatus.Error))!
                 .PropertyType);
         Assert.Equal(
             typeof(double?),
@@ -303,8 +301,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(double?),
-            typeof(AgentContainerStatusItem)
-                .GetProperty(nameof(AgentContainerStatusItem.CpuPercent))!
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.CpuPercent))!
                 .PropertyType);
         Assert.Equal(
             typeof(long?),
@@ -313,8 +311,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(long?),
-            typeof(AgentContainerStatusItem)
-                .GetProperty(nameof(AgentContainerStatusItem.MemoryUsageBytes))!
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.MemoryUsageBytes))!
                 .PropertyType);
         Assert.Equal(
             typeof(int?),
@@ -323,8 +321,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(int?),
-            typeof(AgentContainerStatusItem)
-                .GetProperty(nameof(AgentContainerStatusItem.RestartCount))!
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.RestartCount))!
                 .PropertyType);
         Assert.Equal(
             typeof(string),
@@ -333,8 +331,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(string),
-            typeof(AgentContainerStatusItem)
-                .GetProperty(nameof(AgentContainerStatusItem.Image))!
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.Image))!
                 .PropertyType);
     }
 
@@ -400,7 +398,7 @@ public sealed class AgentSnapshotContractTests
                 json,
                 new JsonSerializerOptions(
                     JsonSerializerDefaults.Web));
-        AgentContainerStatusItem dashboardContainer =
+        PublicContainerStatus dashboardContainer =
             Assert.Single(
                 Assert.IsType<AgentSnapshotItem>(
                     dashboardSnapshot).Containers);
@@ -465,7 +463,7 @@ public sealed class AgentSnapshotContractTests
                     json,
                     new JsonSerializerOptions(
                         JsonSerializerDefaults.Web)));
-        AgentProtocolStatusItem protocol =
+        PublicProtocolStatus protocol =
             Assert.Single(dashboardSnapshot.Protocols);
 
         Assert.Equal(duration, protocol.DurationMilliseconds);
@@ -515,9 +513,9 @@ public sealed class AgentSnapshotContractTests
                     json,
                     new JsonSerializerOptions(
                         JsonSerializerDefaults.Web)));
-        AgentProtocolStatusItem protocol =
+        PublicProtocolStatus protocol =
             Assert.Single(snapshot.Protocols);
-        AgentContainerStatusItem container =
+        PublicContainerStatus container =
             Assert.Single(snapshot.Containers);
 
         Assert.Equal(42, protocol.DurationMilliseconds);
