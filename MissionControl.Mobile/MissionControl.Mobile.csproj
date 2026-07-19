@@ -72,4 +72,8 @@
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
     </ItemGroup>
 
+    <ItemGroup>
+      <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
+    </ItemGroup>
+
 </Project>
