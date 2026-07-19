@@ -1,0 +1,197 @@
+﻿@page "/services"
+
+@inject IAgentSnapshotClient AgentClient
+@inject MobileServiceCatalog Catalog
+
+<PageTitle>Services</PageTitle>
+
+@{
+    ServiceCatalogView view =
+        ServiceCatalogViewBuilder.Build(
+            _services,
+            _snapshot,
+            _filter);
+}
+
+<div class="mobile-services-page">
+    <header class="mobile-page-header">
+        <div class="page-eyebrow">
+            Service operations
+        </div>
+
+        <h1>Services</h1>
+
+        <p>
+            Inspect applications, containers, protocols, and live
+            probe results.
+        </p>
+    </header>
+
+    <AgentSnapshotPanel Snapshot="_snapshot"
+                        IsLoading="_isLoading"
+                        IsRefreshing="_isRefreshing"
+                        IsManualRefreshing="_isManualRefreshing"
+                        ErrorMessage="@_snapshotError"
+                        TimestampFormatter="FormatTimestamp"
+                        OnRefresh="RefreshSnapshotAsync" />
+
+    @if (_catalogError is not null)
+    {
+        <div class="alert alert-danger">
+            @_catalogError
+        </div>
+    }
+
+    <ServiceSummaryCards ConfiguredServices="view.ConfiguredServices"
+                         RunningContainers="view.RunningContainers"
+                         PublicServices="view.PublicServices"
+                         SnapshotContainers="view.SnapshotContainers"
+                         SuccessfulProbes="view.SuccessfulProbes"
+                         FailedProbes="view.FailedProbes" />
+
+    <section class="service-toolbar">
+        <div>
+            <label for="mobile-service-filter"
+                   class="form-label">
+                Filter services
+            </label>
+
+            <input id="mobile-service-filter"
+                   type="search"
+                   class="form-control"
+                   placeholder="Name, protocol, container..."
+                   autocomplete="off"
+                   @bind="_filter"
+                   @bind:event="oninput" />
+        </div>
+
+        <div class="service-result-count">
+            @view.MatchingServices.ToString("N0")
+            matching services
+        </div>
+    </section>
+
+    <UncataloguedContainersPanel Containers="view.UncataloguedContainers" />
+
+    <UncataloguedProtocolsPanel Protocols="view.UncataloguedProtocols" />
+
+    @if (!_isLoading && view.Groups.Count == 0)
+    {
+        <div class="alert alert-info">
+            No services matched that filter.
+        </div>
+    }
+    else
+    {
+        @foreach (ServiceGroupView group in view.Groups)
+        {
+            <section class="service-group">
+                <div class="service-group-heading">
+                    <div>
+                        <div class="page-eyebrow">
+                            Service group
+                        </div>
+
+                        <h2>@group.Name</h2>
+                    </div>
+
+                    <span>
+                        @group.Services.Count.ToString("N0")
+                        services
+                    </span>
+                </div>
+
+                <div class="service-list">
+                    @foreach (ServiceItemView item in group.Services)
+                    {
+                        <ServiceEntry Service="item.Service"
+                                      Container="item.Container"
+                                      Protocol="item.Protocol"
+                                      IsSnapshotAvailable="@(_snapshot is not null)"
+                                      DockerAvailable="@_snapshot?.DockerAvailable" />
+                    }
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ServiceDefinition> _services = [];
+    private PublicNodeSnapshot? _snapshot;
+    private string? _filter;
+    private string? _catalogError;
+    private string? _snapshotError;
+    private bool _isLoading = true;
+    private bool _isRefreshing;
+    private bool _isManualRefreshing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _services = await Catalog.GetServicesAsync();
+        }
+        catch (Exception exception)
+            when (exception is
+                IOException or
+                JsonException or
+                InvalidOperationException)
+        {
+            _catalogError =
+                $"Could not load the service catalog: " +
+                exception.Message;
+        }
+
+        await LoadSnapshotAsync(isManualRefresh: false);
+    }
+
+    private Task RefreshSnapshotAsync()
+    {
+        return LoadSnapshotAsync(isManualRefresh: true);
+    }
+
+    private async Task LoadSnapshotAsync(
+        bool isManualRefresh)
+    {
+        if (_isRefreshing)
+        {
+            return;
+        }
+
+        _isRefreshing = true;
+        _isManualRefreshing = isManualRefresh;
+
+        try
+        {
+            _snapshot =
+                await AgentClient.GetSnapshotAsync();
+
+            _snapshotError = null;
+        }
+        catch (Exception exception)
+            when (exception is
+                HttpRequestException or
+                TaskCanceledException or
+                InvalidOperationException)
+        {
+            _snapshotError =
+                $"Latest Agent refresh failed: " +
+                exception.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+            _isRefreshing = false;
+            _isManualRefreshing = false;
+        }
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        return timestamp
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss zzz");
+    }
+}

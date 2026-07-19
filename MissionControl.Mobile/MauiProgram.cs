@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using MissionControl.Client.Agent;
+using MissionControl.Mobile.Services;
 
 namespace MissionControl.Mobile;
 
@@ -30,6 +31,8 @@ public static class MauiProgram
                 httpClient.Timeout =
                     TimeSpan.FromSeconds(10);
             });
+
+        builder.Services.AddSingleton<MobileServiceCatalog>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

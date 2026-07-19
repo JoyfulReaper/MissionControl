@@ -29,10 +29,10 @@
         <MauiXamlInflator>SourceGen</MauiXamlInflator>
 
         <!-- Display name -->
-        <ApplicationTitle>MissionControl.Mobile</ApplicationTitle>
+        <ApplicationTitle>MissionControl Mobile</ApplicationTitle>
 
         <!-- App Identifier -->
-        <ApplicationId>com.companyname.missioncontrol.mobile</ApplicationId>
+        <ApplicationId>com.kgivler.missioncontrol.mobile</ApplicationId>
 
         <!-- Versions -->
         <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
@@ -64,6 +64,7 @@
 
         <!-- Raw Assets (also remove the "Resources\Raw" prefix) -->
         <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<MauiAsset Include="..\MissionControl.Dashboard\services.json" LogicalName="services.json" />
     </ItemGroup>
 
     <ItemGroup>
@@ -78,5 +79,9 @@
       <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
       <ProjectReference Include="..\MissionControl.UI\MissionControl.UI.csproj" />
     </ItemGroup>
+
+	<ItemGroup>
+		<MauiAsset Include="..\MissionControl.Dashboard\services.json" Link="Resources\Raw\services.json" LogicalName="services.json" />
+	</ItemGroup>
 
 </Project>
