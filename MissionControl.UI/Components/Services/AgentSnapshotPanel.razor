@@ -1,5 +1,3 @@
-@inject IDashboardDateTimeFormatter DateTimeFormatter
-
 <section class="snapshot-panel">
     <div class="snapshot-copy">
         <div class="snapshot-heading">
@@ -26,7 +24,7 @@
                         Node <strong>@Snapshot.Node</strong>
                         · Captured
                         <strong>
-                            @(DateTimeFormatter.Format(
+                            @(TimestampFormatter(
                                 Snapshot.CapturedAt))
                         </strong>
                         · Age
@@ -81,7 +79,7 @@
                 <span class="snapshot-publish-attempt">
                     @PublicationStatusPresentation.AttemptTimestampLabel
                     <strong>
-                        @(DateTimeFormatter.Format(
+                        @(TimestampFormatter(
                             Snapshot
                                 .LastMissionControlPublishAttemptAt
                                 .Value))
@@ -117,7 +115,7 @@
 
 @code {
     [Parameter, EditorRequired]
-    public AgentSnapshotItem? Snapshot { get; set; }
+    public PublicNodeSnapshot? Snapshot { get; set; }
 
     [Parameter, EditorRequired]
     public bool IsLoading { get; set; }
@@ -131,8 +129,14 @@
     [Parameter, EditorRequired]
     public string? ErrorMessage { get; set; }
 
-    [Parameter]
-    [EditorRequired]
+    [Parameter, EditorRequired]
+    public Func<DateTimeOffset, string> TimestampFormatter
+    {
+        get;
+        set;
+    } = default!;
+
+    [Parameter, EditorRequired]
     public EventCallback OnRefresh { get; set; }
 
     private string GetPublishState()

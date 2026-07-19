@@ -5,6 +5,7 @@ using AgentApp::MissionControl.Agent.Models;
 using AgentApp::MissionControl.Agent.Storage;
 using DashboardApp::MissionControl.Dashboard.Components.Services;
 using MissionControl.Contracts.Agent;
+using MissionControl.UI.Components.Services;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Xunit;

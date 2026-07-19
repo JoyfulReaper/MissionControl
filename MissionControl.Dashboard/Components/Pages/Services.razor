@@ -1,5 +1,7 @@
 @page "/services"
 
+@inject IDashboardDateTimeFormatter DateTimeFormatter
+
 <PageTitle>Services</PageTitle>
 
 @{
@@ -24,6 +26,8 @@
                     IsRefreshing="_agentRefresh.IsRefreshing"
                     IsManualRefreshing="_isManualRefresh"
                     ErrorMessage="@_agentRefresh.RefreshWarning"
+                    TimestampFormatter="@(timestamp =>
+                    DateTimeFormatter.Format(timestamp))"
                     OnRefresh="RefreshSnapshotAsync" />
 
 @if (CatalogReloadWarning is not null)

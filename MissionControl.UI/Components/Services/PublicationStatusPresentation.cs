@@ -1,4 +1,4 @@
-namespace MissionControl.Dashboard.Components.Services;
+namespace MissionControl.UI.Components.Services;
 
 internal static class PublicationStatusPresentation
 {
