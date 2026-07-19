@@ -22,8 +22,4 @@
     <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="wwwroot\" />
-  </ItemGroup>
-
 </Project>
