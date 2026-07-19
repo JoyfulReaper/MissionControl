@@ -4,7 +4,7 @@
  * Licensed under the MIT License
  */
 
-namespace MissionControl.Dashboard.Archive;
+namespace MissionControl.Contracts.Archive;
 
 public sealed record ArchiveEventCursor(
     DateTimeOffset OccurredAt,

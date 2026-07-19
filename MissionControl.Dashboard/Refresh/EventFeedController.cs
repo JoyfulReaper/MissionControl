@@ -1,4 +1,5 @@
-using MissionControl.Dashboard.Archive;
+using MissionControl.Client.Archive;
+using MissionControl.Contracts.Archive;
 
 namespace MissionControl.Dashboard.Refresh;
 

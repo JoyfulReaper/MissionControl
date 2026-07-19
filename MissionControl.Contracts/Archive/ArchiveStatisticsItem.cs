@@ -1,4 +1,4 @@
-﻿namespace MissionControl.Dashboard.Archive;
+﻿namespace MissionControl.Contracts.Archive;
 
 public sealed record ArchiveStatisticsItem(
     long TotalEvents,

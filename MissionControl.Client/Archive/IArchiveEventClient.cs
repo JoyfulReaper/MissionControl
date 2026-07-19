@@ -4,7 +4,9 @@
  * Licensed under the MIT License
  */
 
-namespace MissionControl.Dashboard.Archive;
+using MissionControl.Contracts.Archive;
+
+namespace MissionControl.Client.Archive;
 
 public interface IArchiveEventClient
 {

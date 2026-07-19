@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.WebUtilities;
+using MissionControl.Contracts.Archive;
 using System.Globalization;
 using System.Net;
+using System.Net.Http.Json;
 
-namespace MissionControl.Dashboard.Archive;
+namespace MissionControl.Client.Archive;
 
 public class ArchiveEventClient(HttpClient client)
     : IArchiveEventClient
