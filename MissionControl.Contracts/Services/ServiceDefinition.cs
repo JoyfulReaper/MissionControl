@@ -1,4 +1,4 @@
-﻿namespace MissionControl.Dashboard.Services;
+﻿namespace MissionControl.Contracts.Services;
 
 public sealed class ServiceDefinition
 {

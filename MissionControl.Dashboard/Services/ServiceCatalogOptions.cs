@@ -1,4 +1,6 @@
-﻿namespace MissionControl.Dashboard.Services;
+﻿using MissionControl.Contracts.Services;
+
+namespace MissionControl.Dashboard.Services;
 
 public sealed class ServiceCatalogOptions
 {
