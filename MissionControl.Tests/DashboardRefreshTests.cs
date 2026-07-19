@@ -1,9 +1,8 @@
 extern alias DashboardApp;
-
-using DashboardApp::MissionControl.Dashboard.Agent;
 using DashboardApp::MissionControl.Dashboard.Archive;
 using DashboardApp::MissionControl.Dashboard.Configuration;
 using DashboardApp::MissionControl.Dashboard.Refresh;
+using MissionControl.Client.Agent;
 using MissionControl.Contracts.Agent;
 using Xunit;
 

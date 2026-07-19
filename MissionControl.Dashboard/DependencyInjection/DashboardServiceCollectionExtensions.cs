@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
-using MissionControl.Dashboard.Agent;
+using MissionControl.Client.Agent;
 using MissionControl.Dashboard.Archive;
 using MissionControl.Dashboard.Authentication;
 using MissionControl.Dashboard.Configuration;

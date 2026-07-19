@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="MissionControl.Agent/MissionControl.Agent.csproj" Id="be58040c-d4b0-4045-b81b-789092ec34e3" />
   <Project Path="MissionControl.Archive/MissionControl.Archive.csproj" />
+  <Project Path="MissionControl.Client/MissionControl.Client.csproj" Id="714d7d10-b8bd-4d8c-9c4c-d0c5187561a5" />
   <Project Path="MissionControl.Contracts/MissionControl.Contracts.csproj" />
   <Project Path="MissionControl.Dashboard/MissionControl.Dashboard.csproj" />
   <Project Path="MissionControl.Gateway/MissionControl.Gateway.csproj" />

@@ -18,6 +18,7 @@
 </ItemGroup>
 
 <ItemGroup>
+  <ProjectReference Include="..\MissionControl.Client\MissionControl.Client.csproj" />
   <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
   <ProjectReference Include="..\MissionControl.UI\MissionControl.UI.csproj" />
 </ItemGroup>

@@ -1,6 +1,4 @@
 extern alias DashboardApp;
-
-using DashboardApp::MissionControl.Dashboard.Agent;
 using DashboardApp::MissionControl.Dashboard.Components.Pages;
 using DashboardApp::MissionControl.Dashboard.Configuration;
 using DashboardApp::MissionControl.Dashboard.Refresh;
@@ -9,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using MissionControl.Client.Agent;
 using MissionControl.Contracts.Services;
 using Xunit;
 

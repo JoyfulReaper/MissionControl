@@ -1,4 +1,5 @@
-using MissionControl.Dashboard.Agent;
+using MissionControl.Client.Agent;
+using MissionControl.Contracts.Agent;
 
 namespace MissionControl.Dashboard.Refresh;
 
@@ -8,9 +9,9 @@ internal sealed class AgentSnapshotRefreshController(
     TimeSpan staleAfter)
 {
     private readonly RefreshGate refreshGate = new();
-    private AgentSnapshotItem? snapshot;
+    private PublicNodeSnapshot? snapshot;
 
-    public AgentSnapshotItem? CurrentSnapshot =>
+    public PublicNodeSnapshot? CurrentSnapshot =>
         snapshot is null
             ? null
             : SnapshotFreshness.Apply(
@@ -32,7 +33,7 @@ internal sealed class AgentSnapshotRefreshController(
             {
                 try
                 {
-                    AgentSnapshotItem refreshed =
+                    PublicNodeSnapshot refreshed =
                         await client.GetSnapshotAsync(token);
 
                     snapshot = refreshed;

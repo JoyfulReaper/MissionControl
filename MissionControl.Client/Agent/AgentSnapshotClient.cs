@@ -1,11 +1,13 @@
-﻿using System.Net;
+﻿using MissionControl.Contracts.Agent;
+using System.Net;
+using System.Net.Http.Json;
 
-namespace MissionControl.Dashboard.Agent;
+namespace MissionControl.Client.Agent;
 
 public sealed class AgentSnapshotClient(HttpClient client)
     : IAgentSnapshotClient
 {
-    public async Task<AgentSnapshotItem> GetSnapshotAsync(
+    public async Task<PublicNodeSnapshot> GetSnapshotAsync(
         CancellationToken cancellationToken = default)
     {
         using HttpResponseMessage response =
@@ -22,9 +24,9 @@ public sealed class AgentSnapshotClient(HttpClient client)
 
         response.EnsureSuccessStatusCode();
 
-        AgentSnapshotItem? snapshot =
+        PublicNodeSnapshot? snapshot =
             await response.Content
-                .ReadFromJsonAsync<AgentSnapshotItem>(
+                .ReadFromJsonAsync<PublicNodeSnapshot>(
                     cancellationToken);
 
         return snapshot

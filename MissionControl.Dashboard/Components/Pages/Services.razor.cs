@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
+using MissionControl.Client.Agent;
 using MissionControl.Contracts.Services;
-using MissionControl.Dashboard.Agent;
 using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Refresh;
 using MissionControl.Dashboard.Services;
