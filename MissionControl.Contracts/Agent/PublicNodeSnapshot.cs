@@ -1,4 +1,4 @@
-﻿namespace MissionControl.Agent.Contracts;
+﻿namespace MissionControl.Contracts.Agent;
 
 public sealed record PublicNodeSnapshot(
     string Node,

@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using MissionControl.Agent.Contracts;
 using MissionControl.Agent.DependencyInjection;
 using MissionControl.Agent.Storage;
+using MissionControl.Contracts.Agent;
 
 namespace MissionControl.Agent.Endpoints;
 

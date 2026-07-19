@@ -1,6 +1,6 @@
-﻿namespace MissionControl.Dashboard.Agent;
+﻿namespace MissionControl.Contracts.Agent;
 
-public sealed record AgentContainerStatusItem(
+public sealed record PublicContainerStatus(
     string Name,
     string State,
     long? MemoryUsageBytes,

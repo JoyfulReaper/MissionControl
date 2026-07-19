@@ -17,4 +17,8 @@
 	<InternalsVisibleTo Include="MissionControl.Tests" />
 </ItemGroup>
 
+<ItemGroup>
+  <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
+</ItemGroup>
+
 </Project>

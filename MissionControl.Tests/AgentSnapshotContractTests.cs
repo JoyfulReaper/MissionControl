@@ -1,12 +1,10 @@
 extern alias AgentApp;
 extern alias DashboardApp;
-
 using AgentApp::MissionControl.Agent.Endpoints;
-using AgentApp::MissionControl.Agent.Contracts;
 using AgentApp::MissionControl.Agent.Models;
 using AgentApp::MissionControl.Agent.Storage;
-using DashboardApp::MissionControl.Dashboard.Agent;
 using DashboardApp::MissionControl.Dashboard.Components.Services;
+using MissionControl.Contracts.Agent;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Xunit;
