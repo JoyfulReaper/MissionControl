@@ -1,6 +1,6 @@
 namespace MissionControl.UI.Components.Services;
 
-internal static class PublicationStatusPresentation
+public static class PublicationStatusPresentation
 {
     public const string AttemptTimestampLabel =
         "Last publish attempt";

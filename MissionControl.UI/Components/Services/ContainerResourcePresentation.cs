@@ -1,6 +1,6 @@
-namespace MissionControl.Dashboard.Components.Services;
+namespace MissionControl.UI.Components.Services;
 
-internal static class ContainerResourcePresentation
+public static class ContainerResourcePresentation
 {
     public const string UnavailableMarker = "—";
 

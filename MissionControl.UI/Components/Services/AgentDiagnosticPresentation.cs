@@ -1,6 +1,6 @@
-namespace MissionControl.Dashboard.Components.Services;
+namespace MissionControl.UI.Components.Services;
 
-internal static class AgentDiagnosticPresentation
+public static class AgentDiagnosticPresentation
 {
     public const string UnavailableMarker = "—";
     public const string ConfiguredEndpointLabel = "Configured endpoint";

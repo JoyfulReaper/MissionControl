@@ -10,7 +10,7 @@
         </div>
 
         <div class="uncatalogued-list">
-            @foreach (AgentProtocolStatusItem protocol in Protocols)
+            @foreach (PublicProtocolStatus protocol in Protocols)
             {
                 <div class="uncatalogued-item">
                     <strong>@protocol.Service</strong>
@@ -43,10 +43,9 @@
 
 @code {
     [Parameter, EditorRequired]
-    public required IReadOnlyList<AgentProtocolStatusItem> Protocols
+    public required IReadOnlyList<PublicProtocolStatus> Protocols
     {
         get;
         set;
     }
-
 }

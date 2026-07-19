@@ -10,7 +10,7 @@
         </div>
 
         <div class="uncatalogued-list">
-            @foreach (AgentContainerStatusItem container in Containers)
+            @foreach (PublicContainerStatus container in Containers)
             {
                 <div class="uncatalogued-item">
                     <strong>@container.Name</strong>
@@ -42,10 +42,9 @@
 
 @code {
     [Parameter, EditorRequired]
-    public required IReadOnlyList<AgentContainerStatusItem> Containers
+    public required IReadOnlyList<PublicContainerStatus> Containers
     {
         get;
         set;
     }
-
 }
