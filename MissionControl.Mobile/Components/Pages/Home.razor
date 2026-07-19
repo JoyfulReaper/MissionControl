@@ -1,5 +1,138 @@
 ﻿@page "/"
 
-<h1>Hello, world!</h1>
+@inject IAgentSnapshotClient AgentClient
 
-Welcome to your new app.
+<PageTitle>Mission Control</PageTitle>
+
+<div class="mobile-dashboard">
+    <header class="mobile-header">
+        <div class="mobile-eyebrow">
+            JoyfulReaper operations
+        </div>
+
+        <h1>Mission Control</h1>
+
+        <p>
+            Live host, container, and protocol status from the
+            Mission Control Agent.
+        </p>
+    </header>
+
+    <AgentSnapshotPanel Snapshot="_snapshot"
+                        IsLoading="_isLoading"
+                        IsRefreshing="_isRefreshing"
+                        IsManualRefreshing="_isManualRefreshing"
+                        ErrorMessage="@_errorMessage"
+                        TimestampFormatter="FormatTimestamp"
+                        OnRefresh="RefreshSnapshotAsync" />
+
+    <section class="mobile-section"
+             aria-labelledby="node-resources-title">
+        <div class="mobile-section-heading">
+            <div>
+                <div class="mobile-eyebrow">
+                    Current telemetry
+                </div>
+
+                <h2 id="node-resources-title">
+                    Node resources
+                </h2>
+            </div>
+        </div>
+
+        <NodeResourceCards Host="_snapshot?.Host"
+                           IsLoading="_isLoading"
+                           ErrorMessage="_errorMessage" />
+    </section>
+
+    @if (_snapshot is not null)
+    {
+        <section class="mobile-observation-grid">
+            <article class="mobile-observation-card">
+                <span>Containers observed</span>
+                <strong>
+                    @(_snapshot.Containers.Count.ToString("N0"))
+                </strong>
+            </article>
+
+            <article class="mobile-observation-card">
+                <span>Successful probes</span>
+                <strong>
+                    @(_snapshot.Protocols
+                    .Count(protocol => protocol.Succeeded)
+                    .ToString("N0"))
+                </strong>
+            </article>
+
+            <article class="mobile-observation-card">
+                <span>Failed probes</span>
+                <strong>
+                    @(_snapshot.Protocols
+                    .Count(protocol => !protocol.Succeeded)
+                    .ToString("N0"))
+                </strong>
+            </article>
+        </section>
+    }
+</div>
+
+@code {
+    private PublicNodeSnapshot? _snapshot;
+    private bool _isLoading = true;
+    private bool _isRefreshing;
+    private bool _isManualRefreshing;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSnapshotAsync(isManualRefresh: false);
+    }
+
+    private async Task RefreshSnapshotAsync()
+    {
+        await LoadSnapshotAsync(isManualRefresh: true);
+    }
+
+    private async Task LoadSnapshotAsync(
+        bool isManualRefresh)
+    {
+        if (_isRefreshing)
+        {
+            return;
+        }
+
+        _isRefreshing = true;
+        _isManualRefreshing = isManualRefresh;
+
+        try
+        {
+            _snapshot =
+                await AgentClient.GetSnapshotAsync();
+
+            _errorMessage = null;
+        }
+        catch (Exception exception)
+            when (exception is
+                HttpRequestException or
+                TaskCanceledException or
+                InvalidOperationException)
+        {
+            _errorMessage =
+                $"Latest Agent refresh failed: {exception.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            _isRefreshing = false;
+            _isManualRefreshing = false;
+        }
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        return timestamp
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss zzz");
+    }
+}
