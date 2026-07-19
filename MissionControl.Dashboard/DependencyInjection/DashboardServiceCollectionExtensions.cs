@@ -10,6 +10,7 @@ using MissionControl.Dashboard.Authentication;
 using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Events;
 using MissionControl.Dashboard.Formatting;
+using MissionControl.Dashboard.MobileApi;
 using MissionControl.Dashboard.Refresh;
 using MissionControl.Dashboard.Security;
 using MissionControl.Dashboard.Services;
@@ -180,10 +181,26 @@ public static class DashboardServiceCollectionExtensions
 
                     options.Cookie.SecurePolicy =
                         CookieSecurePolicy.Always;
+                })
+            .AddScheme<
+                MobileApiAuthenticationOptions,
+                MobileApiAuthenticationHandler>(
+                MobileApiAuthenticationDefaults.Scheme,
+                _ =>
+                {
                 });
 
         services
             .AddAuthorizationBuilder()
+            .AddPolicy(
+                MobileApiAuthenticationDefaults.Policy,
+                policy =>
+                {
+                    policy.AddAuthenticationSchemes(
+                        MobileApiAuthenticationDefaults.Scheme);
+
+                    policy.RequireAuthenticatedUser();
+                })
             .SetFallbackPolicy(
                 new AuthorizationPolicyBuilder()
                     .RequireAuthenticatedUser()
@@ -204,6 +221,18 @@ public static class DashboardServiceCollectionExtensions
         services.AddSingleton<
             IValidateOptions<DashboardRefreshOptions>,
             DashboardRefreshOptionsValidator>();
+
+        services
+            .AddOptions<MobileApiAuthenticationOptions>(
+                MobileApiAuthenticationDefaults.Scheme)
+            .Bind(
+                configuration.GetSection(
+                    MobileApiAuthenticationOptions.SectionName))
+            .Validate(
+                HasValidMobileApiTokenHash,
+                "Dashboard Mobile API TokenHash must be a " +
+                "Base64-encoded SHA-256 hash when the API is enabled.")
+            .ValidateOnStart();
 
         services
             .AddOptions<DashboardAuthenticationOptions>()
@@ -313,5 +342,33 @@ public static class DashboardServiceCollectionExtensions
         services.AddSingleton<
             IDashboardDateTimeFormatter,
             DashboardDateTimeFormatter>();
+    }
+
+    private static bool HasValidMobileApiTokenHash(
+        MobileApiAuthenticationOptions options)
+    {
+        if (!options.Enabled)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                options.TokenHash))
+        {
+            return false;
+        }
+
+        try
+        {
+            byte[] hash =
+                Convert.FromBase64String(
+                    options.TokenHash);
+
+            return hash.Length == 32;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
     }
 }
