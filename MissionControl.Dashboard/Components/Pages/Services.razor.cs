@@ -1,11 +1,11 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
-using MissionControl.Contracts.Agent;
 using MissionControl.Contracts.Services;
 using MissionControl.Dashboard.Agent;
 using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Refresh;
 using MissionControl.Dashboard.Services;
+using MissionControl.UI.Services;
 
 namespace MissionControl.Dashboard.Components.Pages;
 
@@ -127,93 +127,12 @@ public partial class Services : IAsyncDisposable
         }
     }
 
-    private ServicesView CreateView()
+    private ServiceCatalogView CreateView()
     {
-        IReadOnlyList<ServiceDefinition> services =
-            CurrentCatalog;
-
-        Dictionary<string, PublicContainerStatus> containersByName =
-            (CurrentSnapshot?.Containers ?? [])
-                .GroupBy(
-                    container => container.Name,
-                    StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    group => group.Key,
-                    group => group.First(),
-                    StringComparer.OrdinalIgnoreCase);
-
-        Dictionary<string, PublicProtocolStatus> protocolsByService =
-            (CurrentSnapshot?.Protocols ?? [])
-                .GroupBy(
-                    protocol => protocol.Service,
-                    StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    group => group.Key,
-                    group => group.First(),
-                    StringComparer.OrdinalIgnoreCase);
-
-        ServiceDefinition[] filteredServices = services
-            .Where(MatchesFilter)
-            .OrderBy(service => service.Group)
-            .ThenBy(service => service.Name)
-            .ToArray();
-
-        ServiceGroupView[] groups = filteredServices
-            .GroupBy(service => service.Group)
-            .Select(group => new ServiceGroupView(
-                group.Key,
-                group.Select(service => new ServiceItemView(
-                        service,
-                        FindContainer(service, containersByName),
-                        FindProtocol(service, protocolsByService)))
-                    .ToArray()))
-            .ToArray();
-
-        HashSet<string> cataloguedContainerNames = services
-            .Where(service =>
-                !string.IsNullOrWhiteSpace(service.ContainerName))
-            .Select(service => service.ContainerName!)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        HashSet<string> cataloguedProtocolKeys = services
-            .Where(service =>
-                !string.IsNullOrWhiteSpace(service.ProtocolServiceKey))
-            .Select(service => service.ProtocolServiceKey!)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        PublicContainerStatus[] uncataloguedContainers =
-            (CurrentSnapshot?.Containers ?? [])
-                .Where(container =>
-                    !cataloguedContainerNames.Contains(container.Name))
-                .ToArray();
-
-        PublicProtocolStatus[] uncataloguedProtocols =
-            (CurrentSnapshot?.Protocols ?? [])
-                .Where(protocol =>
-                    !cataloguedProtocolKeys.Contains(protocol.Service))
-                .ToArray();
-
-        int runningContainers = services.Count(service =>
-            string.Equals(
-                FindContainer(service, containersByName)?.State,
-                "running",
-                StringComparison.OrdinalIgnoreCase));
-
-        return new ServicesView(
-            services.Count,
-            runningContainers,
-            services.Count(service =>
-                string.Equals(
-                    service.Visibility,
-                    "Public",
-                    StringComparison.OrdinalIgnoreCase)),
-            CurrentSnapshot?.Containers.Count ?? 0,
-            CurrentSnapshot?.Protocols.Count(protocol => protocol.Succeeded) ?? 0,
-            CurrentSnapshot?.Protocols.Count(protocol => !protocol.Succeeded) ?? 0,
-            filteredServices.Length,
-            uncataloguedContainers,
-            uncataloguedProtocols,
-            groups);
+        return ServiceCatalogViewBuilder.Build(
+            CurrentCatalog,
+            CurrentSnapshot,
+            _filter);
     }
 
     public async ValueTask DisposeAsync()
@@ -256,73 +175,4 @@ public partial class Services : IAsyncDisposable
     {
         return InvokeAsync(StateHasChanged);
     }
-
-    private bool MatchesFilter(ServiceDefinition service)
-    {
-        if (string.IsNullOrWhiteSpace(_filter))
-        {
-            return true;
-        }
-
-        string filter = _filter.Trim();
-
-        return Contains(service.Name, filter) ||
-               Contains(service.Group, filter) ||
-               Contains(service.Summary, filter) ||
-               Contains(service.Description, filter) ||
-               Contains(service.ContainerName, filter) ||
-               Contains(service.Protocol, filter) ||
-               Contains(service.ProtocolServiceKey, filter) ||
-               Contains(service.Endpoint, filter) ||
-               Contains(service.Image, filter) ||
-               service.SearchTerms.Any(term => Contains(term, filter));
-    }
-
-    private static PublicContainerStatus? FindContainer(
-        ServiceDefinition service,
-        IReadOnlyDictionary<string, PublicContainerStatus> containers)
-    {
-        return !string.IsNullOrWhiteSpace(service.ContainerName) &&
-               containers.TryGetValue(service.ContainerName, out var container)
-            ? container
-            : null;
-    }
-
-    private static PublicProtocolStatus? FindProtocol(
-        ServiceDefinition service,
-        IReadOnlyDictionary<string, PublicProtocolStatus> protocols)
-    {
-        return !string.IsNullOrWhiteSpace(service.ProtocolServiceKey) &&
-               protocols.TryGetValue(service.ProtocolServiceKey, out var protocol)
-            ? protocol
-            : null;
-    }
-
-    private static bool Contains(string? value, string filter)
-    {
-        return value?.Contains(
-            filter,
-            StringComparison.OrdinalIgnoreCase) == true;
-    }
-
-    private sealed record ServiceItemView(
-        ServiceDefinition Service,
-        PublicContainerStatus? Container,
-        PublicProtocolStatus? Protocol);
-
-    private sealed record ServiceGroupView(
-        string Name,
-        IReadOnlyList<ServiceItemView> Services);
-
-    private sealed record ServicesView(
-        int ConfiguredServices,
-        int RunningContainers,
-        int PublicServices,
-        int SnapshotContainers,
-        int SuccessfulProbes,
-        int FailedProbes,
-        int MatchingServices,
-        IReadOnlyList<PublicContainerStatus> UncataloguedContainers,
-        IReadOnlyList<PublicProtocolStatus> UncataloguedProtocols,
-        IReadOnlyList<ServiceGroupView> Groups);
 }
