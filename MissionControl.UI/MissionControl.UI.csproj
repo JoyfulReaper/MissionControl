@@ -6,8 +6,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+	<ItemGroup>
+		<InternalsVisibleTo Include="MissionControl.Tests" />
+	</ItemGroup>
 
-  <ItemGroup>
+	<ItemGroup>
     <SupportedPlatform Include="browser" />
   </ItemGroup>
 
