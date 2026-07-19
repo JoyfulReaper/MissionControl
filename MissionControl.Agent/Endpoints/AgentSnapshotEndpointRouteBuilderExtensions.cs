@@ -68,7 +68,7 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                     apiOptions.StaleAfterSeconds));
 
         response.Headers["Cache-Control"] =
-            "public, max-age=15";
+            "no-store";
 
         return Results.Ok(publicSnapshot);
     }
