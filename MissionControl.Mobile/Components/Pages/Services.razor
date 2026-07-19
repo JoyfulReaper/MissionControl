@@ -1,6 +1,7 @@
 ﻿@page "/services"
 
-@inject IAgentSnapshotClient AgentClient
+@implements IDisposable
+@inject MobileAgentSnapshotState SnapshotState
 @inject MobileServiceCatalog Catalog
 
 <PageTitle>Services</PageTitle>
@@ -9,7 +10,7 @@
     ServiceCatalogView view =
         ServiceCatalogViewBuilder.Build(
             _services,
-            _snapshot,
+            SnapshotState.Snapshot,
             _filter);
 }
 
@@ -27,11 +28,11 @@
         </p>
     </header>
 
-    <AgentSnapshotPanel Snapshot="_snapshot"
-                        IsLoading="_isLoading"
-                        IsRefreshing="_isRefreshing"
-                        IsManualRefreshing="_isManualRefreshing"
-                        ErrorMessage="@_snapshotError"
+    <AgentSnapshotPanel Snapshot="SnapshotState.Snapshot"
+                        IsLoading="SnapshotState.IsInitialLoading"
+                        IsRefreshing="SnapshotState.IsRefreshing"
+                        IsManualRefreshing="SnapshotState.IsManualRefreshing"
+                        ErrorMessage="@SnapshotState.ErrorMessage"
                         TimestampFormatter="FormatTimestamp"
                         OnRefresh="RefreshSnapshotAsync" />
 
@@ -75,7 +76,8 @@
 
     <UncataloguedProtocolsPanel Protocols="view.UncataloguedProtocols" />
 
-    @if (!_isLoading && view.Groups.Count == 0)
+    @if (!SnapshotState.IsInitialLoading &&
+         view.Groups.Count == 0)
     {
         <div class="alert alert-info">
             No services matched that filter.
@@ -107,8 +109,10 @@
                         <ServiceEntry Service="item.Service"
                                       Container="item.Container"
                                       Protocol="item.Protocol"
-                                      IsSnapshotAvailable="@(_snapshot is not null)"
-                                      DockerAvailable="@_snapshot?.DockerAvailable" />
+                                      IsSnapshotAvailable="@(
+                                      SnapshotState.Snapshot is not null)"
+                                      DockerAvailable="@(
+                                      SnapshotState.Snapshot?.DockerAvailable)" />
                     }
                 </div>
             </section>
@@ -118,19 +122,18 @@
 
 @code {
     private IReadOnlyList<ServiceDefinition> _services = [];
-    private PublicNodeSnapshot? _snapshot;
     private string? _filter;
     private string? _catalogError;
-    private string? _snapshotError;
-    private bool _isLoading = true;
-    private bool _isRefreshing;
-    private bool _isManualRefreshing;
 
     protected override async Task OnInitializedAsync()
     {
+        SnapshotState.Changed +=
+            HandleSnapshotStateChanged;
+
         try
         {
-            _services = await Catalog.GetServicesAsync();
+            _services =
+                await Catalog.GetServicesAsync();
         }
         catch (Exception exception)
             when (exception is
@@ -143,48 +146,24 @@
                 exception.Message;
         }
 
-        await LoadSnapshotAsync(isManualRefresh: false);
+        await SnapshotState.EnsureLoadedAsync();
     }
 
     private Task RefreshSnapshotAsync()
     {
-        return LoadSnapshotAsync(isManualRefresh: true);
+        return SnapshotState.RefreshAsync(
+            isManualRefresh: true);
     }
 
-    private async Task LoadSnapshotAsync(
-        bool isManualRefresh)
+    private void HandleSnapshotStateChanged()
     {
-        if (_isRefreshing)
-        {
-            return;
-        }
+        _ = InvokeAsync(StateHasChanged);
+    }
 
-        _isRefreshing = true;
-        _isManualRefreshing = isManualRefresh;
-
-        try
-        {
-            _snapshot =
-                await AgentClient.GetSnapshotAsync();
-
-            _snapshotError = null;
-        }
-        catch (Exception exception)
-            when (exception is
-                HttpRequestException or
-                TaskCanceledException or
-                InvalidOperationException)
-        {
-            _snapshotError =
-                $"Latest Agent refresh failed: " +
-                exception.Message;
-        }
-        finally
-        {
-            _isLoading = false;
-            _isRefreshing = false;
-            _isManualRefreshing = false;
-        }
+    public void Dispose()
+    {
+        SnapshotState.Changed -=
+            HandleSnapshotStateChanged;
     }
 
     private static string FormatTimestamp(

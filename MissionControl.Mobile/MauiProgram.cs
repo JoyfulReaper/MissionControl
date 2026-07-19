@@ -33,6 +33,7 @@ public static class MauiProgram
             });
 
         builder.Services.AddSingleton<MobileServiceCatalog>();
+        builder.Services.AddSingleton<MobileAgentSnapshotState>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

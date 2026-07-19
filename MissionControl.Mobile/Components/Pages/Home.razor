@@ -1,6 +1,7 @@
 ﻿@page "/"
 
-@inject IAgentSnapshotClient AgentClient
+@implements IDisposable
+@inject MobileAgentSnapshotState SnapshotState
 
 <PageTitle>Mission Control</PageTitle>
 
@@ -18,11 +19,11 @@
         </p>
     </header>
 
-    <AgentSnapshotPanel Snapshot="_snapshot"
-                        IsLoading="_isLoading"
-                        IsRefreshing="_isRefreshing"
-                        IsManualRefreshing="_isManualRefreshing"
-                        ErrorMessage="@_errorMessage"
+    <AgentSnapshotPanel Snapshot="SnapshotState.Snapshot"
+                        IsLoading="SnapshotState.IsInitialLoading"
+                        IsRefreshing="SnapshotState.IsRefreshing"
+                        IsManualRefreshing="SnapshotState.IsManualRefreshing"
+                        ErrorMessage="@SnapshotState.ErrorMessage"
                         TimestampFormatter="FormatTimestamp"
                         OnRefresh="RefreshSnapshotAsync" />
 
@@ -40,25 +41,25 @@
             </div>
         </div>
 
-        <NodeResourceCards Host="_snapshot?.Host"
-                           IsLoading="_isLoading"
-                           ErrorMessage="_errorMessage" />
+        <NodeResourceCards Host="SnapshotState.Snapshot?.Host"
+                           IsLoading="SnapshotState.IsInitialLoading"
+                           ErrorMessage="@SnapshotState.ErrorMessage" />
     </section>
 
-    @if (_snapshot is not null)
+    @if (SnapshotState.Snapshot is not null)
     {
         <section class="mobile-observation-grid">
             <article class="mobile-observation-card">
                 <span>Containers observed</span>
                 <strong>
-                    @(_snapshot.Containers.Count.ToString("N0"))
+                    @(SnapshotState.Snapshot.Containers.Count.ToString("N0"))
                 </strong>
             </article>
 
             <article class="mobile-observation-card">
                 <span>Successful probes</span>
                 <strong>
-                    @(_snapshot.Protocols
+                    @(SnapshotState.Snapshot.Protocols
                     .Count(protocol => protocol.Succeeded)
                     .ToString("N0"))
                 </strong>
@@ -67,7 +68,7 @@
             <article class="mobile-observation-card">
                 <span>Failed probes</span>
                 <strong>
-                    @(_snapshot.Protocols
+                    @(SnapshotState.Snapshot.Protocols
                     .Count(protocol => !protocol.Succeeded)
                     .ToString("N0"))
                 </strong>
@@ -77,55 +78,27 @@
 </div>
 
 @code {
-    private PublicNodeSnapshot? _snapshot;
-    private bool _isLoading = true;
-    private bool _isRefreshing;
-    private bool _isManualRefreshing;
-    private string? _errorMessage;
-
     protected override async Task OnInitializedAsync()
     {
-        await LoadSnapshotAsync(isManualRefresh: false);
+        SnapshotState.Changed += HandleSnapshotStateChanged;
+
+        await SnapshotState.EnsureLoadedAsync();
     }
 
-    private async Task RefreshSnapshotAsync()
+    private Task RefreshSnapshotAsync()
     {
-        await LoadSnapshotAsync(isManualRefresh: true);
+        return SnapshotState.RefreshAsync(
+            isManualRefresh: true);
     }
 
-    private async Task LoadSnapshotAsync(
-        bool isManualRefresh)
+    private void HandleSnapshotStateChanged()
     {
-        if (_isRefreshing)
-        {
-            return;
-        }
+        _ = InvokeAsync(StateHasChanged);
+    }
 
-        _isRefreshing = true;
-        _isManualRefreshing = isManualRefresh;
-
-        try
-        {
-            _snapshot =
-                await AgentClient.GetSnapshotAsync();
-
-            _errorMessage = null;
-        }
-        catch (Exception exception)
-            when (exception is
-                HttpRequestException or
-                TaskCanceledException or
-                InvalidOperationException)
-        {
-            _errorMessage =
-                $"Latest Agent refresh failed: {exception.Message}";
-        }
-        finally
-        {
-            _isLoading = false;
-            _isRefreshing = false;
-            _isManualRefreshing = false;
-        }
+    public void Dispose()
+    {
+        SnapshotState.Changed -= HandleSnapshotStateChanged;
     }
 
     private static string FormatTimestamp(
