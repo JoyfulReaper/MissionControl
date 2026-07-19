@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using MissionControl.Agent.DependencyInjection;
+using MissionControl.Agent.Host;
+using MissionControl.Agent.Models;
 using MissionControl.Agent.Storage;
 using MissionControl.Contracts.Agent;
 
@@ -31,6 +33,8 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
 
     private static async Task<IResult> HandleGetSnapshotAsync(
         INodeSnapshotStore snapshotStore,
+        IHostMetricsCollector hostMetricsCollector,
+        ILoggerFactory loggerFactory,
         IOptions<AgentOptions> agentOptionsAccessor,
         IOptions<AgentApiOptions> apiOptionsAccessor,
         HttpResponse response,
@@ -60,12 +64,40 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                     StatusCodes.Status503ServiceUnavailable);
         }
 
+        HostMetric? freshHost = null;
+        DateTimeOffset? hostCapturedAt = null;
+
+        try
+        {
+            freshHost =
+                await hostMetricsCollector.GetMetricsAsync(
+                    cancellationToken);
+            hostCapturedAt = DateTimeOffset.UtcNow;
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            ILogger logger =
+                loggerFactory.CreateLogger(
+                    typeof(AgentSnapshotEndpointRouteBuilderExtensions));
+
+            logger.LogWarning(
+                exception,
+                "Live host metric collection failed while serving the Agent snapshot API.");
+        }
+
         PublicNodeSnapshot publicSnapshot =
             CreatePublicSnapshot(
                 storedSnapshot,
                 DateTimeOffset.UtcNow,
                 TimeSpan.FromSeconds(
-                    apiOptions.StaleAfterSeconds));
+                    apiOptions.StaleAfterSeconds),
+                freshHost,
+                hostCapturedAt);
 
         response.Headers["Cache-Control"] =
             "no-store";
@@ -76,7 +108,9 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
     internal static PublicNodeSnapshot CreatePublicSnapshot(
         StoredNodeSnapshot storedSnapshot,
         DateTimeOffset now,
-        TimeSpan staleAfter)
+        TimeSpan staleAfter,
+        HostMetric? host = null,
+        DateTimeOffset? hostCapturedAt = null)
     {
         TimeSpan age =
             now - storedSnapshot.Snapshot.CapturedAt;
@@ -126,6 +160,9 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                                 : container.Image))
                 .ToArray();
 
+        HostMetric? publicHost =
+            host ?? storedSnapshot.Snapshot.Host;
+
         return new PublicNodeSnapshot(
             Node:
                 storedSnapshot.Snapshot.Node,
@@ -136,20 +173,17 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
             Stale:
                 age > staleAfter,
             Host:
-                storedSnapshot.Snapshot.Host is null
+                publicHost is null
                     ? null
                     : new PublicHostMetric(
                         LogicalProcessorCount:
-                            storedSnapshot.Snapshot.Host
-                                .LogicalProcessorCount,
+                            publicHost.LogicalProcessorCount,
                         CpuPercent:
-                            storedSnapshot.Snapshot.Host.CpuPercent,
+                            publicHost.CpuPercent,
                         MemoryTotalBytes:
-                            storedSnapshot.Snapshot.Host
-                                .MemoryTotalBytes,
+                            publicHost.MemoryTotalBytes,
                         MemoryAvailableBytes:
-                            storedSnapshot.Snapshot.Host
-                                .MemoryAvailableBytes),
+                            publicHost.MemoryAvailableBytes),
             MissionControlPublishSucceeded:
                 storedSnapshot.PublishSucceeded,
             LastMissionControlPublishAttemptAt:
@@ -161,6 +195,9 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
             DockerAvailable:
                 storedSnapshot.Snapshot.DockerAvailable,
             DockerError:
-                storedSnapshot.Snapshot.DockerError);
+                storedSnapshot.Snapshot.DockerError)
+        {
+            HostCapturedAt = hostCapturedAt
+        };
     }
 }

@@ -150,6 +150,7 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(
             suppressedSnapshot.CapturedAt,
             dashboardSnapshot.CapturedAt);
+        Assert.Null(dashboardSnapshot.HostCapturedAt);
         Assert.Equal(12, dashboardSnapshot.Host?.LogicalProcessorCount);
         Assert.Equal(37.5, dashboardSnapshot.Host?.CpuPercent);
         Assert.Equal(
@@ -193,6 +194,74 @@ public sealed class AgentSnapshotContractTests
     }
 
     [Fact]
+    public void PublicSnapshotCanUseFreshHostMetricsWithoutChangingStoredSnapshotTimestamp()
+    {
+        DateTimeOffset capturedAt =
+            new(2026, 7, 17, 14, 0, 0, TimeSpan.Zero);
+        DateTimeOffset now =
+            capturedAt.AddSeconds(30);
+        DateTimeOffset hostCapturedAt =
+            capturedAt.AddSeconds(29);
+        var stored = new StoredNodeSnapshot(
+            Snapshot: new NodeSnapshotEvent(
+                Node: "node-1",
+                CapturedAt: capturedAt,
+                Host: new HostMetric(
+                    8,
+                    12.5,
+                    1_000,
+                    800),
+                Protocols: [],
+                Containers: [],
+                DockerAvailable: true,
+                DockerError: null),
+            PublishSucceeded: true,
+            LastPublishAttemptAt: capturedAt.AddSeconds(5),
+            UpdatedAt: capturedAt);
+        var freshHost = new HostMetric(
+            12,
+            37.5,
+            2_000,
+            1_250);
+
+        PublicNodeSnapshot publicSnapshot =
+            AgentSnapshotEndpointRouteBuilderExtensions
+                .CreatePublicSnapshot(
+                    stored,
+                    now,
+                    TimeSpan.FromMinutes(1),
+                    freshHost,
+                    hostCapturedAt);
+
+        Assert.Equal(capturedAt, publicSnapshot.CapturedAt);
+        Assert.Equal(30, publicSnapshot.AgeSeconds);
+        Assert.Equal(hostCapturedAt, publicSnapshot.HostCapturedAt);
+        Assert.Equal(12, publicSnapshot.Host?.LogicalProcessorCount);
+        Assert.Equal(37.5, publicSnapshot.Host?.CpuPercent);
+        Assert.Equal(2_000, publicSnapshot.Host?.MemoryTotalBytes);
+        Assert.Equal(1_250, publicSnapshot.Host?.MemoryAvailableBytes);
+        Assert.Empty(publicSnapshot.Protocols);
+        Assert.Empty(publicSnapshot.Containers);
+
+        string json = JsonSerializer.Serialize(
+            publicSnapshot,
+            new JsonSerializerOptions(
+                JsonSerializerDefaults.Web));
+
+        Assert.Contains("\"hostCapturedAt\":", json);
+
+        AgentSnapshotItem dashboardSnapshot =
+            Assert.IsType<AgentSnapshotItem>(
+                JsonSerializer.Deserialize<AgentSnapshotItem>(
+                    json,
+                    new JsonSerializerOptions(
+                        JsonSerializerDefaults.Web)));
+
+        Assert.Equal(hostCapturedAt, dashboardSnapshot.HostCapturedAt);
+        Assert.Equal(37.5, dashboardSnapshot.Host?.CpuPercent);
+    }
+
+    [Fact]
     public void CriticalAgentAndDashboardContractTypesRemainCompatible()
     {
         Assert.Equal(
@@ -229,6 +298,16 @@ public sealed class AgentSnapshotContractTests
             typeof(DateTimeOffset),
             typeof(PublicNodeSnapshot)
                 .GetProperty(nameof(PublicNodeSnapshot.CapturedAt))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(DateTimeOffset?),
+            typeof(PublicNodeSnapshot)
+                .GetProperty(nameof(PublicNodeSnapshot.HostCapturedAt))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(DateTimeOffset?),
+            typeof(AgentSnapshotItem)
+                .GetProperty(nameof(AgentSnapshotItem.HostCapturedAt))!
                 .PropertyType);
         Assert.Equal(
             typeof(DateTimeOffset?),
@@ -522,6 +601,7 @@ public sealed class AgentSnapshotContractTests
         Assert.Null(protocol.Endpoint);
         Assert.Null(protocol.Error);
         Assert.Null(container.Image);
+        Assert.Null(snapshot.HostCapturedAt);
     }
 
     [Fact]

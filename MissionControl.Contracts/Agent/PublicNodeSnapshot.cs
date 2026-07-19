@@ -11,4 +11,7 @@ public sealed record PublicNodeSnapshot(
     IReadOnlyList<PublicProtocolStatus> Protocols,
     IReadOnlyList<PublicContainerStatus> Containers,
     bool? DockerAvailable = null,
-    string? DockerError = null);
+    string? DockerError = null)
+{
+    public DateTimeOffset? HostCapturedAt { get; init; }
+}
