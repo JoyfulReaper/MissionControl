@@ -108,8 +108,8 @@
     <button type="button"
             class="btn btn-outline-primary"
             disabled="@(IsLoading || IsRefreshing)"
-            @onclick="OnRefresh">
-        @((IsLoading || IsManualRefreshing) ? "Refreshing..." : "Refresh")
+            @onclick="HandleRefreshAsync">
+        Refresh
     </button>
 </section>
 
@@ -169,5 +169,13 @@
             false => "status-stopped",
             _ => "status-unknown"
         };
+    }
+
+    private async Task HandleRefreshAsync()
+    {
+        if (OnRefresh.HasDelegate)
+        {
+            await OnRefresh.InvokeAsync();
+        }
     }
 }
