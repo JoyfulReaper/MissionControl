@@ -231,7 +231,13 @@
                     <a class="event-card-link"
                        href="@($"/events/{item.EventId:D}")"
                        aria-label="Open @item.EventType event from @item.Source">
-                        <article class="event-card">
+                        <article class="event-card event-card-interactive"
+                                 role="button"
+                                 tabindex="0"
+                                 aria-label="Open @item.EventType event from @item.Source"
+                                 @onclick="() => OpenEventModal(item.EventId)"
+                                 @onkeydown="eventArgs =>
+                                         HandleEventKeyDown(eventArgs, item.EventId)">
                             <div class="event-card-heading">
                                 <div>
                                     <span class="event-source">
@@ -298,6 +304,13 @@
         }
     }
 </div>
+
+@if (_feed?.SelectedEventId is Guid selectedEventId)
+{
+    <MobileEventDetailsModal @key="selectedEventId"
+                             EventId="selectedEventId"
+                             OnClosed="CloseEventModal" />
+}
 
 @code {
     private readonly CancellationTokenSource _disposeSource =
@@ -427,5 +440,27 @@
     {
         _disposeSource.Cancel();
         _disposeSource.Dispose();
+    }
+
+    private void OpenEventModal(Guid eventId)
+    {
+        _feed?.SelectEvent(eventId);
+    }
+
+    private void CloseEventModal()
+    {
+        _feed?.CloseSelectedEvent();
+    }
+
+    private Task HandleEventKeyDown(
+        KeyboardEventArgs eventArgs,
+        Guid eventId)
+    {
+        if (eventArgs.Key is "Enter" or " ")
+        {
+            OpenEventModal(eventId);
+        }
+
+        return Task.CompletedTask;
     }
 }

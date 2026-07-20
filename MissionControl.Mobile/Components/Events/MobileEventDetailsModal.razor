@@ -1,0 +1,180 @@
+@implements IDisposable
+@inject IArchiveEventClient ArchiveClient
+
+<div class="modal-backdrop fade show"></div>
+
+<div class="modal d-block"
+     tabindex="-1"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="mobile-event-details-title"
+     @onclick="CloseAsync"
+     @onkeydown="HandleKeyDown">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable"
+         role="document"
+         @onclick:stopPropagation="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-eyebrow">
+                        Event archive
+                    </div>
+
+                    <h1 id="mobile-event-details-title"
+                        class="modal-title">
+                        Event details
+                    </h1>
+                </div>
+
+                <button type="button"
+                        class="btn-close"
+                        aria-label="Close"
+                        autofocus
+                        @onclick="CloseAsync">
+                </button>
+            </div>
+
+            <div class="modal-body">
+                @if (_isLoading)
+                {
+                    <div class="alert alert-info mb-0">
+                        Loading event details...
+                    </div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="alert alert-danger mb-0">
+                        @_error
+                    </div>
+                }
+                else if (_event is null)
+                {
+                    <div class="alert alert-warning mb-0">
+                        The requested event was not found.
+                    </div>
+                }
+                else
+                {
+                    <EventDetailsPanel Event="_event"
+                                       TimestampFormatter="FormatTimestamp" />
+                }
+            </div>
+
+            <div class="modal-footer">
+                <a class="btn btn-outline-primary"
+                   href="@($"/events/{EventId:D}")">
+                    View full page
+                </a>
+
+                <button type="button"
+                        class="btn btn-secondary"
+                        @onclick="CloseAsync">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly CancellationTokenSource _disposeSource =
+        new();
+
+    [Parameter]
+    public Guid EventId { get; set; }
+
+    [Parameter]
+    public EventCallback OnClosed { get; set; }
+
+    private ArchiveEventDetailsItem? _event;
+    private string? _error;
+    private bool _isLoading;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _isLoading = true;
+        _error = null;
+        _event = null;
+
+        try
+        {
+            _event =
+                await ArchiveClient.GetByIdAsync(
+                    EventId,
+                    _disposeSource.Token);
+        }
+        catch (OperationCanceledException)
+            when (_disposeSource.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+            when (exception is
+                HttpRequestException or
+                TaskCanceledException or
+                InvalidOperationException)
+        {
+            _error = CreateErrorMessage(exception);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private static string CreateErrorMessage(
+        Exception exception)
+    {
+        return exception switch
+        {
+            HttpRequestException
+            {
+                StatusCode:
+                    System.Net.HttpStatusCode.Unauthorized
+            } =>
+                "The Dashboard rejected the Mobile API token.",
+
+            HttpRequestException
+            {
+                StatusCode:
+                    System.Net.HttpStatusCode.BadGateway
+            } =>
+                "The Dashboard could not reach the Mission Control Archive.",
+
+            HttpRequestException =>
+                "Event details could not be retrieved: " +
+                exception.Message,
+
+            TaskCanceledException =>
+                "The event details request timed out.",
+
+            _ => exception.Message
+        };
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        return timestamp
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss zzz");
+    }
+
+    private Task CloseAsync()
+    {
+        return OnClosed.InvokeAsync();
+    }
+
+    private Task HandleKeyDown(
+        KeyboardEventArgs eventArgs)
+    {
+        return eventArgs.Key == "Escape"
+            ? CloseAsync()
+            : Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        _disposeSource.Cancel();
+        _disposeSource.Dispose();
+    }
+}

@@ -216,25 +216,18 @@
     }
 }
 
-.event-card-link {
-    display: block;
-    color: inherit;
-    text-decoration: none;
+.event-card-interactive {
+    cursor: pointer;
+    transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
 }
 
-    .event-card-link:hover,
-    .event-card-link:focus-visible {
-        color: inherit;
-        text-decoration: none;
+    .event-card-interactive:hover {
+        border-color: var(--mc-accent);
+        transform: translateY(-1px);
     }
 
-        .event-card-link:hover .event-card,
-        .event-card-link:focus-visible .event-card {
-            border-color: var(--mc-accent);
-        }
-
-    .event-card-link:focus-visible {
-        border-radius: 0.7rem;
+    .event-card-interactive:focus-visible {
+        border-color: var(--mc-accent);
         outline: 2px solid var(--mc-accent);
         outline-offset: 2px;
     }
