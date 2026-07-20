@@ -441,8 +441,8 @@ Checked-in launch profiles use port 5190 for Gateway, 5194 for Agent, 5089/7062 
 
 - `ApplicationTitle`: `Mission Control`
 - `ApplicationId`: `com.kgivler.missioncontrol.mobile`
-- `ApplicationDisplayVersion`: `1.0.1`
-- `ApplicationVersion`: `2`
+- `ApplicationDisplayVersion`: `1.0.2`
+- `ApplicationVersion`: `3`
 - Android Release package format: `apk`
 - Windows package type: `None`
 
