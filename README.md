@@ -466,6 +466,59 @@ on the other files in that directory; copying only the `.exe` is not enough.
 
 ### Android private APK publish
 
+#### Automated phone install or update
+
+The repository includes `scripts\Update-MissionControlPhone.ps1` for installing
+Mission Control on a new Android phone or updating an existing installation. It
+requires an authorized ADB device and an existing signing keystore. The script
+does not create the keystore.
+
+Create the default keystore once, using the same password for the keystore and
+key when prompted:
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.missioncontrol"
+
+keytool -genkeypair `
+    -keystore "$HOME\.missioncontrol\missioncontrol.keystore" `
+    -alias missioncontrol `
+    -keyalg RSA `
+    -keysize 2048 `
+    -validity 10000
+```
+
+Back up the keystore and password securely. Android requires every future
+update to use the same signing key; losing it prevents updates to existing
+installations.
+
+Enable USB debugging on the phone, connect and unlock it, approve the
+authorization prompt, then run this command from the repository root:
+
+```powershell
+.\scripts\Update-MissionControlPhone.ps1
+```
+
+The script increments the display and build versions, publishes a signed
+Release APK, and runs `adb install -r`. That ADB command performs a first-time
+install when the package is absent and preserves app data and `SecureStorage`
+when updating an installation signed with the same key. The project version is
+retained only after a successful installation.
+
+If ADB is installed in the current Android SDK user directory, specify it
+explicitly:
+
+```powershell
+.\scripts\Update-MissionControlPhone.ps1 `
+    -AdbPath "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+```
+
+Use `-Version 1.1.0` to choose the next display version, or `-DeviceSerial` to
+select a phone when multiple ADB devices are connected. `-SkipVersionBump`
+rebuilds the current project version and may be rejected by Android if the
+installed build number is newer.
+
+#### Manual APK publish
+
 For private Android sideloading, publish a signed Release APK. Keep the keystore
 file outside the repository and provide passwords through environment variables:
 

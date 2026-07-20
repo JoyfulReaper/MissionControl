@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Razor">
+﻿<?xml version="1.0" encoding="utf-8"?><Project Sdk="Microsoft.NET.Sdk.Razor">
 
     <PropertyGroup>
         <TargetFrameworks>net10.0-android</TargetFrameworks>
@@ -35,8 +35,8 @@
         <ApplicationId>com.kgivler.missioncontrol.mobile</ApplicationId>
 
         <!-- Versions -->
-		<ApplicationDisplayVersion>1.0.2</ApplicationDisplayVersion>
-        <ApplicationVersion>3</ApplicationVersion>
+		<ApplicationDisplayVersion>1.0.3</ApplicationDisplayVersion>
+        <ApplicationVersion>4</ApplicationVersion>
 
         <!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
         <WindowsPackageType>None</WindowsPackageType>
