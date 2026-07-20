@@ -228,46 +228,50 @@
                     ArchiveEventSummaryItem item in
                     _feed.Events)
                 {
-                    <article class="event-card">
-                        <div class="event-card-heading">
-                            <div>
-                                <span class="event-source">
-                                    @item.Source
-                                </span>
+                    <a class="event-card-link"
+                       href="@($"/events/{item.EventId:D}")"
+                       aria-label="Open @item.EventType event from @item.Source">
+                        <article class="event-card">
+                            <div class="event-card-heading">
+                                <div>
+                                    <span class="event-source">
+                                        @item.Source
+                                    </span>
 
-                                <h2 title="@item.EventType">
-                                    @item.EventType
-                                </h2>
+                                    <h2 title="@item.EventType">
+                                        @item.EventType
+                                    </h2>
+                                </div>
+
+                                <time datetime="@item.OccurredAt.ToString("O")">
+                                    @FormatTimestamp(item.OccurredAt)
+                                </time>
                             </div>
 
-                            <time datetime="@item.OccurredAt.ToString("O")">
-                                @FormatTimestamp(item.OccurredAt)
-                            </time>
-                        </div>
+                            <dl class="event-meta">
+                                <div>
+                                    <dt>Schema</dt>
+                                    <dd>@item.SchemaVersion</dd>
+                                </div>
 
-                        <dl class="event-meta">
-                            <div>
-                                <dt>Schema</dt>
-                                <dd>@item.SchemaVersion</dd>
-                            </div>
+                                <div>
+                                    <dt>Correlation</dt>
+                                    <dd>
+                                        <code title="@item.CorrelationId">
+                                            @(item.CorrelationId ?? "—")
+                                        </code>
+                                    </dd>
+                                </div>
 
-                            <div>
-                                <dt>Correlation</dt>
-                                <dd>
-                                    <code title="@item.CorrelationId">
-                                        @(item.CorrelationId ?? "—")
-                                    </code>
-                                </dd>
-                            </div>
-
-                            <div>
-                                <dt>Received</dt>
-                                <dd>
-                                    @FormatTimestamp(item.ReceivedAt)
-                                </dd>
-                            </div>
-                        </dl>
-                    </article>
+                                <div>
+                                    <dt>Received</dt>
+                                    <dd>
+                                        @FormatTimestamp(item.ReceivedAt)
+                                    </dd>
+                                </div>
+                            </dl>
+                        </article>
+                    </a>
                 }
             </div>
 

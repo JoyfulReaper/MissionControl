@@ -1,0 +1,92 @@
+<div class="event-details">
+    <dl class="event-details-grid">
+        <div>
+            <dt>Event ID</dt>
+            <dd>
+                <code>@Event.EventId</code>
+            </dd>
+        </div>
+
+        <div>
+            <dt>Event type</dt>
+            <dd>@Event.EventType</dd>
+        </div>
+
+        <div>
+            <dt>Source</dt>
+            <dd>@Event.Source</dd>
+        </div>
+
+        <div>
+            <dt>Schema version</dt>
+            <dd>@Event.SchemaVersion</dd>
+        </div>
+
+        <div>
+            <dt>Occurred</dt>
+            <dd>@FormatTimestamp(Event.OccurredAt)</dd>
+        </div>
+
+        <div>
+            <dt>Received</dt>
+            <dd>@FormatTimestamp(Event.ReceivedAt)</dd>
+        </div>
+
+        <div>
+            <dt>Correlation ID</dt>
+            <dd>
+                <code>@(Event.CorrelationId ?? "—")</code>
+            </dd>
+        </div>
+
+        <div>
+            <dt>Causation ID</dt>
+            <dd>
+                <code>@(Event.CausationId ?? "—")</code>
+            </dd>
+        </div>
+    </dl>
+
+    <section class="event-payload-section">
+        <h2>Payload</h2>
+
+        <pre class="event-payload"><code>@FormatPayload(Event.Payload)</code></pre>
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ArchiveEventDetailsItem Event { get; set; } =
+        default!;
+
+    [Parameter]
+    public Func<DateTimeOffset, string>? TimestampFormatter
+    {
+        get;
+        set;
+    }
+
+    private string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        return TimestampFormatter?.Invoke(timestamp)
+            ?? timestamp
+                .ToLocalTime()
+                .ToString("yyyy-MM-dd HH:mm:ss zzz");
+    }
+
+    private static string FormatPayload(
+        JsonElement payload)
+    {
+        return payload.ValueKind is
+            JsonValueKind.Undefined or
+            JsonValueKind.Null
+                ? "null"
+                : JsonSerializer.Serialize(
+                    payload,
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    });
+    }
+}

@@ -1,0 +1,145 @@
+﻿@page "/events/{EventId:guid}"
+@implements IDisposable
+
+@inject IArchiveEventClient ArchiveClient
+
+<PageTitle>Event Details</PageTitle>
+
+<div class="mobile-event-details-page">
+    <header class="event-details-header">
+        <div>
+            <div class="page-eyebrow">
+                Event archive
+            </div>
+
+            <h1>Event details</h1>
+
+            <p>
+                Inspect event metadata and the complete archived
+                payload.
+            </p>
+        </div>
+
+        <NavLink class="btn btn-outline-secondary"
+                 href="events">
+            Back to events
+        </NavLink>
+    </header>
+
+    @if (_isLoading)
+    {
+        <div class="alert alert-info">
+            Loading event details...
+        </div>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger">
+            <div>@_error</div>
+
+            <NavLink class="alert-link"
+                     href="settings">
+                Open Settings
+            </NavLink>
+        </div>
+    }
+    else if (_event is null)
+    {
+        <div class="alert alert-warning">
+            The requested event was not found.
+        </div>
+    }
+    else
+    {
+        <EventDetailsPanel Event="_event"
+                           TimestampFormatter="FormatTimestamp" />
+    }
+</div>
+
+@code {
+    private readonly CancellationTokenSource _disposeSource =
+        new();
+
+    [Parameter]
+    public Guid EventId { get; set; }
+
+    private ArchiveEventDetailsItem? _event;
+    private string? _error;
+    private bool _isLoading;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _isLoading = true;
+        _error = null;
+        _event = null;
+
+        try
+        {
+            _event =
+                await ArchiveClient.GetByIdAsync(
+                    EventId,
+                    _disposeSource.Token);
+        }
+        catch (OperationCanceledException)
+            when (_disposeSource.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+            when (exception is
+                HttpRequestException or
+                TaskCanceledException or
+                InvalidOperationException)
+        {
+            _error =
+                CreateErrorMessage(exception);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private static string CreateErrorMessage(
+        Exception exception)
+    {
+        return exception switch
+        {
+            HttpRequestException
+            {
+                StatusCode:
+                    System.Net.HttpStatusCode.Unauthorized
+            } =>
+                "The Dashboard rejected the Mobile API token.",
+
+            HttpRequestException
+            {
+                StatusCode:
+                    System.Net.HttpStatusCode.BadGateway
+            } =>
+                "The Dashboard could not reach the Mission Control Archive.",
+
+            HttpRequestException =>
+                "Event details could not be retrieved: " +
+                exception.Message,
+
+            TaskCanceledException =>
+                "The event details request timed out.",
+
+            _ => exception.Message
+        };
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        return timestamp
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss zzz");
+    }
+
+    public void Dispose()
+    {
+        _disposeSource.Cancel();
+        _disposeSource.Dispose();
+    }
+}
