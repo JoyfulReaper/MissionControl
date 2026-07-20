@@ -26,28 +26,11 @@
 
 <section class="overview-section"
          aria-labelledby="archive-overview-title">
-    <div class="section-heading">
-        <div>
-            <div class="page-eyebrow">
-                Archive activity
-            </div>
 
-            <h2 id="archive-overview-title">
-                Event overview
-            </h2>
-        </div>
-
-        @if (_statistics?.LatestReceivedAt is not null)
-        {
-            <div class="latest-event">
-                Latest receipt
-                <strong>
-                    @DateTimeFormatter.Format(
-                        _statistics.LatestReceivedAt.Value)
-                </strong>
-            </div>
-        }
-    </div>
+    <ArchiveStatisticsPanel Statistics="_statistics"
+                            IsLoading="_isLoading"
+                            ErrorMessage="@_error"
+                            TimestampFormatter="DateTimeFormatter.Format" />
 
     @if (_isLoading)
     {

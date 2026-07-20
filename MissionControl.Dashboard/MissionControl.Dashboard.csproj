@@ -25,6 +25,7 @@
 
 <ItemGroup>
   <Folder Include="Archive\" />
+  <Folder Include="Components\Overview\" />
   <Folder Include="Components\Services\" />
 </ItemGroup>
 
