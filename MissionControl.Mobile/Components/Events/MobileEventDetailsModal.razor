@@ -8,6 +8,7 @@
      role="dialog"
      aria-modal="true"
      aria-labelledby="mobile-event-details-title"
+     @ref="_modalElement"
      @onclick="CloseAsync"
      @onkeydown="HandleKeyDown">
     <div class="modal-dialog modal-xl modal-dialog-scrollable"
@@ -29,7 +30,6 @@
                 <button type="button"
                         class="btn-close"
                         aria-label="Close"
-                        autofocus
                         @onclick="CloseAsync">
                 </button>
             </div>
@@ -90,6 +90,8 @@
     private string? _error;
     private bool _isLoading;
 
+    private ElementReference _modalElement;
+
     protected override async Task OnParametersSetAsync()
     {
         _isLoading = true;
@@ -149,6 +151,25 @@
 
             _ => exception.Message
         };
+    }
+
+    protected override async Task OnAfterRenderAsync(
+    bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            await _modalElement.FocusAsync(
+                preventScroll: true);
+        }
+        catch (JSException)
+        {
+            // The component may have been closed before focus completed.
+        }
     }
 
     private static string FormatTimestamp(
