@@ -61,7 +61,30 @@
     }
     else if (_feed is not null)
     {
-        <section class="event-filter-card">
+        <button type="button"
+                class="events-filter-toggle"
+                aria-expanded="@_filtersExpanded"
+                aria-controls="events-filter-panel"
+                @onclick="ToggleFilters">
+            <span>
+                @(_filtersExpanded
+                    ? "Hide filters"
+                    : "Show filters")
+            </span>
+
+            @if (_feed.HasActiveFilters)
+            {
+                <span class="badge text-bg-primary">
+                    Filters active
+                </span>
+            }
+        </button>
+
+        <section id="events-filter-panel"
+                 class="event-filter-card @(
+                 _filtersExpanded
+                     ? "event-filter-card-expanded"
+                     : null)">
             <div class="event-filter-heading">
                 <div>
                     <h2>Filter events</h2>
@@ -318,6 +341,7 @@
     private string? _configurationError;
     private bool _configurationChecked;
     private bool _hasToken;
+    private bool _filtersExpanded;
 
     private bool IsBusy =>
         _feed?.IsRefreshing == true;
@@ -366,6 +390,12 @@
             ? Task.CompletedTask
             : _feed.PollAsync(
                 _disposeSource.Token);
+    }
+
+    private void ToggleFilters()
+    {
+        _filtersExpanded =
+            !_filtersExpanded;
     }
 
     private async Task ApplyFiltersAsync()
