@@ -13,12 +13,14 @@
     </a>
 </div>
 
-<input type="checkbox"
+<input id="dashboard-nav-toggle"
+       type="checkbox"
        title="Navigation menu"
        class="navbar-toggler" />
 
 <div class="nav-scrollable"
-     onclick="document.querySelector('.navbar-toggler').click()">
+     onclick="document.getElementById(
+        'dashboard-nav-toggle').checked = false">
     <div class="nav-section-label">
         Workspace
     </div>

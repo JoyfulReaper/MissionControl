@@ -99,7 +99,6 @@
 @media (max-width: 700px) {
     .app-shell {
         flex-direction: column;
-        overflow: visible;
     }
 
     .sidebar {
@@ -107,6 +106,7 @@
         width: 100%;
         height: auto;
         flex-basis: auto;
+        overflow: visible;
         border-right: 0;
         border-bottom: 1px solid var(--mc-border);
     }

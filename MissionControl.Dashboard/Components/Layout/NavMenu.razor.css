@@ -208,14 +208,15 @@
         display: none;
     }
 
-    .nav-scrollable {
-        display: flex;
-        height: calc(100vh - 4.5rem);
-        min-height: 0;
-        flex-direction: column;
-        overflow-y: auto;
-        scrollbar-gutter: stable;
-    }
+        .nav-scrollable,
+        .navbar-toggler:checked ~ .nav-scrollable {
+            display: flex;
+            height: calc(100vh - 4.5rem);
+            min-height: 0;
+            flex-direction: column;
+            overflow-y: auto;
+            scrollbar-gutter: stable;
+        }
 
     .nav-footer {
         margin-top: auto;
