@@ -511,6 +511,7 @@ docker build -f Dockerfile.gitactivity -t mission-control-gitactivity .
 ```
 
 There is no Compose file checked into this repository and no Agent Dockerfile. Production Compose orchestration is maintained externally and is not part of the MissionControl repository.
+Currently the dockerfile can be found here: https://github.com/JoyfulReaper/UsefulScripts/blob/main/VPS/compose.yaml However please note it is not always updated quickly.
 
 - Archive sets `EventArchive__BasePath=/app/data` and declares `/app/data` as a volume; mount persistent storage there.
 - Dashboard declares `/app/data` for its authentication database and Data Protection keys.
