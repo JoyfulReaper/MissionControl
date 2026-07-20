@@ -1,74 +1,16 @@
 ﻿@inject IDashboardDateTimeFormatter DateTimeFormatter
 
-<dl class="row">
-    <dt class="col-sm-3">Event ID</dt>
-    <dd class="col-sm-9">
-        <code>@Event.EventId</code>
-    </dd>
-
-    <dt class="col-sm-3">Event type</dt>
-    <dd class="col-sm-9">@Event.EventType</dd>
-
-    <dt class="col-sm-3">Source</dt>
-    <dd class="col-sm-9">@Event.Source</dd>
-
-    <dt class="col-sm-3">Schema version</dt>
-    <dd class="col-sm-9">@Event.SchemaVersion</dd>
-
-    <dt class="col-sm-3">Occurred</dt>
-    <dd class="col-sm-9">
-        @DateTimeFormatter.Format(Event.OccurredAt)
-    </dd>
-
-    <dt class="col-sm-3">Received</dt>
-    <dd class="col-sm-9">
-        @DateTimeFormatter.Format(Event.ReceivedAt)
-    </dd>
-
-    <dt class="col-sm-3">Correlation ID</dt>
-    <dd class="col-sm-9">
-        <code>@(Event.CorrelationId ?? "—")</code>
-    </dd>
-
-    <dt class="col-sm-3">Causation ID</dt>
-    <dd class="col-sm-9">
-        <code>@(Event.CausationId ?? "—")</code>
-    </dd>
-</dl>
-
-<h2 class="h4">Payload</h2>
-
-<pre class="event-payload overflow-auto"><code>@FormatPayload(Event.Payload)</code></pre>
+<EventDetailsPanel Event="Event"
+                   TimestampFormatter="FormatTimestamp" />
 
 @code {
     [Parameter, EditorRequired]
-    public ArchiveEventDetailsItem Event { get; set; } = default!;
+    public ArchiveEventDetailsItem Event { get; set; } =
+        default!;
 
-    private static readonly TimeZoneInfo DashboardTimeZone =
-        TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
-
-    private static string FormatTimestamp(
+    private string FormatTimestamp(
         DateTimeOffset timestamp)
     {
-        DateTimeOffset localTime = TimeZoneInfo.ConvertTime(
-            timestamp,
-            DashboardTimeZone);
-
-        return localTime.ToString(
-            "yyyy-MM-dd HH:mm:ss zzz");
-    }
-
-    private static string FormatPayload(
-        JsonElement payload)
-    {
-        return payload.ValueKind is
-            JsonValueKind.Undefined or JsonValueKind.Null
-                ? "null"
-                : JsonSerializer.Serialize(
-                    payload,
-                    new JsonSerializerOptions
-                    {
-                        WriteIndented = true
-                    });
+        return DateTimeFormatter.Format(timestamp);
     }
 }

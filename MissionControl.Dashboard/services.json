@@ -24,6 +24,30 @@
         ]
       },
       {
+        "Id": "ntfy",
+        "Name": "ntfy",
+        "Group": "Public Services",
+        "Summary": "Delivers push notifications from applications and infrastructure.",
+        "Description": "A self-hosted notification service that accepts simple HTTP requests and delivers real-time push notifications to subscribed devices. It is used for application alerts, monitoring events, and operational notifications.",
+        "ContainerName": "joyful-stack-ntfy-1",
+        "Visibility": "Public",
+        "Protocol": "HTTPS / REST API",
+        "Endpoint": "ntfy.kgivler.com",
+        "Image": "binwiederhier/ntfy",
+        "ApplicationUrl": "https://ntfy.kgivler.com/",
+        "SourceUrl": "https://github.com/binwiederhier/ntfy",
+        "SearchTerms": [
+          "ntfy",
+          "notifications",
+          "push",
+          "alerts",
+          "monitoring",
+          "http",
+          "self-hosted",
+          "public"
+        ]
+      },
+      {
         "Id": "mission-control-dashboard",
         "Name": "Mission Control Dashboard",
         "Group": "Operations",

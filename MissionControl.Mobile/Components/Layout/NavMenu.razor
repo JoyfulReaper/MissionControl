@@ -1,0 +1,105 @@
+﻿<div class="nav-shell">
+    <header class="nav-header">
+        <a class="brand-link"
+           href="">
+            <span class="brand-mark"
+                  aria-hidden="true">
+                MC
+            </span>
+
+            <span class="brand-copy">
+                <strong>Mission Control</strong>
+                <small>JoyfulReaper operations</small>
+            </span>
+        </a>
+
+        <label class="nav-toggle"
+               for="mission-control-nav-toggle"
+               title="Toggle navigation">
+            <span></span>
+            <span></span>
+            <span></span>
+        </label>
+    </header>
+
+    <input id="mission-control-nav-toggle"
+           type="checkbox"
+           class="navbar-toggler"
+           aria-label="Navigation menu" />
+
+    <div class="nav-scrollable"
+         onclick="document.getElementById(
+        'mission-control-nav-toggle').checked = false">
+        <div class="nav-section-label">
+            Workspace
+        </div>
+
+        <nav class="nav flex-column">
+            <div class="nav-item">
+                <NavLink class="nav-link"
+                         href=""
+                         Match="NavLinkMatch.All">
+                    <span class="bi bi-house-door-fill-nav-menu"
+                          aria-hidden="true"></span>
+
+                    <span class="nav-copy">
+                        <strong>Overview</strong>
+                        <small>System and Archive activity</small>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item">
+                <NavLink class="nav-link"
+                         href="services">
+                    <span class="bi bi-list-nested-nav-menu"
+                          aria-hidden="true"></span>
+
+                    <span class="nav-copy">
+                        <strong>Services</strong>
+                        <small>Containers and protocols</small>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item">
+                <NavLink class="nav-link"
+                         href="events">
+                    <span class="bi bi-calendar-event-nav-menu"
+                          aria-hidden="true"></span>
+
+                    <span class="nav-copy">
+                        <strong>Events</strong>
+                        <small>Archive feed and payloads</small>
+                    </span>
+                </NavLink>
+            </div>
+
+            <div class="nav-item">
+                <NavLink class="nav-link"
+                         href="settings">
+                    <span class="bi bi-gear-fill-nav-menu"
+                          aria-hidden="true"></span>
+
+                    <span class="nav-copy">
+                        <strong>Settings</strong>
+                        <small>Dashboard API access</small>
+                    </span>
+                </NavLink>
+            </div>
+        </nav>
+
+        <footer class="nav-footer">
+            <div class="nav-status">
+                <span class="nav-status-dot"
+                      aria-hidden="true"></span>
+
+                <strong>Live telemetry</strong>
+            </div>
+
+            <small>
+                Agent refreshes every 30 seconds
+            </small>
+        </footer>
+    </div>
+</div>

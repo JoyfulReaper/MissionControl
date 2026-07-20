@@ -9,11 +9,10 @@ using AgentApp::MissionControl.Agent.Models;
 using AgentApp::MissionControl.Agent.Protocols;
 using AgentApp::MissionControl.Agent.Publishing;
 using AgentApp::MissionControl.Agent.Storage;
-using DashboardApp::MissionControl.Dashboard.Agent;
-using DashboardApp::MissionControl.Dashboard.Components.Overview;
 using JoyfulReaperLib.MissionControl;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using MissionControl.UI.Components.Overview;
 using System.Net.Http.Json;
 using Xunit;
 

@@ -1,9 +1,10 @@
 extern alias DashboardApp;
-
-using DashboardApp::MissionControl.Dashboard.Agent;
-using DashboardApp::MissionControl.Dashboard.Archive;
 using DashboardApp::MissionControl.Dashboard.Configuration;
 using DashboardApp::MissionControl.Dashboard.Refresh;
+using MissionControl.Client.Agent;
+using MissionControl.Client.Archive;
+using MissionControl.Contracts.Agent;
+using MissionControl.Contracts.Archive;
 using Xunit;
 
 namespace MissionControl.Tests;
@@ -476,7 +477,7 @@ public sealed class DashboardRefreshTests
                 capturedAt.AddSeconds(-5),
             Protocols:
             [
-                new AgentProtocolStatusItem(
+                new PublicProtocolStatus(
                     "echo",
                     protocolSucceeded,
                     12,
@@ -485,7 +486,7 @@ public sealed class DashboardRefreshTests
             ],
             Containers:
             [
-                new AgentContainerStatusItem(
+                new PublicContainerStatus(
                     "api",
                     containerState,
                     1_000_000,

@@ -1,4 +1,5 @@
 using MissionControl.Dashboard.Components;
+using MissionControl.Dashboard.MobileApi;
 
 namespace MissionControl.Dashboard.Hosting;
 
@@ -29,8 +30,10 @@ public static class DashboardApplicationExtensions
 
         app.UseAntiforgery();
         app.MapRazorPages();
+        app.MapMobileApiEndpoints();
 
-        app.MapStaticAssets();
+        app.MapStaticAssets()
+            .AllowAnonymous();
 
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();

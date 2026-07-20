@@ -1,11 +1,11 @@
-using MissionControl.Dashboard.Agent;
+using MissionControl.Contracts.Agent;
 
 namespace MissionControl.Dashboard.Refresh;
 
 internal static class SnapshotFreshness
 {
-    public static AgentSnapshotItem Apply(
-        AgentSnapshotItem snapshot,
+    public static PublicNodeSnapshot Apply(
+        PublicNodeSnapshot snapshot,
         DateTimeOffset utcNow,
         TimeSpan staleAfter)
     {

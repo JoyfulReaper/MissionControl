@@ -9,12 +9,15 @@ Mission Control is a .NET operations system for collecting integration events an
 | `MissionControl.Gateway` | ASP.NET Core ingress for generic integration events and signed GitHub webhooks. Publishes normalized envelopes to RabbitMQ. |
 | `MissionControl.Archive` | RabbitMQ consumer and HTTP query API backed by a SQLite event archive. |
 | `MissionControl.Agent` | Collects host, Docker, and protocol status; persists the latest node snapshot; optionally publishes operational snapshot events; exposes a sanitized snapshot API. |
-| `MissionControl.Dashboard` | Authenticated Blazor Server UI for archive statistics, events, node resources, containers, probes, and a configured service catalog. |
+| `MissionControl.Dashboard` | Authenticated Blazor Server UI for archive statistics, events, node resources, containers, probes, and a configured service catalog. Also exposes the bearer-authenticated Mobile API proxy for installed clients. |
 | `MissionControl.GitActivity` | Consumes selected GitHub push events, stores an allowed repository/branch projection in SQLite, and exposes an API-key-protected activity feed. |
-| `MissionControl.Contracts` | Shared integration-event and GitHub payload contracts. |
+| `MissionControl.Contracts` | Shared Agent, Archive, service-catalog, integration-event, and GitHub transport contracts. |
+| `MissionControl.Client` | Shared Agent and Archive HTTP clients plus client-side event-feed state, including cursor paging and new-event detection. |
+| `MissionControl.UI` | Razor Class Library with shared dashboard components, presentation helpers, event details UI, overview panels, service panels, and the shared Mission Control theme. |
+| `MissionControl.Mobile` | .NET MAUI Blazor Hybrid application sharing the Client, Contracts, and UI projects across Windows and Android builds. |
 | `MissionControl.Messaging.RabbitMq` | Shared RabbitMQ consumer, consumer options, and integration-event processor contract. |
 | `MissionControl.Observability` | Shared liveness/readiness endpoint mapping and RabbitMQ connection health check. |
-| `MissionControl.Tests` | xUnit unit and focused integration coverage for the solution. |
+| `MissionControl.Tests` | xUnit unit and focused integration coverage for storage, messaging, Agent, Dashboard, shared client/UI behavior, GitActivity, and API contracts. |
 
 ## Data flow
 
@@ -30,6 +33,17 @@ generic client or GitHub
 -> MissionControl.Dashboard
 ```
 
+The shared cross-platform UI layers sit above those service APIs:
+
+```text
+MissionControl.Contracts
+-> MissionControl.Client
+-> MissionControl.UI
+   -> MissionControl.Dashboard authenticated Blazor web app
+   -> MissionControl.Mobile Windows MAUI Blazor Hybrid app
+   -> MissionControl.Mobile Android MAUI Blazor Hybrid app
+```
+
 `MissionControl.GitActivity` consumes `github.push.received` events from its own RabbitMQ queue. It filters configured repositories and branches, then stores a commit-oriented SQLite projection for `GET /api/github/activity`.
 
 The Agent path is separate:
@@ -41,6 +55,20 @@ host, Docker, and protocol collectors
 -> GET /api/snapshot
 -> Dashboard Overview and Services pages
 ```
+
+Installed Windows and Android clients share the same Razor UI and service clients.
+Archive data is reached through Dashboard, not by exposing Archive publicly:
+
+```text
+Windows / Android MAUI client
+-> HTTPS Dashboard Mobile API with bearer token
+-> internal Dashboard Archive client
+-> private Archive HTTP service
+```
+
+The current mobile app also polls the configured Agent snapshot API for live
+host, container, and protocol status. Keep Archive private; do not publish the
+Archive HTTP service solely to support installed clients.
 
 Every Agent collection is saved locally. A snapshot is published as an integration event only for the first successful attempt, an operational-state change, or the configured heartbeat. CPU, memory, container resource usage, probe duration, and diagnostic wording alone do not trigger publication. A failed publication remains eligible for the next collection, and successful publication metadata is recorded without preventing later snapshot persistence.
 
@@ -57,7 +85,7 @@ Docker collection uses a Unix domain socket, normally `/var/run/docker.sock`. Do
 
 The Agent stores one latest snapshot per node rather than a metrics history. `GET /api/snapshot` returns that snapshot with age, staleness, Docker availability, publication status, and sanitized protocol diagnostics. The endpoint applies configured CORS origins and a fixed request rate limit. Raw exception details and local Docker socket paths are not exposed through protocol diagnostics.
 
-## Dashboard behavior
+## Web Dashboard behavior
 
 The Dashboard requires an authenticated user and provides:
 
@@ -68,6 +96,36 @@ The Dashboard requires an authenticated user and provides:
 Agent data on Overview and Services refreshes automatically. Event data also polls automatically. Freshness is recalculated locally between requests. When a later refresh fails, the last successful Agent or event data remains visible with a warning. If older events are loaded, polling preserves the current list and shows a “new events available” action instead of replacing the user’s position.
 
 The service catalog is loaded from the required `MissionControl.Dashboard/services.json` file and reloads automatically. An invalid reload keeps the last valid catalog visible and displays a warning until a later valid update succeeds. Dashboard authentication uses a local SQLite user database and persisted ASP.NET Core Data Protection keys.
+
+## Windows and Android client behavior
+
+`MissionControl.Mobile` is one .NET MAUI Blazor Hybrid application. The current
+project builds Android on all supported build hosts, adds iOS and Mac Catalyst
+targets on non-Linux hosts, and adds the Windows target on Windows. The installed
+Windows and Android applications share the same Razor UI, shared theme,
+contracts, and HTTP clients.
+
+The mobile app currently provides:
+
+- **Overview**: Archive statistics through the Dashboard Mobile API, Agent
+  snapshot status, node resources, container counts, and protocol counts;
+- **Services**: bundled service-catalog entries correlated with Agent
+  containers and protocol probes;
+- **Events**: source and event-type filters, cursor-based older-event loading,
+  manual refresh, new-event detection, event cards, modal details, and a
+  full-page details route;
+- **Settings**: entry, testing, storage, and removal of the raw Mobile API
+  bearer token.
+
+Event cards open an in-place details modal. The modal supports the Close button,
+backdrop dismissal, Escape dismissal on desktop, and a View full page action.
+The app reads the shared service catalog from its bundled `services.json` asset,
+which is included from `MissionControl.Dashboard/services.json` at build time.
+
+Agent polling runs every 30 seconds from the mobile layout, and Overview and
+Services also expose manual refresh for Agent data. Archive event and statistics
+requests keep last-known data visible when a later refresh fails and surface the
+failure as a warning or actionable Settings message.
 
 ## Requirements
 
@@ -226,6 +284,10 @@ Dashboard uses upstream URLs plus `Dashboard`, `MissionControl`, and `ServiceCat
       "CookieLifetimeHours": 8,
       "MaxFailedAttempts": 5,
       "LockoutMinutes": 15
+    },
+    "MobileApi": {
+      "Enabled": true,
+      "TokenHash": "base64-encoded-sha256-token-hash"
     }
   },
   "MissionControl": {
@@ -238,6 +300,29 @@ Dashboard uses upstream URLs plus `Dashboard`, `MissionControl`, and `ServiceCat
 ```
 
 Refresh intervals must be between 5 and 3600 seconds; the stale threshold must be between 5 and 86400 seconds. `ServiceCatalog:Services` is supplied by `services.json` and must contain at least one service. Each service may identify its corresponding `ContainerName` and `ProtocolServiceKey` so live Agent data can be correlated with catalog metadata.
+
+`Dashboard:MobileApi:Enabled` controls the bearer-authenticated Mobile API used
+by installed Windows and Android clients. `Dashboard:MobileApi:TokenHash` is the
+Base64-encoded SHA-256 hash of the expected token, not the raw token. Enter the
+raw token independently in each installed app's Settings page; it is stored with
+MAUI `SecureStorage`. Keep the Dashboard `Archive:BaseUrl` pointed at an
+internal Archive URL.
+
+One way to derive the placeholder hash locally with PowerShell is:
+
+```powershell
+$token = Read-Host -AsSecureString "Mobile API token"
+$ptr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($token)
+try {
+    $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)
+    [Convert]::ToBase64String(
+        [Security.Cryptography.SHA256]::HashData(
+            [Text.Encoding]::UTF8.GetBytes($plain)))
+}
+finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
+}
+```
 
 The optional Mission Control client publishes successful Dashboard login events when enabled. Create a local Dashboard user from an interactive terminal with:
 
@@ -293,12 +378,24 @@ The API key must contain at least 32 characters. Both allowlists must be non-emp
 | Archive | `GET /api/events/feed` | Summary feed with a stable three-part cursor. |
 | Archive | `GET /api/events/{eventId}` | Complete event metadata and payload, or 404. |
 | Archive | `GET /api/events/statistics` | Archive totals, 24-hour counts, and top categories. |
+| Dashboard Mobile API | `GET /api/mobile/ping` | Requires `Authorization: Bearer <raw-token>` and validates the configured `Dashboard:MobileApi:TokenHash`. Used by installed clients to test Settings. |
+| Dashboard Mobile API | `GET /api/events/feed` | Requires the Mobile API bearer token. Proxies to the internal Archive client; supports limit/source/eventType and the three cursor fields. |
+| Dashboard Mobile API | `GET /api/events/statistics` | Requires the Mobile API bearer token. Proxies Archive statistics through Dashboard. |
+| Dashboard Mobile API | `GET /api/events/{eventId}` | Requires the Mobile API bearer token. Proxies complete Archive event details through Dashboard. |
 | Agent | `GET /api/snapshot` | Latest sanitized node snapshot; returns 503 until one is stored. |
 | GitActivity | `GET /api/github/activity` | Recent allowed activity; requires `X-Mission-Control-Key`. |
 
 Gateway, Archive, and GitActivity expose `GET /health/live` and `GET /health/ready`. Readiness includes their RabbitMQ status and, for SQLite consumers, database health. Agent exposes `GET /health/live`. Dashboard pages are cookie-authenticated and redirect anonymous users to `/login`.
 
-Archive query endpoints and Agent liveness do not add application-level authentication. Place internal services behind appropriate network controls or an authenticated proxy when they are not intended to be public.
+Dashboard pages (`/`, `/events`, `/events/{eventId}`, `/services`, `/login`,
+and `/logout`) use normal cookie authentication. The Dashboard Mobile API uses
+bearer authentication and does not use the Dashboard cookie.
+
+Archive query endpoints and Agent liveness do not add application-level
+authentication. Place internal services behind appropriate network controls or
+an authenticated proxy when they are not intended to be public. The Mobile API
+exists so Archive can remain private while installed clients read Archive data
+through Dashboard.
 
 ## Local development
 
@@ -308,6 +405,22 @@ Restore, build, and test the solution:
 dotnet restore MissionControl.slnx
 dotnet build MissionControl.slnx --configuration Debug
 dotnet test MissionControl.slnx --configuration Debug --no-build
+```
+
+Build the MAUI client on Windows for the checked-in Windows target:
+
+```powershell
+dotnet build .\MissionControl.Mobile\MissionControl.Mobile.csproj `
+    -f net10.0-windows10.0.19041.0 `
+    -c Debug
+```
+
+Build the MAUI client for Android:
+
+```powershell
+dotnet build .\MissionControl.Mobile\MissionControl.Mobile.csproj `
+    -f net10.0-android `
+    -c Debug
 ```
 
 After supplying valid local configuration, run each executable in a separate terminal as needed:
@@ -321,6 +434,70 @@ dotnet run --project MissionControl.GitActivity
 ```
 
 Checked-in launch profiles use port 5190 for Gateway, 5194 for Agent, 5089/7062 for Dashboard, and 5242 for GitActivity. The explicit Archive command above matches the Dashboard’s checked-in Archive URL. Services that connect to RabbitMQ will not be fully operational until the broker and credentials are available.
+
+## Publishing for personal use
+
+`MissionControl.Mobile` currently uses:
+
+- `ApplicationTitle`: `Mission Control`
+- `ApplicationId`: `com.kgivler.missioncontrol.mobile`
+- `ApplicationDisplayVersion`: `1.0.0`
+- `ApplicationVersion`: `1`
+- Android Release package format: `apk`
+- Windows package type: `None`
+
+### Windows unpackaged publish
+
+For a private Windows install, publish an unpackaged, self-contained, win-x64
+build:
+
+```powershell
+dotnet publish .\MissionControl.Mobile\MissionControl.Mobile.csproj `
+    -f net10.0-windows10.0.19041.0 `
+    -c Release `
+    /p:RuntimeIdentifierOverride=win-x64 `
+    /p:SelfContained=true `
+    /p:WindowsPackageType=None `
+    /p:WindowsAppSDKSelfContained=true
+```
+
+Copy the entire publish directory to the target machine. The executable depends
+on the other files in that directory; copying only the `.exe` is not enough.
+
+### Android private APK publish
+
+For private Android sideloading, publish a signed Release APK. Keep the keystore
+file outside the repository and provide passwords through environment variables:
+
+```powershell
+$env:MC_ANDROID_KEYSTORE = "C:\path\to\mission-control-upload.keystore"
+$env:MC_ANDROID_KEY_ALIAS = "mission-control-upload"
+$env:MC_ANDROID_STORE_PASS = "<store-password-from-secret-manager>"
+$env:MC_ANDROID_KEY_PASS = "<key-password-from-secret-manager>"
+
+dotnet publish .\MissionControl.Mobile\MissionControl.Mobile.csproj `
+    -f net10.0-android `
+    -c Release `
+    /p:AndroidKeyStore=true `
+    /p:AndroidSigningKeyStore="$env:MC_ANDROID_KEYSTORE" `
+    /p:AndroidSigningKeyAlias="$env:MC_ANDROID_KEY_ALIAS" `
+    /p:AndroidSigningStorePass="$env:MC_ANDROID_STORE_PASS" `
+    /p:AndroidSigningKeyPass="$env:MC_ANDROID_KEY_PASS"
+```
+
+Install or update the APK with:
+
+```powershell
+adb install -r .\path\to\com.kgivler.missioncontrol.mobile-Signed.apk
+```
+
+Retain the same keystore and alias for future updates. Never commit the
+keystore, signing passwords, or release credentials. Google Play/AAB publishing
+is not the current release path documented here.
+
+For releases, `ApplicationDisplayVersion` is the user-facing version,
+`ApplicationVersion` must increase, and `ApplicationId` must remain stable.
+Android updates must be signed with the same signing key.
 
 ## Containers
 
@@ -366,6 +543,9 @@ dotnet format MissionControl.slnx --verify-no-changes
 
 - Keep event-source keys, GitActivity keys, RabbitMQ credentials, GitHub webhook secrets, and Dashboard user credentials out of source control.
 - Webhook signatures and API keys are validated before event publication; GitActivity compares its API key in fixed time.
+- Keep Mobile API raw tokens, token hashes, Android keystores, signing passwords, and production host secrets out of source control.
+- The Dashboard stores only the configured Mobile API token hash. Installed clients store the raw token independently in MAUI `SecureStorage`.
+- Mobile Archive traffic should follow the Dashboard Mobile API proxy path; do not expose Archive publicly merely to support Windows or Android clients.
 - Dashboard authentication state depends on persistent SQLite and Data Protection key storage. Back up and permission those paths appropriately.
 - Access to the Docker socket is effectively privileged host access. Grant it only to a trusted Agent process.
 - Agent protocol endpoints and errors are sanitized before public serialization; local collector logs can contain more operational context and should be protected accordingly.
@@ -378,3 +558,9 @@ dotnet format MissionControl.slnx --verify-no-changes
 - Host uptime is not collected by the Agent.
 - The repository does not include its externally maintained Compose orchestration or an Agent container image.
 - Automated tests avoid external infrastructure; a real Gateway → RabbitMQ → Archive/GitActivity smoke test is still recommended for deployment validation.
+
+## Planned polish
+
+- Reduce card padding and height at the mobile breakpoint.
+- Make the Events filter panel collapsible on small screens so it does not dominate the page.
+- Preserve current desktop and web layouts while making those mobile-only changes.

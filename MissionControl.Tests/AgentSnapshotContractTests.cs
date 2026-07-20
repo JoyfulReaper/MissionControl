@@ -1,12 +1,9 @@
 extern alias AgentApp;
-extern alias DashboardApp;
-
 using AgentApp::MissionControl.Agent.Endpoints;
-using AgentApp::MissionControl.Agent.Contracts;
 using AgentApp::MissionControl.Agent.Models;
 using AgentApp::MissionControl.Agent.Storage;
-using DashboardApp::MissionControl.Dashboard.Agent;
-using DashboardApp::MissionControl.Dashboard.Components.Services;
+using MissionControl.Contracts.Agent;
+using MissionControl.UI.Components.Services;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Xunit;
@@ -153,6 +150,7 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(
             suppressedSnapshot.CapturedAt,
             dashboardSnapshot.CapturedAt);
+        Assert.Null(dashboardSnapshot.HostCapturedAt);
         Assert.Equal(12, dashboardSnapshot.Host?.LogicalProcessorCount);
         Assert.Equal(37.5, dashboardSnapshot.Host?.CpuPercent);
         Assert.Equal(
@@ -166,7 +164,7 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(
             attemptedAt,
             dashboardSnapshot.LastMissionControlPublishAttemptAt);
-        AgentContainerStatusItem dashboardContainer =
+        PublicContainerStatus dashboardContainer =
             Assert.Single(dashboardSnapshot.Containers);
         Assert.Equal(987_654_321, dashboardContainer.MemoryUsageBytes);
         Assert.Equal(2_147_483_648, dashboardContainer.MemoryLimitBytes);
@@ -193,6 +191,74 @@ public sealed class AgentSnapshotContractTests
                 Assert.Equal("localhost:17", protocol.Endpoint);
                 Assert.Equal("Connection refused", protocol.Error);
             });
+    }
+
+    [Fact]
+    public void PublicSnapshotCanUseFreshHostMetricsWithoutChangingStoredSnapshotTimestamp()
+    {
+        DateTimeOffset capturedAt =
+            new(2026, 7, 17, 14, 0, 0, TimeSpan.Zero);
+        DateTimeOffset now =
+            capturedAt.AddSeconds(30);
+        DateTimeOffset hostCapturedAt =
+            capturedAt.AddSeconds(29);
+        var stored = new StoredNodeSnapshot(
+            Snapshot: new NodeSnapshotEvent(
+                Node: "node-1",
+                CapturedAt: capturedAt,
+                Host: new HostMetric(
+                    8,
+                    12.5,
+                    1_000,
+                    800),
+                Protocols: [],
+                Containers: [],
+                DockerAvailable: true,
+                DockerError: null),
+            PublishSucceeded: true,
+            LastPublishAttemptAt: capturedAt.AddSeconds(5),
+            UpdatedAt: capturedAt);
+        var freshHost = new HostMetric(
+            12,
+            37.5,
+            2_000,
+            1_250);
+
+        PublicNodeSnapshot publicSnapshot =
+            AgentSnapshotEndpointRouteBuilderExtensions
+                .CreatePublicSnapshot(
+                    stored,
+                    now,
+                    TimeSpan.FromMinutes(1),
+                    freshHost,
+                    hostCapturedAt);
+
+        Assert.Equal(capturedAt, publicSnapshot.CapturedAt);
+        Assert.Equal(30, publicSnapshot.AgeSeconds);
+        Assert.Equal(hostCapturedAt, publicSnapshot.HostCapturedAt);
+        Assert.Equal(12, publicSnapshot.Host?.LogicalProcessorCount);
+        Assert.Equal(37.5, publicSnapshot.Host?.CpuPercent);
+        Assert.Equal(2_000, publicSnapshot.Host?.MemoryTotalBytes);
+        Assert.Equal(1_250, publicSnapshot.Host?.MemoryAvailableBytes);
+        Assert.Empty(publicSnapshot.Protocols);
+        Assert.Empty(publicSnapshot.Containers);
+
+        string json = JsonSerializer.Serialize(
+            publicSnapshot,
+            new JsonSerializerOptions(
+                JsonSerializerDefaults.Web));
+
+        Assert.Contains("\"hostCapturedAt\":", json);
+
+        AgentSnapshotItem dashboardSnapshot =
+            Assert.IsType<AgentSnapshotItem>(
+                JsonSerializer.Deserialize<AgentSnapshotItem>(
+                    json,
+                    new JsonSerializerOptions(
+                        JsonSerializerDefaults.Web)));
+
+        Assert.Equal(hostCapturedAt, dashboardSnapshot.HostCapturedAt);
+        Assert.Equal(37.5, dashboardSnapshot.Host?.CpuPercent);
     }
 
     [Fact]
@@ -236,6 +302,16 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(
             typeof(DateTimeOffset?),
             typeof(PublicNodeSnapshot)
+                .GetProperty(nameof(PublicNodeSnapshot.HostCapturedAt))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(DateTimeOffset?),
+            typeof(AgentSnapshotItem)
+                .GetProperty(nameof(AgentSnapshotItem.HostCapturedAt))!
+                .PropertyType);
+        Assert.Equal(
+            typeof(DateTimeOffset?),
+            typeof(PublicNodeSnapshot)
                 .GetProperty(
                     nameof(PublicNodeSnapshot.LastMissionControlPublishAttemptAt))!
                 .PropertyType);
@@ -274,8 +350,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(long),
-            typeof(AgentProtocolStatusItem)
-                .GetProperty(nameof(AgentProtocolStatusItem.DurationMilliseconds))!
+            typeof(PublicProtocolStatus)
+                .GetProperty(nameof(PublicProtocolStatus.DurationMilliseconds))!
                 .PropertyType);
         Assert.Equal(
             typeof(string),
@@ -284,8 +360,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(string),
-            typeof(AgentProtocolStatusItem)
-                .GetProperty(nameof(AgentProtocolStatusItem.Endpoint))!
+            typeof(PublicProtocolStatus)
+                .GetProperty(nameof(PublicProtocolStatus.Endpoint))!
                 .PropertyType);
         Assert.Equal(
             typeof(string),
@@ -294,8 +370,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(string),
-            typeof(AgentProtocolStatusItem)
-                .GetProperty(nameof(AgentProtocolStatusItem.Error))!
+            typeof(PublicProtocolStatus)
+                .GetProperty(nameof(PublicProtocolStatus.Error))!
                 .PropertyType);
         Assert.Equal(
             typeof(double?),
@@ -304,8 +380,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(double?),
-            typeof(AgentContainerStatusItem)
-                .GetProperty(nameof(AgentContainerStatusItem.CpuPercent))!
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.CpuPercent))!
                 .PropertyType);
         Assert.Equal(
             typeof(long?),
@@ -314,8 +390,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(long?),
-            typeof(AgentContainerStatusItem)
-                .GetProperty(nameof(AgentContainerStatusItem.MemoryUsageBytes))!
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.MemoryUsageBytes))!
                 .PropertyType);
         Assert.Equal(
             typeof(int?),
@@ -324,8 +400,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(int?),
-            typeof(AgentContainerStatusItem)
-                .GetProperty(nameof(AgentContainerStatusItem.RestartCount))!
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.RestartCount))!
                 .PropertyType);
         Assert.Equal(
             typeof(string),
@@ -334,8 +410,8 @@ public sealed class AgentSnapshotContractTests
                 .PropertyType);
         Assert.Equal(
             typeof(string),
-            typeof(AgentContainerStatusItem)
-                .GetProperty(nameof(AgentContainerStatusItem.Image))!
+            typeof(PublicContainerStatus)
+                .GetProperty(nameof(PublicContainerStatus.Image))!
                 .PropertyType);
     }
 
@@ -401,7 +477,7 @@ public sealed class AgentSnapshotContractTests
                 json,
                 new JsonSerializerOptions(
                     JsonSerializerDefaults.Web));
-        AgentContainerStatusItem dashboardContainer =
+        PublicContainerStatus dashboardContainer =
             Assert.Single(
                 Assert.IsType<AgentSnapshotItem>(
                     dashboardSnapshot).Containers);
@@ -466,7 +542,7 @@ public sealed class AgentSnapshotContractTests
                     json,
                     new JsonSerializerOptions(
                         JsonSerializerDefaults.Web)));
-        AgentProtocolStatusItem protocol =
+        PublicProtocolStatus protocol =
             Assert.Single(dashboardSnapshot.Protocols);
 
         Assert.Equal(duration, protocol.DurationMilliseconds);
@@ -516,15 +592,16 @@ public sealed class AgentSnapshotContractTests
                     json,
                     new JsonSerializerOptions(
                         JsonSerializerDefaults.Web)));
-        AgentProtocolStatusItem protocol =
+        PublicProtocolStatus protocol =
             Assert.Single(snapshot.Protocols);
-        AgentContainerStatusItem container =
+        PublicContainerStatus container =
             Assert.Single(snapshot.Containers);
 
         Assert.Equal(42, protocol.DurationMilliseconds);
         Assert.Null(protocol.Endpoint);
         Assert.Null(protocol.Error);
         Assert.Null(container.Image);
+        Assert.Null(snapshot.HostCapturedAt);
     }
 
     [Fact]
@@ -663,6 +740,18 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(
             "12.5%",
             ContainerResourcePresentation.FormatCpu(12.5));
+        Assert.Equal(
+            "—",
+            ContainerResourcePresentation.FormatMemorySummary(
+                null));
+        Assert.Equal(
+            "94.6 MB",
+            ContainerResourcePresentation.FormatMemorySummary(
+                99_194_880));
+        Assert.Equal(
+            "1 MB",
+            ContainerResourcePresentation.FormatMemorySummary(
+                1_048_576));
     }
 
     [Fact]

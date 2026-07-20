@@ -1,0 +1,261 @@
+﻿@page "/"
+
+@implements IDisposable
+@inject MobileAgentSnapshotState SnapshotState
+@inject IArchiveEventClient ArchiveClient
+@inject MobileApiCredentialStore CredentialStore
+
+<PageTitle>Mission Control</PageTitle>
+
+<div class="mobile-dashboard">
+    <header class="mobile-header">
+        <div class="mobile-eyebrow">
+            JoyfulReaper operations
+        </div>
+
+        <h1>Mission Control</h1>
+
+        <p>
+            Live Archive activity, host resources, containers, and protocol status.
+        </p>
+    </header>
+
+    @if (!_archiveConfigurationChecked)
+    {
+        <div class="alert alert-info">
+            Checking Archive configuration...
+        </div>
+    }
+    else if (!_hasArchiveToken)
+    {
+        <div class="alert alert-warning">
+            <div>
+                Configure the Mobile API token to view Archive activity.
+            </div>
+
+            <NavLink class="alert-link"
+                     href="settings">
+                Open Settings
+            </NavLink>
+        </div>
+    }
+    else
+    {
+        <ArchiveStatisticsPanel Statistics="_archiveStatistics"
+                                IsLoading="_archiveIsLoading"
+                                IsRefreshing="_archiveIsRefreshing"
+                                ErrorMessage="@_archiveError"
+                                TimestampFormatter="FormatTimestamp"
+                                OnRefresh="RefreshArchiveStatisticsAsync" />
+    }
+
+    <AgentSnapshotPanel Snapshot="SnapshotState.Snapshot"
+                        IsLoading="SnapshotState.IsInitialLoading"
+                        IsRefreshing="SnapshotState.IsRefreshing"
+                        IsManualRefreshing="SnapshotState.IsManualRefreshing"
+                        ErrorMessage="@SnapshotState.ErrorMessage"
+                        TimestampFormatter="FormatTimestamp"
+                        OnRefresh="RefreshSnapshotAsync" />
+
+    <section class="mobile-section"
+             aria-labelledby="node-resources-title">
+        <div class="mobile-section-heading">
+            <div>
+                <div class="mobile-eyebrow">
+                    Current telemetry
+                </div>
+
+                <h2 id="node-resources-title">
+                    Node resources
+                </h2>
+            </div>
+        </div>
+
+        <NodeResourceCards Host="SnapshotState.Snapshot?.Host"
+                           IsLoading="SnapshotState.IsInitialLoading"
+                           ErrorMessage="@SnapshotState.ErrorMessage" />
+    </section>
+
+    @if (SnapshotState.Snapshot is not null)
+    {
+        <section class="mobile-observation-grid">
+            <article class="mobile-observation-card">
+                <span>Containers observed</span>
+                <strong>
+                    @(SnapshotState.Snapshot.Containers.Count.ToString("N0"))
+                </strong>
+            </article>
+
+            <article class="mobile-observation-card">
+                <span>Successful probes</span>
+                <strong>
+                    @(SnapshotState.Snapshot.Protocols
+                    .Count(protocol => protocol.Succeeded)
+                    .ToString("N0"))
+                </strong>
+            </article>
+
+            <article class="mobile-observation-card">
+                <span>Failed probes</span>
+                <strong>
+                    @(SnapshotState.Snapshot.Protocols
+                    .Count(protocol => !protocol.Succeeded)
+                    .ToString("N0"))
+                </strong>
+            </article>
+        </section>
+    }
+</div>
+
+@code {
+    private readonly CancellationTokenSource _disposeSource =
+        new();
+
+    private ArchiveStatisticsItem? _archiveStatistics;
+    private string? _archiveError;
+    private bool _archiveConfigurationChecked;
+    private bool _archiveIsLoading;
+    private bool _archiveIsRefreshing;
+    private bool _hasArchiveToken;
+
+    protected override async Task OnInitializedAsync()
+    {
+        SnapshotState.Changed += HandleSnapshotStateChanged;
+
+        Task snapshotTask =
+            SnapshotState.EnsureLoadedAsync(
+                _disposeSource.Token);
+
+        try
+        {
+            string? token =
+                await CredentialStore.GetTokenAsync();
+
+            _hasArchiveToken =
+                !string.IsNullOrWhiteSpace(token);
+
+            _archiveConfigurationChecked = true;
+
+            if (_hasArchiveToken)
+            {
+                await LoadArchiveStatisticsAsync(
+                    isManualRefresh: false);
+            }
+        }
+        catch (Exception exception)
+        {
+            _archiveConfigurationChecked = true;
+            _archiveError =
+                $"Could not read the Mobile API configuration: " +
+                exception.Message;
+        }
+
+        await snapshotTask;
+    }
+
+    private Task RefreshArchiveStatisticsAsync()
+    {
+        return LoadArchiveStatisticsAsync(
+            isManualRefresh: true);
+    }
+
+    private async Task LoadArchiveStatisticsAsync(
+        bool isManualRefresh)
+    {
+        if (_archiveIsLoading || _archiveIsRefreshing)
+        {
+            return;
+        }
+
+        _archiveIsLoading =
+            _archiveStatistics is null;
+
+        _archiveIsRefreshing =
+            isManualRefresh;
+
+        try
+        {
+            _archiveStatistics =
+                await ArchiveClient.GetStatisticsAsync(
+                    _disposeSource.Token);
+
+            _archiveError = null;
+        }
+        catch (OperationCanceledException)
+            when (_disposeSource.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+            when (exception is
+                HttpRequestException or
+                TaskCanceledException or
+                InvalidOperationException)
+        {
+            _archiveError =
+                CreateArchiveErrorMessage(exception);
+        }
+        finally
+        {
+            _archiveIsLoading = false;
+            _archiveIsRefreshing = false;
+        }
+    }
+
+    private static string CreateArchiveErrorMessage(
+        Exception exception)
+    {
+        return exception switch
+        {
+            HttpRequestException
+            {
+                StatusCode:
+                    System.Net.HttpStatusCode.Unauthorized
+            } =>
+                "The Dashboard rejected the Mobile API token. " +
+                "Update it in Settings.",
+
+            HttpRequestException
+            {
+                StatusCode:
+                    System.Net.HttpStatusCode.BadGateway
+            } =>
+                "The Dashboard could not reach the Mission Control Archive.",
+
+            HttpRequestException =>
+                "Archive statistics could not be retrieved: " +
+                exception.Message,
+
+            TaskCanceledException =>
+                "The Archive statistics request timed out.",
+
+            _ => exception.Message
+        };
+    }
+
+    private Task RefreshSnapshotAsync()
+    {
+        return SnapshotState.RefreshAsync(
+            isManualRefresh: true);
+    }
+
+    private void HandleSnapshotStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SnapshotState.Changed -= HandleSnapshotStateChanged;
+
+        _disposeSource.Cancel();
+        _disposeSource.Dispose();
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        return timestamp
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss zzz");
+    }
+}

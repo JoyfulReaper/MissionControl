@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using MissionControl.Contracts.Services;
 
 namespace MissionControl.Dashboard.Services;
 

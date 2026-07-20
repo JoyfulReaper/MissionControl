@@ -1,7 +1,6 @@
 extern alias DashboardApp;
 
-using DashboardApp::MissionControl.Dashboard.Agent;
-using DashboardApp::MissionControl.Dashboard.Components.Overview;
+using MissionControl.UI.Components.Overview;
 using Xunit;
 
 namespace MissionControl.Tests;

@@ -61,6 +61,14 @@ public sealed class LoginModel(
             InvalidCredentials = true;
             Password = string.Empty;
 
+            await loginEventPublisher.TryPublishAsync(
+                new DashboardUser(0, Username, DashboardUsernameNormalizer.Normalize(Username), "Failed Login", string.Empty, false, 1, null, string.Empty, DateTime.UtcNow, DateTime.UtcNow),
+                HttpContext.Connection
+                    .RemoteIpAddress?
+                    .ToString(),
+                DashBoardEventTypes.LoginFailed,
+                HttpContext.RequestAborted);
+
             return Page();
         }
 
@@ -121,6 +129,7 @@ public sealed class LoginModel(
             HttpContext.Connection
                 .RemoteIpAddress?
                 .ToString(),
+            DashBoardEventTypes.LoginSucceeded,
             HttpContext.RequestAborted);
 
         return LocalRedirect(ReturnUrl);

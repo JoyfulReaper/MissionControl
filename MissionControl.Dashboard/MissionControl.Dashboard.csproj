@@ -17,4 +17,16 @@
 	<InternalsVisibleTo Include="MissionControl.Tests" />
 </ItemGroup>
 
+<ItemGroup>
+  <ProjectReference Include="..\MissionControl.Client\MissionControl.Client.csproj" />
+  <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
+  <ProjectReference Include="..\MissionControl.UI\MissionControl.UI.csproj" />
+</ItemGroup>
+
+<ItemGroup>
+  <Folder Include="Archive\" />
+  <Folder Include="Components\Overview\" />
+  <Folder Include="Components\Services\" />
+</ItemGroup>
+
 </Project>

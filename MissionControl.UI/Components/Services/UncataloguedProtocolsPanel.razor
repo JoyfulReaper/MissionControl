@@ -1,0 +1,51 @@
+@if (Protocols.Count > 0)
+{
+    <section class="uncatalogued-panel"
+             aria-label="Uncatalogued protocol probes">
+        <div class="uncatalogued-heading">
+            <strong>Uncatalogued protocol probes</strong>
+            <span>
+                Map these probe keys to a service when they are expected.
+            </span>
+        </div>
+
+        <div class="uncatalogued-list">
+            @foreach (PublicProtocolStatus protocol in Protocols)
+            {
+                <div class="uncatalogued-item">
+                    <strong>@protocol.Service</strong>
+                    <span>
+                        @(protocol.Succeeded ? "Succeeded" : "Failed")
+                    </span>
+                    <span>
+                        @AgentDiagnosticPresentation.FormatDuration(
+                            protocol.DurationMilliseconds)
+                    </span>
+                    <span>
+                        Observed endpoint:
+                        @AgentDiagnosticPresentation.FormatOptional(
+                            protocol.Endpoint)
+                    </span>
+                    @if (!protocol.Succeeded)
+                    {
+                        <span class="uncatalogued-diagnostic">
+                            Reason:
+                            @AgentDiagnosticPresentation.GetFailureReason(
+                                protocol.Succeeded,
+                                protocol.Error)
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<PublicProtocolStatus> Protocols
+    {
+        get;
+        set;
+    }
+}

@@ -1,0 +1,176 @@
+﻿@page "/services"
+
+@implements IDisposable
+@inject MobileAgentSnapshotState SnapshotState
+@inject MobileServiceCatalog Catalog
+
+<PageTitle>Services</PageTitle>
+
+@{
+    ServiceCatalogView view =
+        ServiceCatalogViewBuilder.Build(
+            _services,
+            SnapshotState.Snapshot,
+            _filter);
+}
+
+<div class="mobile-services-page">
+    <header class="mobile-page-header">
+        <div class="page-eyebrow">
+            Service operations
+        </div>
+
+        <h1>Services</h1>
+
+        <p>
+            Inspect applications, containers, protocols, and live
+            probe results.
+        </p>
+    </header>
+
+    <AgentSnapshotPanel Snapshot="SnapshotState.Snapshot"
+                        IsLoading="SnapshotState.IsInitialLoading"
+                        IsRefreshing="SnapshotState.IsRefreshing"
+                        IsManualRefreshing="SnapshotState.IsManualRefreshing"
+                        ErrorMessage="@SnapshotState.ErrorMessage"
+                        TimestampFormatter="FormatTimestamp"
+                        OnRefresh="RefreshSnapshotAsync" />
+
+    @if (_catalogError is not null)
+    {
+        <div class="alert alert-danger">
+            @_catalogError
+        </div>
+    }
+
+    <ServiceSummaryCards ConfiguredServices="view.ConfiguredServices"
+                         RunningContainers="view.RunningContainers"
+                         PublicServices="view.PublicServices"
+                         SnapshotContainers="view.SnapshotContainers"
+                         SuccessfulProbes="view.SuccessfulProbes"
+                         FailedProbes="view.FailedProbes" />
+
+    <section class="service-toolbar">
+        <div>
+            <label for="mobile-service-filter"
+                   class="form-label">
+                Filter services
+            </label>
+
+            <input id="mobile-service-filter"
+                   type="search"
+                   class="form-control"
+                   placeholder="Name, protocol, container..."
+                   autocomplete="off"
+                   @bind="_filter"
+                   @bind:event="oninput" />
+        </div>
+
+        <div class="service-result-count">
+            @view.MatchingServices.ToString("N0")
+            matching services
+        </div>
+    </section>
+
+    <UncataloguedContainersPanel Containers="view.UncataloguedContainers" />
+
+    <UncataloguedProtocolsPanel Protocols="view.UncataloguedProtocols" />
+
+    @if (!SnapshotState.IsInitialLoading &&
+         view.Groups.Count == 0)
+    {
+        <div class="alert alert-info">
+            No services matched that filter.
+        </div>
+    }
+    else
+    {
+        @foreach (ServiceGroupView group in view.Groups)
+        {
+            <section class="service-group">
+                <div class="service-group-heading">
+                    <div>
+                        <div class="page-eyebrow">
+                            Service group
+                        </div>
+
+                        <h2>@group.Name</h2>
+                    </div>
+
+                    <span>
+                        @group.Services.Count.ToString("N0")
+                        services
+                    </span>
+                </div>
+
+                <div class="service-list">
+                    @foreach (ServiceItemView item in group.Services)
+                    {
+                        <ServiceEntry Service="item.Service"
+                                      Container="item.Container"
+                                      Protocol="item.Protocol"
+                                      IsSnapshotAvailable="@(
+                                      SnapshotState.Snapshot is not null)"
+                                      DockerAvailable="@(
+                                      SnapshotState.Snapshot?.DockerAvailable)" />
+                    }
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ServiceDefinition> _services = [];
+    private string? _filter;
+    private string? _catalogError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        SnapshotState.Changed +=
+            HandleSnapshotStateChanged;
+
+        try
+        {
+            _services =
+                await Catalog.GetServicesAsync();
+        }
+        catch (Exception exception)
+            when (exception is
+                IOException or
+                JsonException or
+                InvalidOperationException)
+        {
+            _catalogError =
+                $"Could not load the service catalog: " +
+                exception.Message;
+        }
+
+        await SnapshotState.EnsureLoadedAsync();
+    }
+
+    private Task RefreshSnapshotAsync()
+    {
+        return SnapshotState.RefreshAsync(
+            isManualRefresh: true);
+    }
+
+    private void HandleSnapshotStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SnapshotState.Changed -=
+            HandleSnapshotStateChanged;
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        return timestamp
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss zzz");
+    }
+}

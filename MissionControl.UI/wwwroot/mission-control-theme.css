@@ -1,0 +1,17 @@
+﻿:root {
+    color-scheme: dark;
+    --mc-background: #080d16;
+    --mc-background-elevated: #0d1420;
+    --mc-surface: #111a28;
+    --mc-surface-hover: #172233;
+    --mc-border: #253247;
+    --mc-text: #e7edf7;
+    --mc-text-muted: #91a0b5;
+    --mc-accent: #48c9b0;
+    --mc-accent-hover: #65ddc4;
+    --mc-accent-subtle: rgba(72, 201, 176, 0.13);
+    --mc-danger: #f87171;
+    --mc-warning: #fbbf24;
+    --mc-radius: 0.65rem;
+    --mc-shadow: 0 14px 35px rgba(0, 0, 0, 0.25);
+}

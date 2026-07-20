@@ -1,0 +1,146 @@
+﻿<section class="archive-statistics"
+         aria-labelledby="archive-statistics-title">
+    <div class="archive-statistics-heading">
+        <div>
+            <div class="archive-statistics-eyebrow">
+                Archive activity
+            </div>
+
+            <h2 id="archive-statistics-title">
+                Event overview
+            </h2>
+        </div>
+
+        <div class="archive-statistics-actions">
+            @if (Statistics?.LatestReceivedAt is not null)
+            {
+                <div class="latest-receipt">
+                    Latest receipt
+                    <strong>
+                        @FormatTimestamp(
+                            Statistics.LatestReceivedAt.Value)
+                    </strong>
+                </div>
+            }
+
+            @if (OnRefresh.HasDelegate)
+            {
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        disabled="@(IsLoading || IsRefreshing)"
+                        @onclick="HandleRefreshAsync">
+                    @(IsRefreshing
+                        ? "Refreshing..."
+                        : "Refresh")
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="archive-stats-grid">
+            @for (int index = 0; index < 4; index++)
+            {
+                <div class="archive-stat-card archive-stat-loading">
+                    <span></span>
+                    <strong></strong>
+                </div>
+            }
+        </div>
+    }
+    else if (ErrorMessage is not null)
+    {
+        <div class="alert alert-danger">
+            @ErrorMessage
+        </div>
+    }
+    else if (Statistics is not null)
+    {
+        <div class="archive-stats-grid">
+            <div class="archive-stat-card">
+                <span>Total archived</span>
+                <strong>
+                    @Statistics.TotalEvents.ToString("N0")
+                </strong>
+            </div>
+
+            <div class="archive-stat-card archive-stat-accent">
+                <span>Received in 24 hours</span>
+                <strong>
+                    @Statistics.EventsReceivedLast24Hours.ToString("N0")
+                </strong>
+            </div>
+
+            <div class="archive-stat-card">
+                <span>Event sources</span>
+                <strong>
+                    @Statistics.UniqueSources.ToString("N0")
+                </strong>
+            </div>
+
+            <div class="archive-stat-card">
+                <span>Event types</span>
+                <strong>
+                    @Statistics.UniqueEventTypes.ToString("N0")
+                </strong>
+            </div>
+        </div>
+
+        <div class="archive-category-grid">
+            <div class="archive-category-card">
+                <h3>Top sources</h3>
+
+                <CategoryList Items="Statistics.TopSources"
+                              TotalEvents="Statistics.TotalEvents" />
+            </div>
+
+            <div class="archive-category-card">
+                <h3>Top event types</h3>
+
+                <CategoryList Items="Statistics.TopEventTypes"
+                              TotalEvents="Statistics.TotalEvents" />
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public ArchiveStatisticsItem? Statistics { get; set; }
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool IsRefreshing { get; set; }
+
+    [Parameter]
+    public string? ErrorMessage { get; set; }
+
+    [Parameter]
+    public Func<DateTimeOffset, string>? TimestampFormatter
+    {
+        get;
+        set;
+    }
+
+    [Parameter]
+    public EventCallback OnRefresh { get; set; }
+
+    private string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        return TimestampFormatter?.Invoke(timestamp)
+            ?? timestamp
+                .ToLocalTime()
+                .ToString("yyyy-MM-dd HH:mm:ss zzz");
+    }
+
+    private Task HandleRefreshAsync()
+    {
+        return OnRefresh.HasDelegate
+            ? OnRefresh.InvokeAsync()
+            : Task.CompletedTask;
+    }
+}

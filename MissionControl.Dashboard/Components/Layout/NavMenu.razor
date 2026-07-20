@@ -13,12 +13,14 @@
     </a>
 </div>
 
-<input type="checkbox"
+<input id="dashboard-nav-toggle"
+       type="checkbox"
        title="Navigation menu"
        class="navbar-toggler" />
 
 <div class="nav-scrollable"
-     onclick="document.querySelector('.navbar-toggler').click()">
+     onclick="document.getElementById(
+        'dashboard-nav-toggle').checked = false">
     <div class="nav-section-label">
         Workspace
     </div>
@@ -59,11 +61,17 @@
         </div>
     </nav>
 
-    <div class="nav-footer">
-        <span class="nav-footer-dot"
-              aria-hidden="true">
-        </span>
+    <footer class="nav-footer">
+        <div class="nav-footer-status">
+            <span class="nav-footer-dot"
+                  aria-hidden="true">
+            </span>
 
-        Private dashboard
-    </div>
+            <strong>Live telemetry</strong>
+        </div>
+
+        <small>
+            Agent refreshes every 30 seconds
+        </small>
+    </footer>
 </div>

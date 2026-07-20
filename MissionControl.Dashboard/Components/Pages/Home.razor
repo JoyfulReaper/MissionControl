@@ -11,200 +11,96 @@
 
 <PageTitle>Mission Control</PageTitle>
 
-<header class="page-header">
-    <div class="page-eyebrow">
-        Operations dashboard
-    </div>
-
-    <h1>Mission Control</h1>
-
-    <p class="page-description">
-        Inspect archived integration events, trace related activity,
-        and investigate payloads without leaving the dashboard.
-    </p>
-</header>
-
-<section class="overview-section"
-         aria-labelledby="archive-overview-title">
-    <div class="section-heading">
-        <div>
-            <div class="page-eyebrow">
-                Archive activity
-            </div>
-
-            <h2 id="archive-overview-title">
-                Event overview
-            </h2>
+<div class="dashboard-home">
+    <header class="page-header">
+        <div class="page-eyebrow">
+            JoyfulReaper operations
         </div>
 
-        @if (_statistics?.LatestReceivedAt is not null)
-        {
-            <div class="latest-event">
-                Latest receipt
-                <strong>
-                    @DateTimeFormatter.Format(
-                        _statistics.LatestReceivedAt.Value)
-                </strong>
-            </div>
-        }
-    </div>
+        <h1>Mission Control</h1>
 
-    @if (_isLoading)
-    {
-        <div class="stats-grid">
-            @for (int index = 0; index < 4; index++)
-            {
-                <div class="stat-card stat-card-loading">
-                    <span></span>
-                    <strong></strong>
+        <p class="page-description">
+            Live Archive activity, host resources, containers, and protocol status.
+        </p>
+    </header>
+
+    <ArchiveStatisticsPanel Statistics="_statistics"
+                            IsLoading="_archiveIsLoading"
+                            IsRefreshing="_archiveIsRefreshing"
+                            ErrorMessage="@_archiveError"
+                            TimestampFormatter="DateTimeFormatter.Format"
+                            OnRefresh="RefreshArchiveStatisticsAsync" />
+
+    <AgentSnapshotPanel Snapshot="CurrentSnapshot"
+                        IsLoading="_agentRefresh.IsInitialLoading"
+                        IsRefreshing="_agentRefresh.IsRefreshing"
+                        IsManualRefreshing="_isManualAgentRefresh"
+                        ErrorMessage="@_agentRefresh.RefreshWarning"
+                        TimestampFormatter="@(timestamp =>
+                            DateTimeFormatter.Format(timestamp))"
+                        OnRefresh="RefreshSnapshotAsync" />
+
+    <section class="overview-section"
+             aria-labelledby="node-resources-title">
+        <div class="section-heading">
+            <div>
+                <div class="page-eyebrow">
+                    Current telemetry
                 </div>
-            }
+
+                <h2 id="node-resources-title">
+                    Node resources
+                </h2>
+            </div>
         </div>
-    }
-    else if (_error is not null)
+
+        <NodeResourceCards Host="CurrentSnapshot?.Host"
+                           IsLoading="_agentRefresh.IsInitialLoading"
+                           ErrorMessage="@ResourceError" />
+    </section>
+
+    @if (CurrentSnapshot is not null)
     {
-        <div class="alert alert-danger">
-            @_error
-        </div>
+        <section class="observation-grid"
+                 aria-label="Operational observations">
+            <article class="observation-card">
+                <span>Containers observed</span>
+                <strong>
+                    @(CurrentSnapshot.Containers.Count.ToString("N0"))
+                </strong>
+            </article>
+
+            <article class="observation-card">
+                <span>Successful probes</span>
+                <strong>
+                    @(CurrentSnapshot.Protocols
+                        .Count(protocol => protocol.Succeeded)
+                        .ToString("N0"))
+                </strong>
+            </article>
+
+            <article class="observation-card">
+                <span>Failed probes</span>
+                <strong>
+                    @(CurrentSnapshot.Protocols
+                        .Count(protocol => !protocol.Succeeded)
+                        .ToString("N0"))
+                </strong>
+            </article>
+        </section>
     }
-    else if (_statistics is not null)
-    {
-        <div class="stats-grid">
-            <div class="stat-card">
-                <span>Total archived</span>
-                <strong>
-                    @_statistics.TotalEvents.ToString("N0")
-                </strong>
-            </div>
-
-            <div class="stat-card stat-card-accent">
-                <span>Received in 24 hours</span>
-                <strong>
-                    @(_statistics.EventsReceivedLast24Hours.ToString("N0"))
-                </strong>
-            </div>
-
-            <div class="stat-card">
-                <span>Event sources</span>
-                <strong>
-                    @(_statistics.UniqueSources.ToString("N0"))
-                </strong>
-            </div>
-
-            <div class="stat-card">
-                <span>Event types</span>
-                <strong>
-                    @(_statistics.UniqueEventTypes.ToString("N0"))
-                </strong>
-            </div>
-        </div>
-
-        <div class="category-grid">
-            <div class="category-card">
-                <h3>Top sources</h3>
-
-                <CategoryList
-                    Items="_statistics.TopSources"
-                    TotalEvents="_statistics.TotalEvents" />
-            </div>
-
-            <div class="category-card">
-                <h3>Top event types</h3>
-
-                <CategoryList
-                    Items="_statistics.TopEventTypes"
-                    TotalEvents="_statistics.TotalEvents" />
-            </div>
-        </div>
-    }
-</section>
-
-<section class="overview-section"
-         aria-labelledby="node-resources-title">
-    <div class="section-heading">
-        <div>
-            <div class="page-eyebrow">
-                Agent snapshot
-            </div>
-
-            <h2 id="node-resources-title">
-                Node resources
-            </h2>
-        </div>
-
-        @if (CurrentSnapshot is not null)
-        {
-            <div class="latest-event">
-                Node <strong>@CurrentSnapshot.Node</strong>
-                · Captured
-                <strong>
-                    @DateTimeFormatter.Format(CurrentSnapshot.CapturedAt)
-                </strong>
-                · Age
-                <strong>@CurrentSnapshot.AgeSeconds seconds</strong>
-                · @(CurrentSnapshot.Stale ? "Stale" : "Fresh")
-            </div>
-        }
-    </div>
-
-    @if (CurrentSnapshot is not null &&
-         !string.IsNullOrWhiteSpace(_agentRefresh.RefreshWarning))
-    {
-        <div class="alert alert-warning">
-            @_agentRefresh.RefreshWarning
-        </div>
-    }
-
-    <NodeResourceCards Host="CurrentSnapshot?.Host"
-                       IsLoading="_agentRefresh.IsInitialLoading"
-                       ErrorMessage="@ResourceError" />
-</section>
-
-<div class="row g-4 mt-1">
-    <div class="col-lg-7">
-        <a class="workspace-card"
-           href="events">
-            <div class="workspace-card-label">
-                Event Archive
-            </div>
-
-            <h2>Explore integration events</h2>
-
-            <p>
-                Filter by source or event type, page through historical
-                activity, and open complete event payloads in place.
-            </p>
-
-            <span class="workspace-card-action">
-                Open archive →
-            </span>
-        </a>
-    </div>
-
-    <div class="col-lg-5">
-        <div class="workspace-card workspace-card-secondary">
-            <div class="workspace-card-label">
-                Investigation workflow
-            </div>
-
-            <h2>Keep your place</h2>
-
-            <p>
-                Click an event row for a quick modal inspection, or open
-                the full event page when you need a permanent URL.
-            </p>
-        </div>
-    </div>
 </div>
 
 @code 
 {
     private ArchiveStatisticsItem? _statistics;
-    private bool _isLoading = true;
-    private string? _error;
+    private bool _archiveIsLoading;
+    private bool _archiveIsRefreshing;
+    private string? _archiveError;
     private AgentSnapshotRefreshController _agentRefresh = null!;
     private readonly CancellationTokenSource _disposeSource = new();
     private Task? _pollingTask;
+    private bool _isManualAgentRefresh;
     private bool _disposed;
 
     private AgentSnapshotItem? CurrentSnapshot =>
@@ -225,7 +121,8 @@
                 RefreshOptions.Value.SnapshotStaleAfterSeconds));
 
         await Task.WhenAll(
-            LoadArchiveStatisticsAsync(),
+            LoadArchiveStatisticsAsync(
+                isManualRefresh: false),
             _agentRefresh.RefreshAsync(
                 _disposeSource.Token));
 
@@ -236,27 +133,73 @@
             _disposeSource.Token);
     }
 
-    private async Task LoadArchiveStatisticsAsync()
+    private Task RefreshArchiveStatisticsAsync()
     {
+        return LoadArchiveStatisticsAsync(
+            isManualRefresh: true);
+    }
+
+    private async Task LoadArchiveStatisticsAsync(
+        bool isManualRefresh)
+    {
+        if (_archiveIsLoading || _archiveIsRefreshing)
+        {
+            return;
+        }
+
+        _archiveIsLoading =
+            _statistics is null;
+
+        _archiveIsRefreshing =
+            isManualRefresh;
+
         try
         {
             _statistics =
-                await ArchiveClient.GetStatisticsAsync();
+                await ArchiveClient.GetStatisticsAsync(
+                    _disposeSource.Token);
+
+            _archiveError = null;
+        }
+        catch (OperationCanceledException)
+            when (_disposeSource.IsCancellationRequested)
+        {
         }
         catch (HttpRequestException exception)
         {
-            _error =
+            _archiveError =
                 $"Mission Control Archive could not be reached: " +
                 exception.Message;
         }
         catch (TaskCanceledException)
         {
-            _error =
+            _archiveError =
                 "The Mission Control Archive request timed out.";
         }
         finally
         {
-            _isLoading = false;
+            _archiveIsLoading = false;
+            _archiveIsRefreshing = false;
+        }
+    }
+
+    private async Task RefreshSnapshotAsync()
+    {
+        if (_agentRefresh.IsRefreshing)
+        {
+            return;
+        }
+
+        _isManualAgentRefresh = true;
+
+        try
+        {
+            await _agentRefresh.RefreshAsync(
+                _disposeSource.Token);
+        }
+        finally
+        {
+            _isManualAgentRefresh = false;
         }
     }
 

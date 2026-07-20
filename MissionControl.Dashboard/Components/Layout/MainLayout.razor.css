@@ -10,7 +10,7 @@
     flex: 0 0 260px;
     width: 260px;
     height: 100vh;
-    overflow-y: auto;
+    overflow: hidden;
     background: #0a111c;
     border-right: 1px solid var(--mc-border);
 }
@@ -106,6 +106,7 @@
         width: 100%;
         height: auto;
         flex-basis: auto;
+        overflow: visible;
         border-right: 0;
         border-bottom: 1px solid var(--mc-border);
     }

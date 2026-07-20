@@ -1,0 +1,462 @@
+﻿@page "/events"
+@implements IDisposable
+
+@inject IArchiveEventClient ArchiveClient
+@inject MobileApiCredentialStore CredentialStore
+
+<PageTitle>Events</PageTitle>
+
+<div class="mobile-events-page">
+    <header class="mobile-page-header event-page-header">
+        <div>
+            <div class="page-eyebrow">
+                Event archive
+            </div>
+
+            <h1>Events</h1>
+
+            <p>
+                Inspect recent integration events received by
+                Mission Control.
+            </p>
+        </div>
+
+        <button type="button"
+                class="btn btn-outline-primary"
+                disabled="@(!_configurationChecked ||
+                                        !_hasToken ||
+                                        IsBusy)"
+                @onclick="RefreshAsync">
+            @(IsBusy
+                ? "Refreshing..."
+                : "Refresh")
+        </button>
+    </header>
+
+    @if (!_configurationChecked)
+    {
+        <div class="alert alert-info">
+            Checking Mobile API configuration...
+        </div>
+    }
+    else if (_configurationError is not null)
+    {
+        <div class="alert alert-danger">
+            @_configurationError
+        </div>
+    }
+    else if (!_hasToken)
+    {
+        <div class="alert alert-warning">
+            <div>
+                A Mobile API token is required to access archived
+                events.
+            </div>
+
+            <NavLink class="alert-link"
+                     href="settings">
+                Open Settings
+            </NavLink>
+        </div>
+    }
+    else if (_feed is not null)
+    {
+        <section class="event-filter-card">
+            <div class="event-filter-heading">
+                <div>
+                    <h2>Filter events</h2>
+
+                    <p>
+                        Filter by source, event type, or both.
+                    </p>
+                </div>
+
+                @if (_feed.HasActiveFilters)
+                {
+                    <span class="badge text-bg-primary">
+                        Filters active
+                    </span>
+                }
+            </div>
+
+            <div class="event-filter-grid">
+                <div>
+                    <label for="mobile-event-source"
+                           class="form-label">
+                        Source
+                    </label>
+
+                    <input id="mobile-event-source"
+                           class="form-control"
+                           list="mobile-event-source-options"
+                           placeholder="Source"
+                           autocomplete="off"
+                           @bind="_sourceFilter"
+                           @bind:event="oninput"
+                           @onkeydown="HandleFilterKeyDown" />
+
+                    <datalist id="mobile-event-source-options">
+                        @foreach (
+                            string source in
+                            _feed.SourceSuggestions)
+                        {
+                            <option value="@source"></option>
+                        }
+                    </datalist>
+                </div>
+
+                <div>
+                    <label for="mobile-event-type"
+                           class="form-label">
+                        Event type
+                    </label>
+
+                    <input id="mobile-event-type"
+                           class="form-control"
+                           list="mobile-event-type-options"
+                           placeholder="Event type"
+                           autocomplete="off"
+                           @bind="_eventTypeFilter"
+                           @bind:event="oninput"
+                           @onkeydown="HandleFilterKeyDown" />
+
+                    <datalist id="mobile-event-type-options">
+                        @foreach (
+                            string eventType in
+                            _feed.EventTypeSuggestions)
+                        {
+                            <option value="@eventType"></option>
+                        }
+                    </datalist>
+                </div>
+            </div>
+
+            <div class="event-filter-actions">
+                <button type="button"
+                        class="btn btn-primary"
+                        disabled="@IsBusy"
+                        @onclick="ApplyFiltersAsync">
+                    Apply filters
+                </button>
+
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        disabled="@(
+                        IsBusy ||
+                        !_feed.HasActiveFilters)"
+                        @onclick="ClearFiltersAsync">
+                    Clear
+                </button>
+            </div>
+        </section>
+
+        @if (_feed.RefreshWarning is not null)
+        {
+            <div class="alert alert-warning">
+                @_feed.RefreshWarning
+            </div>
+        }
+
+        @if (_feed.NewEventsAvailable)
+        {
+            <div class="alert alert-info event-newest-alert">
+                <span>
+                    New events are available.
+                </span>
+
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        disabled="@IsBusy"
+                        @onclick="LoadNewestAsync">
+                    Load newest
+                </button>
+            </div>
+        }
+
+        @if (_feed.Error is not null)
+        {
+            <div class="alert alert-danger">
+                <div>
+                    @_feed.Error
+                </div>
+
+                <NavLink class="alert-link"
+                         href="settings">
+                    Open Settings
+                </NavLink>
+            </div>
+        }
+        else if (_feed.IsInitialLoading)
+        {
+            <div class="event-list event-list-loading"
+                 aria-label="Loading archived events">
+                @for (int index = 0; index < 5; index++)
+                {
+                    <div class="event-card event-card-loading">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                }
+            </div>
+        }
+        else if (_feed.Events.Count == 0)
+        {
+            <div class="alert alert-info">
+                No archived events matched the current filters.
+            </div>
+        }
+        else
+        {
+            <div class="event-results-heading">
+                <div>
+                    <h2>Recent events</h2>
+
+                    <span>
+                        @_feed.Events.Count.ToString("N0")
+                        loaded
+                    </span>
+                </div>
+
+                <span>
+                    Newest first
+                </span>
+            </div>
+
+            <div class="event-list">
+                @foreach (
+    ArchiveEventSummaryItem item in
+    _feed.Events)
+                {
+                    <article class="event-card event-card-interactive"
+                             role="button"
+                             tabindex="0"
+                             aria-label="Open @item.EventType event from @item.Source"
+                             @onclick="() => OpenEventModal(item.EventId)"
+                             @onkeydown="eventArgs =>
+                                         HandleEventKeyDown(eventArgs, item.EventId)">
+                       <div class="event-card-heading">
+                            <div>
+                                <span class="event-source">
+                                    @item.Source
+                                </span>
+
+                                <h2 title="@item.EventType">
+                                    @item.EventType
+                                </h2>
+                            </div>
+
+                            <time datetime="@item.OccurredAt.ToString("O")">
+                                @FormatTimestamp(item.OccurredAt)
+                            </time>
+                        </div>
+
+                        <dl class="event-meta">
+                            <div>
+                                <dt>Schema</dt>
+                                <dd>@item.SchemaVersion</dd>
+                            </div>
+
+                            <div>
+                                <dt>Correlation</dt>
+                                <dd>
+                                    <code title="@item.CorrelationId">
+                                        @(item.CorrelationId ?? "—")
+                                    </code>
+                                </dd>
+                            </div>
+
+                            <div>
+                                <dt>Received</dt>
+                                <dd>
+                                    @FormatTimestamp(item.ReceivedAt)
+                                </dd>
+                            </div>
+                        </dl>
+                    </article>
+                }
+            </div>
+
+            @if (_feed.LoadMoreError is not null)
+            {
+                <div class="alert alert-danger">
+                    @_feed.LoadMoreError
+                </div>
+            }
+
+            @if (_feed.HasMore)
+            {
+                <div class="load-more">
+                    <button type="button"
+                            class="btn btn-outline-primary"
+                            disabled="@IsBusy"
+                            @onclick="LoadOlderAsync">
+                        @(_feed.IsLoadingMore
+                            ? "Loading older events..."
+                            : "Load older")
+                    </button>
+                </div>
+            }
+        }
+    }
+</div>
+
+@if (_feed?.SelectedEventId is Guid selectedEventId)
+{
+    <MobileEventDetailsModal @key="selectedEventId"
+                             EventId="selectedEventId"
+                             OnClosed="CloseEventModal" />
+}
+
+@code {
+    private readonly CancellationTokenSource _disposeSource =
+        new();
+
+    private EventFeedController? _feed;
+    private string? _sourceFilter;
+    private string? _eventTypeFilter;
+    private string? _configurationError;
+    private bool _configurationChecked;
+    private bool _hasToken;
+
+    private bool IsBusy =>
+        _feed?.IsRefreshing == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            string? token =
+                await CredentialStore.GetTokenAsync();
+
+            _hasToken =
+                !string.IsNullOrWhiteSpace(token);
+
+            _configurationChecked = true;
+
+            if (!_hasToken)
+            {
+                return;
+            }
+
+            _feed =
+                new EventFeedController(
+                    ArchiveClient);
+
+            await _feed.LoadInitialAsync(
+                _disposeSource.Token);
+        }
+        catch (OperationCanceledException)
+            when (_disposeSource.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            _configurationError =
+                $"Could not initialize the event archive: " +
+                exception.Message;
+
+            _configurationChecked = true;
+        }
+    }
+
+    private Task RefreshAsync()
+    {
+        return _feed is null
+            ? Task.CompletedTask
+            : _feed.PollAsync(
+                _disposeSource.Token);
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        if (_feed is null)
+        {
+            return;
+        }
+
+        _feed.SourceFilter =
+            _sourceFilter;
+
+        _feed.EventTypeFilter =
+            _eventTypeFilter;
+
+        await _feed.ApplyFiltersAsync(
+            _disposeSource.Token);
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        if (_feed is null)
+        {
+            return;
+        }
+
+        _sourceFilter = null;
+        _eventTypeFilter = null;
+
+        await _feed.ClearFiltersAsync(
+            _disposeSource.Token);
+    }
+
+    private Task LoadOlderAsync()
+    {
+        return _feed is null
+            ? Task.CompletedTask
+            : _feed.LoadOlderAsync(
+                _disposeSource.Token);
+    }
+
+    private Task LoadNewestAsync()
+    {
+        return _feed is null
+            ? Task.CompletedTask
+            : _feed.LoadNewestAsync(
+                _disposeSource.Token);
+    }
+
+    private Task HandleFilterKeyDown(
+        KeyboardEventArgs eventArgs)
+    {
+        return eventArgs.Key == "Enter" &&
+               !IsBusy
+            ? ApplyFiltersAsync()
+            : Task.CompletedTask;
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        return timestamp
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    public void Dispose()
+    {
+        _disposeSource.Cancel();
+        _disposeSource.Dispose();
+    }
+
+    private void OpenEventModal(Guid eventId)
+    {
+        _feed?.SelectEvent(eventId);
+    }
+
+    private void CloseEventModal()
+    {
+        _feed?.CloseSelectedEvent();
+    }
+
+    private Task HandleEventKeyDown(
+        KeyboardEventArgs eventArgs,
+        Guid eventId)
+    {
+        if (eventArgs.Key is "Enter" or " " or "Spacebar")
+        {
+            OpenEventModal(eventId);
+        }
+
+        return Task.CompletedTask;
+    }
+}
