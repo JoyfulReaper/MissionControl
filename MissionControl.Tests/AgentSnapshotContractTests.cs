@@ -222,7 +222,12 @@ public sealed class AgentSnapshotContractTests
             12,
             37.5,
             2_000,
-            1_250);
+            1_250)
+        {
+            LoadAverage1Minute = 1.24,
+            LoadAverage5Minutes = 0.97,
+            LoadAverage15Minutes = 0.81
+        };
 
         PublicNodeSnapshot publicSnapshot =
             AgentSnapshotEndpointRouteBuilderExtensions
@@ -240,6 +245,9 @@ public sealed class AgentSnapshotContractTests
         Assert.Equal(37.5, publicSnapshot.Host?.CpuPercent);
         Assert.Equal(2_000, publicSnapshot.Host?.MemoryTotalBytes);
         Assert.Equal(1_250, publicSnapshot.Host?.MemoryAvailableBytes);
+        Assert.Equal(1.24, publicSnapshot.Host?.LoadAverage1Minute);
+        Assert.Equal(0.97, publicSnapshot.Host?.LoadAverage5Minutes);
+        Assert.Equal(0.81, publicSnapshot.Host?.LoadAverage15Minutes);
         Assert.Empty(publicSnapshot.Protocols);
         Assert.Empty(publicSnapshot.Containers);
 
@@ -602,6 +610,9 @@ public sealed class AgentSnapshotContractTests
         Assert.Null(protocol.Error);
         Assert.Null(container.Image);
         Assert.Null(snapshot.HostCapturedAt);
+        Assert.Null(snapshot.Host?.LoadAverage1Minute);
+        Assert.Null(snapshot.Host?.LoadAverage5Minutes);
+        Assert.Null(snapshot.Host?.LoadAverage15Minutes);
     }
 
     [Fact]

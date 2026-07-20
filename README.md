@@ -324,7 +324,7 @@ finally {
 }
 ```
 
-The optional Mission Control client publishes successful Dashboard login events when enabled. Create a local Dashboard user from an interactive terminal with:
+The optional Mission Control client publishes successful and failed Dashboard login events when enabled. Create a local Dashboard user from an interactive terminal with:
 
 ```bash
 dotnet run --project MissionControl.Dashboard -- users create operator "Local Operator"
@@ -441,8 +441,8 @@ Checked-in launch profiles use port 5190 for Gateway, 5194 for Agent, 5089/7062 
 
 - `ApplicationTitle`: `Mission Control`
 - `ApplicationId`: `com.kgivler.missioncontrol.mobile`
-- `ApplicationDisplayVersion`: `1.0.0`
-- `ApplicationVersion`: `1`
+- `ApplicationDisplayVersion`: `1.0.1`
+- `ApplicationVersion`: `2`
 - Android Release package format: `apk`
 - Windows package type: `None`
 
@@ -555,7 +555,7 @@ dotnet format MissionControl.slnx --verify-no-changes
 ## Current limitations
 
 - Agent storage retains only the latest snapshot per node; it is not a historical metrics database.
-- Linux `/proc` supplies the implemented host CPU and memory metrics, and Docker collection currently targets a Unix socket.
+- Linux `/proc` supplies the implemented host CPU, load-average, and memory metrics, and Docker collection currently targets a Unix socket.
 - Host uptime is not collected by the Agent.
 - The repository does not include its externally maintained Compose orchestration or an Agent container image.
 - Automated tests avoid external infrastructure; a real Gateway → RabbitMQ → Archive/GitActivity smoke test is still recommended for deployment validation.
@@ -563,5 +563,4 @@ dotnet format MissionControl.slnx --verify-no-changes
 ## Planned polish
 
 - Reduce card padding and height at the mobile breakpoint.
-- Make the Events filter panel collapsible on small screens so it does not dominate the page.
 - Preserve current desktop and web layouts while making those mobile-only changes.

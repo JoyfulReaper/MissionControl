@@ -18,10 +18,18 @@ public static class NodeResourceCalculations
                host.MemoryAvailableBytes is >= 0;
     }
 
+    public static bool HasLoadAverageMetrics(PublicHostMetric? host)
+    {
+        return host?.LoadAverage1Minute is >= 0 &&
+               host.LoadAverage5Minutes is >= 0 &&
+               host.LoadAverage15Minutes is >= 0;
+    }
+
     public static bool HasResourceMetrics(PublicHostMetric? host)
     {
         return GetCpuPercent(host) is not null ||
-               HasMemoryMetrics(host);
+               HasMemoryMetrics(host) ||
+               HasLoadAverageMetrics(host);
     }
 
     public static long GetMemoryUsedBytes(PublicHostMetric? host)

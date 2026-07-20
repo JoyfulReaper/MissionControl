@@ -1,7 +1,7 @@
 @if (IsLoading)
 {
     <div class="resource-grid" aria-label="Loading node resource usage">
-        @for (int index = 0; index < 2; index++)
+        @for (int index = 0; index < 3; index++)
         {
             <div class="resource-card resource-card-loading">
                 <span></span>
@@ -74,6 +74,35 @@ else if (Host is not null && HasResourceMetrics)
                 </div>
             </article>
         }
+
+        @if (HasLoadAverageMetrics)
+        {
+            <article class="resource-card">
+                <div class="resource-card-heading">
+                    <h3>Load average</h3>
+                    <strong>
+                        @Host.LogicalProcessorCount
+                        @(Host.LogicalProcessorCount == 1 ? "CPU" : "CPUs")
+                    </strong>
+                </div>
+
+                <div class="load-average-values"
+                     aria-label="Host load averages">
+                    <div>
+                        <strong>@FormatLoadAverage(Host.LoadAverage1Minute)</strong>
+                        <span>1 min</span>
+                    </div>
+                    <div>
+                        <strong>@FormatLoadAverage(Host.LoadAverage5Minutes)</strong>
+                        <span>5 min</span>
+                    </div>
+                    <div>
+                        <strong>@FormatLoadAverage(Host.LoadAverage15Minutes)</strong>
+                        <span>15 min</span>
+                    </div>
+                </div>
+            </article>
+        }
     </div>
 }
 else if (Host is not null)
@@ -109,6 +138,9 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
     private bool HasResourceMetrics =>
         NodeResourceCalculations.HasResourceMetrics(Host);
 
+    private bool HasLoadAverageMetrics =>
+        NodeResourceCalculations.HasLoadAverageMetrics(Host);
+
     private long MemoryUsedBytes =>
         NodeResourceCalculations.GetMemoryUsedBytes(Host);
 
@@ -124,5 +156,10 @@ else if (!string.IsNullOrWhiteSpace(ErrorMessage))
     private static string FormatBytes(long bytes)
     {
         return NodeResourceCalculations.FormatBytes(bytes);
+    }
+
+    private static string FormatLoadAverage(double? loadAverage)
+    {
+        return loadAverage?.ToString("0.00") ?? "--";
     }
 }

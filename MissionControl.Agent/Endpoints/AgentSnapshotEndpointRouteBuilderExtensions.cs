@@ -183,7 +183,15 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                         MemoryTotalBytes:
                             publicHost.MemoryTotalBytes,
                         MemoryAvailableBytes:
-                            publicHost.MemoryAvailableBytes),
+                            publicHost.MemoryAvailableBytes)
+                    {
+                        LoadAverage1Minute =
+                            publicHost.LoadAverage1Minute,
+                        LoadAverage5Minutes =
+                            publicHost.LoadAverage5Minutes,
+                        LoadAverage15Minutes =
+                            publicHost.LoadAverage15Minutes
+                    },
             MissionControlPublishSucceeded:
                 storedSnapshot.PublishSucceeded,
             LastMissionControlPublishAttemptAt:
