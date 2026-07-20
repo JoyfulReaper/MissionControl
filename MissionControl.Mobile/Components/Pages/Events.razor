@@ -225,59 +225,55 @@
 
             <div class="event-list">
                 @foreach (
-                    ArchiveEventSummaryItem item in
-                    _feed.Events)
+    ArchiveEventSummaryItem item in
+    _feed.Events)
                 {
-                    <a class="event-card-link"
-                       href="@($"/events/{item.EventId:D}")"
-                       aria-label="Open @item.EventType event from @item.Source">
-                        <article class="event-card event-card-interactive"
-                                 role="button"
-                                 tabindex="0"
-                                 aria-label="Open @item.EventType event from @item.Source"
-                                 @onclick="() => OpenEventModal(item.EventId)"
-                                 @onkeydown="eventArgs =>
+                    <article class="event-card event-card-interactive"
+                             role="button"
+                             tabindex="0"
+                             aria-label="Open @item.EventType event from @item.Source"
+                             @onclick="() => OpenEventModal(item.EventId)"
+                             @onkeydown="eventArgs =>
                                          HandleEventKeyDown(eventArgs, item.EventId)">
-<div class="event-card-heading">
-                                <div>
-                                    <span class="event-source">
-                                        @item.Source
-                                    </span>
+                       <div class="event-card-heading">
+                            <div>
+                                <span class="event-source">
+                                    @item.Source
+                                </span>
 
-                                    <h2 title="@item.EventType">
-                                        @item.EventType
-                                    </h2>
-                                </div>
-
-                                <time datetime="@item.OccurredAt.ToString("O")">
-                                    @FormatTimestamp(item.OccurredAt)
-                                </time>
+                                <h2 title="@item.EventType">
+                                    @item.EventType
+                                </h2>
                             </div>
 
-                            <dl class="event-meta">
-                                <div>
-                                    <dt>Schema</dt>
-                                    <dd>@item.SchemaVersion</dd>
-                                </div>
+                            <time datetime="@item.OccurredAt.ToString("O")">
+                                @FormatTimestamp(item.OccurredAt)
+                            </time>
+                        </div>
 
-                                <div>
-                                    <dt>Correlation</dt>
-                                    <dd>
-                                        <code title="@item.CorrelationId">
-                                            @(item.CorrelationId ?? "—")
-                                        </code>
-                                    </dd>
-                                </div>
+                        <dl class="event-meta">
+                            <div>
+                                <dt>Schema</dt>
+                                <dd>@item.SchemaVersion</dd>
+                            </div>
 
-                                <div>
-                                    <dt>Received</dt>
-                                    <dd>
-                                        @FormatTimestamp(item.ReceivedAt)
-                                    </dd>
-                                </div>
-                            </dl>
-                        </article>
-                    </a>
+                            <div>
+                                <dt>Correlation</dt>
+                                <dd>
+                                    <code title="@item.CorrelationId">
+                                        @(item.CorrelationId ?? "—")
+                                    </code>
+                                </dd>
+                            </div>
+
+                            <div>
+                                <dt>Received</dt>
+                                <dd>
+                                    @FormatTimestamp(item.ReceivedAt)
+                                </dd>
+                            </div>
+                        </dl>
+                    </article>
                 }
             </div>
 
@@ -456,7 +452,7 @@
         KeyboardEventArgs eventArgs,
         Guid eventId)
     {
-        if (eventArgs.Key is "Enter" or " ")
+        if (eventArgs.Key is "Enter" or " " or "Spacebar")
         {
             OpenEventModal(eventId);
         }
