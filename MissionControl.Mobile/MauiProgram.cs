@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using MissionControl.Client.Agent;
 using MissionControl.Client.Archive;
+using MissionControl.Client.GitActivity;
 using MissionControl.Mobile.Services;
 
 namespace MissionControl.Mobile;
@@ -39,6 +40,10 @@ public static class MauiProgram
         builder.Services.AddTransient<
             MobileApiAuthorizationHandler>();
 
+        builder.Services.AddSingleton(
+            new GitActivityClientOptions(
+                "api/mobile/git-activity"));
+
         builder.Services
             .AddHttpClient<
                 MobileApiConnectionClient>(
@@ -50,6 +55,14 @@ public static class MauiProgram
             .AddHttpClient<
                 IArchiveEventClient,
                 ArchiveEventClient>(
+                ConfigureMobileApiClient)
+            .AddHttpMessageHandler<
+                MobileApiAuthorizationHandler>();
+
+        builder.Services
+            .AddHttpClient<
+                IGitActivityClient,
+                GitActivityClient>(
                 ConfigureMobileApiClient)
             .AddHttpMessageHandler<
                 MobileApiAuthorizationHandler>();

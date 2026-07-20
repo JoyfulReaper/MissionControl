@@ -260,7 +260,7 @@
         "Protocol": "HTTP / JSON API",
         "Endpoint": "127.0.0.1:5192",
         "Image": "mission-control-gitactivity",
-        "ApplicationUrl": "https://api.kgivler.com/api/github/activity?limit=5",
+        "ApplicationUrl": "https://dashboard.kgivler.com/gitactivity",
         "SourceUrl": "https://github.com/JoyfulReaper/MissionControl",
         "SearchTerms": [
           "mission control",

@@ -11,9 +11,9 @@ Mission Control is a .NET operations system for collecting integration events an
 | `MissionControl.Agent` | Collects host, Docker, and protocol status; persists the latest node snapshot; optionally publishes operational snapshot events; exposes a sanitized snapshot API. |
 | `MissionControl.Dashboard` | Authenticated Blazor Server UI for archive statistics, events, node resources, containers, probes, and a configured service catalog. Also exposes the bearer-authenticated Mobile API proxy for installed clients. |
 | `MissionControl.GitActivity` | Consumes selected GitHub push events, stores an allowed repository/branch projection in SQLite, and exposes an API-key-protected activity feed. |
-| `MissionControl.Contracts` | Shared Agent, Archive, service-catalog, integration-event, and GitHub transport contracts. |
-| `MissionControl.Client` | Shared Agent and Archive HTTP clients plus client-side event-feed state, including cursor paging and new-event detection. |
-| `MissionControl.UI` | Razor Class Library with shared dashboard components, presentation helpers, event details UI, overview panels, service panels, and the shared Mission Control theme. |
+| `MissionControl.Contracts` | Shared Agent, Archive, GitActivity, service-catalog, integration-event, and GitHub transport contracts. |
+| `MissionControl.Client` | Shared Agent, Archive, and GitActivity HTTP clients plus client-side feed state. |
+| `MissionControl.UI` | Razor Class Library with shared Git Activity, event details, overview, and service UI plus the shared Mission Control theme. |
 | `MissionControl.Mobile` | .NET MAUI Blazor Hybrid application sharing the Client, Contracts, and UI projects across Windows and Android builds. |
 | `MissionControl.Messaging.RabbitMq` | Shared RabbitMQ consumer, consumer options, and integration-event processor contract. |
 | `MissionControl.Observability` | Shared liveness/readiness endpoint mapping and RabbitMQ connection health check. |
@@ -44,7 +44,28 @@ MissionControl.Contracts
    -> MissionControl.Mobile Android MAUI Blazor Hybrid app
 ```
 
-`MissionControl.GitActivity` consumes `github.push.received` events from its own RabbitMQ queue. It filters configured repositories and branches, then stores a commit-oriented SQLite projection for `GET /api/github/activity`.
+`MissionControl.GitActivity` consumes `github.push.received` events from its own
+RabbitMQ queue. It filters configured repositories and branches, then stores a
+commit-oriented SQLite projection. Dashboard and Mobile use the private service
+path:
+
+```text
+authenticated Dashboard page
+-> Dashboard server-side GitActivity client with X-Mission-Control-Key
+-> private GET /api/github/activity
+
+Windows / Android MAUI client
+-> HTTPS Dashboard Mobile API with bearer token
+-> GET /api/mobile/git-activity
+-> Dashboard server-side GitActivity client with X-Mission-Control-Key
+-> private GET /api/github/activity
+```
+
+The Dashboard holds the GitActivity API key. Installed MAUI clients hold only
+the Dashboard Mobile bearer token; the proxy never returns the GitActivity key
+or service URL. A deployment may separately expose the API-key-protected
+GitActivity endpoint for trusted server-side consumers, but Mobile does not use
+that route.
 
 The Agent path is separate:
 
@@ -92,6 +113,7 @@ The Dashboard requires an authenticated user and provides:
 - **Overview**: archive totals and categories plus the current node CPU/memory snapshot;
 - **Services**: service-catalog entries correlated with Agent containers and protocol probes, including uncatalogued observations;
 - **Events**: filtering, cursor-based older-event loading, modal/full-page details, and periodic checks for new events.
+- **Git Activity**: a bounded recent-commit feed with repository and branch filters and manual refresh.
 
 Agent data on Overview and Services refreshes automatically. Event data also polls automatically. Freshness is recalculated locally between requests. When a later refresh fails, the last successful Agent or event data remains visible with a warning. If older events are loaded, polling preserves the current list and shows a “new events available” action instead of replacing the user’s position.
 
@@ -114,6 +136,8 @@ The mobile app currently provides:
 - **Events**: source and event-type filters, cursor-based older-event loading,
   manual refresh, new-event detection, event cards, modal details, and a
   full-page details route;
+- **Git Activity**: the same shared bounded commit feed, loaded through the
+  authenticated Dashboard Mobile API rather than the private service;
 - **Settings**: entry, testing, storage, and removal of the raw Mobile API
   bearer token.
 
@@ -267,6 +291,11 @@ Dashboard uses upstream URLs plus `Dashboard`, `MissionControl`, and `ServiceCat
   "Agent": {
     "BaseUrl": "http://localhost:5194/"
   },
+  "GitActivityApi": {
+    "Enabled": true,
+    "BaseUrl": "http://gitactivity:8080/",
+    "ApiKey": "replace-with-the-private-service-key"
+  },
   "Dashboard": {
     "Refresh": {
       "AgentSnapshotRefreshSeconds": 30,
@@ -307,6 +336,15 @@ Base64-encoded SHA-256 hash of the expected token, not the raw token. Enter the
 raw token independently in each installed app's Settings page; it is stored with
 MAUI `SecureStorage`. Keep the Dashboard `Archive:BaseUrl` pointed at an
 internal Archive URL.
+
+`GitActivityApi:BaseUrl` must be an absolute HTTP or HTTPS URL.
+`GitActivityApi:ApiKey` is required when the integration is enabled and must
+match `GitActivity:ApiKey` on the private service. In container deployments,
+configure these as `GitActivityApi__BaseUrl`, `GitActivityApi__Enabled`,
+`GitActivityApi__ApiKey`, and `GitActivity__ApiKey`. Dashboard and Mobile do not
+require public GitActivity exposure. If the API is separately exposed for a
+trusted server-side integration, retain its API-key authentication and do not
+ship that key to browser or Mobile clients.
 
 One way to derive the placeholder hash locally with PowerShell is:
 
@@ -382,13 +420,14 @@ The API key must contain at least 32 characters. Both allowlists must be non-emp
 | Dashboard Mobile API | `GET /api/events/feed` | Requires the Mobile API bearer token. Proxies to the internal Archive client; supports limit/source/eventType and the three cursor fields. |
 | Dashboard Mobile API | `GET /api/events/statistics` | Requires the Mobile API bearer token. Proxies Archive statistics through Dashboard. |
 | Dashboard Mobile API | `GET /api/events/{eventId}` | Requires the Mobile API bearer token. Proxies complete Archive event details through Dashboard. |
+| Dashboard Mobile API | `GET /api/mobile/git-activity` | Requires the Mobile API bearer token. Returns a bounded recent feed through Dashboard's private GitActivity client with no-store headers. |
 | Agent | `GET /api/snapshot` | Latest sanitized node snapshot; returns 503 until one is stored. |
 | GitActivity | `GET /api/github/activity` | Recent allowed activity; requires `X-Mission-Control-Key`. |
 
 Gateway, Archive, and GitActivity expose `GET /health/live` and `GET /health/ready`. Readiness includes their RabbitMQ status and, for SQLite consumers, database health. Agent exposes `GET /health/live`. Dashboard pages are cookie-authenticated and redirect anonymous users to `/login`.
 
-Dashboard pages (`/`, `/events`, `/events/{eventId}`, `/services`, `/login`,
-and `/logout`) use normal cookie authentication. The Dashboard Mobile API uses
+Dashboard pages (`/`, `/events`, `/events/{eventId}`, `/services`,
+`/gitactivity`, `/login`, and `/logout`) use normal cookie authentication. The Dashboard Mobile API uses
 bearer authentication and does not use the Dashboard cookie.
 
 Archive query endpoints and Agent liveness do not add application-level
@@ -410,10 +449,13 @@ dotnet test MissionControl.slnx --configuration Debug --no-build
 Build the MAUI client on Windows for the checked-in Windows target:
 
 ```powershell
-dotnet build .\MissionControl.Mobile\MissionControl.Mobile.csproj `
-    -f net10.0-windows10.0.19041.0 `
-    -c Debug
+.\scripts\Build-MissionControlWindows.ps1
 ```
+
+The script builds `Release` for `win-x64` by default and does not publish,
+launch, or install the app. Use `-Configuration Debug` for a development build,
+`-RuntimeIdentifier win-arm64` for Windows on ARM64, or `-NoRestore` when the
+required assets have already been restored.
 
 Build the MAUI client for Android:
 
@@ -563,11 +605,16 @@ docker build -f Dockerfile.dashboard -t mission-control-dashboard .
 docker build -f Dockerfile.gitactivity -t mission-control-gitactivity .
 ```
 
-There is no Compose file checked into this repository and no Agent Dockerfile. Production Compose orchestration is maintained externally and is not part of the MissionControl repository.
-Currently the dockerfile can be found here: https://github.com/JoyfulReaper/UsefulScripts/blob/main/VPS/compose.yaml However please note it is not always updated quickly.
+There is no Compose file checked into this repository and no Agent Dockerfile.
+Production Compose orchestration is maintained externally in
+[`UsefulScripts/VPS/docker-compose.yaml`](https://github.com/JoyfulReaper/UsefulScripts/blob/main/VPS/docker-compose.yaml)
+and may trail application changes.
 
 - Archive sets `EventArchive__BasePath=/app/data` and declares `/app/data` as a volume; mount persistent storage there.
 - Dashboard declares `/app/data` for its authentication database and Data Protection keys.
+- Dashboard requires the private `GitActivityApi__BaseUrl` and matching
+  `GitActivityApi__ApiKey`; GitActivity requires the same value through
+  `GitActivity__ApiKey`. Supply that value through deployment secrets.
 - Gateway requires RabbitMQ, event-source, and optional webhook secrets through external configuration.
 - GitActivity requires RabbitMQ, API-key, allowlist, and SQLite path configuration. Its Dockerfile does not declare a data volume, so persistent deployment storage must be arranged by the operator.
 - An externally containerized Agent would require access to the configured Docker Unix socket, but this repository does not provide or endorse a Compose mounting recipe. Docker socket access is highly privileged.
@@ -585,7 +632,8 @@ The xUnit suite covers:
 - protocol probe execution, timeout, and public diagnostic sanitization;
 - snapshot persistence, API/Dashboard contract compatibility, publication gating, retries, and metadata;
 - Dashboard refresh, freshness, last-known-data, polling cancellation, paging, and new-event handling;
-- GitActivity authentication, filtering, and storage projection behavior.
+- GitActivity contracts, private-client authentication, Mobile proxy security,
+  shared feed behavior, filtering, navigation, and storage projection behavior.
 
 Run the repository formatting check with:
 
@@ -600,6 +648,9 @@ dotnet format MissionControl.slnx --verify-no-changes
 - Keep Mobile API raw tokens, token hashes, Android keystores, signing passwords, and production host secrets out of source control.
 - The Dashboard stores only the configured Mobile API token hash. Installed clients store the raw token independently in MAUI `SecureStorage`.
 - Mobile Archive traffic should follow the Dashboard Mobile API proxy path; do not expose Archive publicly merely to support Windows or Android clients.
+- Mobile GitActivity traffic must follow the Dashboard Mobile API proxy. MAUI
+  must never receive `X-Mission-Control-Key`, the private GitActivity URL, or
+  the GitActivity API key.
 - Dashboard authentication state depends on persistent SQLite and Data Protection key storage. Back up and permission those paths appropriately.
 - Access to the Docker socket is effectively privileged host access. Grant it only to a trusted Agent process.
 - Agent protocol endpoints and errors are sanitized before public serialization; local collector logs can contain more operational context and should be protected accordingly.
@@ -612,8 +663,3 @@ dotnet format MissionControl.slnx --verify-no-changes
 - Host uptime is not collected by the Agent.
 - The repository does not include its externally maintained Compose orchestration or an Agent container image.
 - Automated tests avoid external infrastructure; a real Gateway → RabbitMQ → Archive/GitActivity smoke test is still recommended for deployment validation.
-
-## Planned polish
-
-- Reduce card padding and height at the mobile breakpoint.
-- Preserve current desktop and web layouts while making those mobile-only changes.

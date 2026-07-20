@@ -1,0 +1,341 @@
+@implements IAsyncDisposable
+
+@inject IGitActivityClient GitActivityClient
+
+<div class="git-activity-page">
+    <header class="git-activity-header">
+        <div>
+            <div class="git-activity-eyebrow">
+                Source control
+            </div>
+
+            <h1>Git Activity</h1>
+
+            <p>
+                Recent commits received from the configured GitHub
+                repositories and branches.
+            </p>
+        </div>
+
+        <button type="button"
+                class="btn btn-outline-primary"
+                disabled="@_feed.IsRefreshing"
+                @onclick="RefreshAsync">
+            @(_feed.IsRefreshing
+                ? "Refreshing..."
+                : "Refresh")
+        </button>
+    </header>
+
+    <button type="button"
+            class="git-filter-toggle"
+            aria-expanded="@_filtersExpanded"
+            aria-controls="git-activity-filters"
+            @onclick="ToggleFilters">
+        <span>
+            @(_filtersExpanded
+                ? "Hide filters"
+                : "Show filters")
+        </span>
+
+        @if (_feed.HasActiveFilters)
+        {
+            <span class="git-filter-status">
+                Filters active
+            </span>
+        }
+    </button>
+
+    <section id="git-activity-filters"
+             class="git-filter-panel @(
+             _filtersExpanded
+                 ? "git-filter-panel-expanded"
+                 : null)"
+             aria-labelledby="git-filter-title">
+        <div class="git-filter-heading">
+            <div>
+                <h2 id="git-filter-title">Filter activity</h2>
+                <p>Filtering is case-insensitive over the loaded feed.</p>
+            </div>
+
+            @if (_feed.HasActiveFilters)
+            {
+                <span class="git-filter-status">
+                    Filters active
+                </span>
+            }
+        </div>
+
+        <div class="git-filter-grid">
+            <div>
+                <label for="git-repository-filter"
+                       class="form-label">
+                    Repository
+                </label>
+
+                <input id="git-repository-filter"
+                       class="form-control"
+                       list="git-repository-options"
+                       placeholder="Repository"
+                       autocomplete="off"
+                       @bind="_feed.RepositoryFilter"
+                       @bind:event="oninput" />
+
+                <datalist id="git-repository-options">
+                    @foreach (
+                        string repository in
+                        _feed.RepositorySuggestions)
+                    {
+                        <option value="@repository"></option>
+                    }
+                </datalist>
+            </div>
+
+            <div>
+                <label for="git-branch-filter"
+                       class="form-label">
+                    Branch
+                </label>
+
+                <input id="git-branch-filter"
+                       class="form-control"
+                       list="git-branch-options"
+                       placeholder="Branch"
+                       autocomplete="off"
+                       @bind="_feed.BranchFilter"
+                       @bind:event="oninput" />
+
+                <datalist id="git-branch-options">
+                    @foreach (
+                        string branch in
+                        _feed.BranchSuggestions)
+                    {
+                        <option value="@branch"></option>
+                    }
+                </datalist>
+            </div>
+
+            <div class="git-filter-actions">
+                <button type="button"
+                        class="btn btn-outline-secondary"
+                        disabled="@(!_feed.HasActiveFilters)"
+                        @onclick="ClearFilters">
+                    Clear
+                </button>
+            </div>
+        </div>
+    </section>
+
+    @if (_feed.RefreshWarning is not null)
+    {
+        <div class="alert alert-warning"
+             role="status">
+            @_feed.RefreshWarning
+        </div>
+    }
+
+    <div aria-live="polite">
+        @if (_feed.Error is not null)
+        {
+            <div class="git-empty-state"
+                 role="alert">
+                <h2>Git Activity is unavailable</h2>
+                <p>@_feed.Error</p>
+
+                <div class="git-empty-actions">
+                    <button type="button"
+                            class="btn btn-outline-primary"
+                            disabled="@_feed.IsRefreshing"
+                            @onclick="RetryAsync">
+                        Retry
+                    </button>
+
+                    @if (!string.IsNullOrWhiteSpace(ErrorActionHref))
+                    {
+                        <a class="btn btn-link"
+                           href="@ErrorActionHref">
+                            @ErrorActionLabel
+                        </a>
+                    }
+                </div>
+            </div>
+        }
+        else if (_feed.IsInitialLoading)
+        {
+            <div class="git-activity-list git-activity-loading"
+                 aria-label="Loading Git Activity">
+                @for (int index = 0; index < 5; index++)
+                {
+                    <div class="git-activity-card git-activity-skeleton">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                }
+            </div>
+        }
+        else if (_feed.Items.Count == 0)
+        {
+            <div class="git-empty-state">
+                <h2>No Git activity yet</h2>
+                <p>
+                    No recent commits have been received from the
+                    configured repositories and branches.
+                </p>
+            </div>
+        }
+        else if (_feed.FilteredItems.Count == 0)
+        {
+            <div class="git-empty-state">
+                <h2>No activity matches these filters</h2>
+                <p>
+                    Clear or adjust the repository and branch filters.
+                </p>
+
+                <button type="button"
+                        class="btn btn-outline-primary"
+                        @onclick="ClearFilters">
+                    Clear filters
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="git-results-heading">
+                <div>
+                    <h2>Recent commits</h2>
+                    <span>@GetResultCountLabel()</span>
+                </div>
+
+                <span>Newest first</span>
+            </div>
+
+            <div class="git-activity-list">
+                @foreach (
+                    GitActivityItem item in
+                    _feed.FilteredItems)
+                {
+                    string? commitUrl =
+                        GitActivityPresentation.GetSafeCommitUrl(item.Url);
+
+                    <article class="git-activity-card"
+                             @key="GitActivityPresentation.GetItemKey(item)">
+                        <div class="git-card-topline">
+                            <time datetime="@item.Timestamp.ToString("O")">
+                                @FormatTimestamp(item.Timestamp)
+                            </time>
+
+                            <code title="@item.Sha"
+                                  aria-label="Commit @item.Sha">
+                                @GitActivityPresentation.AbbreviateSha(item.Sha)
+                            </code>
+                        </div>
+
+                        <div class="git-card-context">
+                            <span class="git-repository">
+                                @item.Repository
+                            </span>
+
+                            <span class="git-branch">
+                                @item.Branch
+                            </span>
+                        </div>
+
+                        <h3>@item.Message</h3>
+
+                        <div class="git-card-footer">
+                            <span class="git-author">
+                                @GitActivityPresentation.FormatAuthor(item)
+                            </span>
+
+                            @if (commitUrl is not null)
+                            {
+                                <a href="@commitUrl"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   aria-label="View commit @item.Sha">
+                                    View commit
+                                </a>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private readonly CancellationTokenSource _disposeSource = new();
+    private GitActivityFeedController _feed = null!;
+    private bool _filtersExpanded;
+
+    [Parameter]
+    public string? ErrorActionHref { get; set; }
+
+    [Parameter]
+    public string ErrorActionLabel { get; set; } = "Open Settings";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _feed = new GitActivityFeedController(GitActivityClient);
+
+        try
+        {
+            await _feed.LoadInitialAsync(_disposeSource.Token);
+        }
+        catch (OperationCanceledException)
+            when (_disposeSource.IsCancellationRequested)
+        {
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            await _feed.RefreshAsync(_disposeSource.Token);
+        }
+        catch (OperationCanceledException)
+            when (_disposeSource.IsCancellationRequested)
+        {
+        }
+    }
+
+    private Task RetryAsync()
+    {
+        return RefreshAsync();
+    }
+
+    private void ToggleFilters()
+    {
+        _filtersExpanded = !_filtersExpanded;
+    }
+
+    private void ClearFilters()
+    {
+        _feed.ClearFilters();
+    }
+
+    private string GetResultCountLabel()
+    {
+        int filteredCount = _feed.FilteredItems.Count;
+
+        return _feed.HasActiveFilters
+            ? $"{filteredCount:N0} of {_feed.Items.Count:N0} loaded"
+            : $"{filteredCount:N0} loaded";
+    }
+
+    private static string FormatTimestamp(DateTimeOffset timestamp)
+    {
+        return timestamp
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _disposeSource.CancelAsync();
+        _disposeSource.Dispose();
+    }
+}

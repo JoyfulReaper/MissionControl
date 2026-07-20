@@ -1,0 +1,55 @@
+@page "/gitactivity"
+
+@inject MobileApiCredentialStore CredentialStore
+
+<PageTitle>Git Activity</PageTitle>
+
+@if (!_configurationChecked)
+{
+    <div class="alert alert-info">
+        Checking Mobile API configuration...
+    </div>
+}
+else if (!_hasToken)
+{
+    <div class="alert alert-warning">
+        <div>
+            A Mobile API token is required to access Git Activity.
+        </div>
+
+        <NavLink class="alert-link"
+                 href="settings">
+            Open Settings
+        </NavLink>
+    </div>
+}
+else
+{
+    <GitActivityPageContent ErrorActionHref="settings"
+                            ErrorActionLabel="Open Settings" />
+}
+
+@code {
+    private bool _configurationChecked;
+    private bool _hasToken;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            string? token =
+                await CredentialStore.GetTokenAsync();
+
+            _hasToken =
+                !string.IsNullOrWhiteSpace(token);
+        }
+        catch
+        {
+            _hasToken = false;
+        }
+        finally
+        {
+            _configurationChecked = true;
+        }
+    }
+}

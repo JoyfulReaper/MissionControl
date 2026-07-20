@@ -2,9 +2,8 @@
 
 using System.Net;
 using System.Net.Http.Json;
+using MissionControl.Contracts.GitActivity;
 using Xunit;
-using GitActivityItem =
-    GitActivityApp::MissionControl.GitActivity.Contracts.GitActivityItem;
 
 namespace MissionControl.Tests;
 

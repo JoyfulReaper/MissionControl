@@ -1,6 +1,9 @@
 ﻿using MissionControl.Client.Archive;
 using MissionControl.Contracts.Archive;
 
+using MissionControl.Client.GitActivity;
+using MissionControl.Contracts.GitActivity;
+
 namespace MissionControl.Dashboard.MobileApi;
 
 public static class MobileApiEndpointRouteBuilderExtensions
@@ -53,7 +56,61 @@ public static class MobileApiEndpointRouteBuilderExtensions
                 HandleGetEventByIdAsync)
             .WithName("GetMobileApiEventById");
 
+        endpoints
+            .MapGet(
+                "/api/mobile/git-activity",
+                HandleGetGitActivityAsync)
+            .WithName("GetMobileApiGitActivity")
+            .WithTags("Mobile API", "Git Activity")
+            .Produces<IReadOnlyList<GitActivityItem>>(
+                StatusCodes.Status200OK)
+            .ProducesProblem(
+                StatusCodes.Status502BadGateway)
+            .RequireAuthorization(
+                MobileApiAuthenticationDefaults.Policy);
+
         return endpoints;
+    }
+
+    private static async Task<IResult> HandleGetGitActivityAsync(
+        int? limit,
+        IGitActivityClient gitActivityClient,
+        HttpResponse response,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        DisableResponseCaching(response);
+
+        try
+        {
+            IReadOnlyList<GitActivityItem> activity =
+                await gitActivityClient.GetRecentAsync(
+                    Math.Clamp(limit ?? 25, 1, 50),
+                    cancellationToken);
+
+            return Results.Ok(activity);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+            when (IsExpectedGitActivityException(exception))
+        {
+            return CreateGitActivityUnavailableResult(exception);
+        }
+        catch (Exception exception)
+        {
+            ILogger logger = loggerFactory.CreateLogger(
+                "MissionControl.Dashboard.MobileApi.GitActivity");
+
+            logger.LogError(
+                exception,
+                "Unexpected Git Activity proxy failure.");
+
+            return CreateGitActivityUnavailableResult(exception);
+        }
     }
 
     private static async Task<IResult> HandleGetEventFeedAsync(
@@ -188,6 +245,38 @@ public static class MobileApiEndpointRouteBuilderExtensions
             HttpRequestException or
             TaskCanceledException or
             InvalidOperationException;
+    }
+
+    private static bool IsExpectedGitActivityException(
+        Exception exception)
+    {
+        return exception is
+            HttpRequestException or
+            TaskCanceledException or
+            InvalidOperationException;
+    }
+
+    private static IResult CreateGitActivityUnavailableResult(
+        Exception exception)
+    {
+        string detail =
+            exception switch
+            {
+                TaskCanceledException =>
+                    "The Git Activity request timed out.",
+
+                HttpRequestException =>
+                    "Git Activity could not be reached.",
+
+                _ =>
+                    "The Git Activity request failed."
+            };
+
+        return Results.Problem(
+            title: "Git Activity unavailable.",
+            detail: detail,
+            statusCode:
+                StatusCodes.Status502BadGateway);
     }
 
     private static IResult CreateArchiveUnavailableResult(

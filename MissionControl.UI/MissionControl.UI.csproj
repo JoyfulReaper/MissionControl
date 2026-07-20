@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MissionControl.Client\MissionControl.Client.csproj" />
     <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
   </ItemGroup>
 

@@ -6,7 +6,7 @@
  */
 
 using Microsoft.Extensions.Options;
-using MissionControl.GitActivity.Contracts;
+using MissionControl.Contracts.GitActivity;
 using MissionControl.GitActivity.Storage;
 using System.Security.Cryptography;
 using System.Text;

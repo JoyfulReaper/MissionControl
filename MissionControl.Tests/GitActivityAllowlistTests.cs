@@ -320,14 +320,14 @@ public sealed class GitActivityAllowlistTests
         }
 
         public Task<IReadOnlyList<
-            GitActivityApp::MissionControl.GitActivity.Contracts.GitActivityItem>>
+            MissionControl.Contracts.GitActivity.GitActivityItem>>
             GetRecentAsync(
                 int limit,
                 CancellationToken cancellationToken = default)
         {
             return Task.FromResult<
                 IReadOnlyList<
-                    GitActivityApp::MissionControl.GitActivity.Contracts.GitActivityItem>>(
+                    MissionControl.Contracts.GitActivity.GitActivityItem>>(
                 []);
         }
     }
