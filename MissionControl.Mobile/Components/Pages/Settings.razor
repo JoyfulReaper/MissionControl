@@ -150,16 +150,13 @@
 
         try
         {
-            if (!string.IsNullOrWhiteSpace(_token))
-            {
-                await CredentialStore.SetTokenAsync(
-                    _token);
+            string? candidateToken =
+                string.IsNullOrWhiteSpace(_token)
+                    ? null
+                    : _token.Trim();
 
-                _token = null;
-                _hasSavedToken = true;
-            }
-
-            if (!_hasSavedToken)
+            if (candidateToken is null &&
+                !_hasSavedToken)
             {
                 SetError(
                     "Paste the raw Mobile API token first.");
@@ -167,7 +164,17 @@
                 return;
             }
 
-            await ConnectionClient.TestAsync();
+            await ConnectionClient.TestAsync(
+                candidateToken);
+
+            if (candidateToken is not null)
+            {
+                await CredentialStore.SetTokenAsync(
+                    candidateToken);
+
+                _token = null;
+                _hasSavedToken = true;
+            }
 
             SetSuccess(
                 "Connected to the Dashboard Mobile API successfully.");
