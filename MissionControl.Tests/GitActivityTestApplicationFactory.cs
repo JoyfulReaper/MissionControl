@@ -7,10 +7,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using MissionControl.Contracts.GitActivity;
 using MissionControl.Contracts.GitHub;
 using MissionControl.Observability.RabbitMq;
-using GitActivityItem =
-    GitActivityApp::MissionControl.GitActivity.Contracts.GitActivityItem;
 using GitActivityProgram =
     GitActivityApp::Program;
 using IGitActivityRepository =

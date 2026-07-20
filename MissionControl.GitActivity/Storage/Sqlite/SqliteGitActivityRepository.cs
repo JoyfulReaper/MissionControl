@@ -6,8 +6,8 @@
  */
 
 using Microsoft.Data.Sqlite;
+using MissionControl.Contracts.GitActivity;
 using MissionControl.Contracts.GitHub;
-using MissionControl.GitActivity.Contracts;
 using System.Globalization;
 
 namespace MissionControl.GitActivity.Storage.Sqlite;

@@ -1,11 +1,11 @@
-﻿/*
+/*
  * Mission Control
  *
  * Copyright (c) 2026 Kyle Givler
  * Licensed under the MIT License
  */
 
-namespace MissionControl.GitActivity.Contracts;
+namespace MissionControl.Contracts.GitActivity;
 
 public sealed record GitActivityItem(
     string Repository,

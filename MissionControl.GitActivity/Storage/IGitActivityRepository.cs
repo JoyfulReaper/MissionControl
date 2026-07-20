@@ -5,8 +5,8 @@
  * Licensed under the MIT License
  */
 
+using MissionControl.Contracts.GitActivity;
 using MissionControl.Contracts.GitHub;
-using MissionControl.GitActivity.Contracts;
 
 namespace MissionControl.GitActivity.Storage;
 

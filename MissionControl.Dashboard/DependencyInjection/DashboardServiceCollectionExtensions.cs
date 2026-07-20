@@ -6,10 +6,12 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using MissionControl.Client.Agent;
 using MissionControl.Client.Archive;
+using MissionControl.Client.GitActivity;
 using MissionControl.Dashboard.Authentication;
 using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Events;
 using MissionControl.Dashboard.Formatting;
+using MissionControl.Dashboard.GitActivity;
 using MissionControl.Dashboard.MobileApi;
 using MissionControl.Dashboard.Refresh;
 using MissionControl.Dashboard.Security;
@@ -40,6 +42,9 @@ public static class DashboardServiceCollectionExtensions
             services,
             configuration);
         AddAgentClient(
+            services,
+            configuration);
+        AddGitActivityClient(
             services,
             configuration);
         AddDashboardFormatting(services);
@@ -342,6 +347,63 @@ public static class DashboardServiceCollectionExtensions
         services.AddSingleton<
             IDashboardDateTimeFormatter,
             DashboardDateTimeFormatter>();
+    }
+
+    private static void AddGitActivityClient(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services
+            .AddOptions<GitActivityApiOptions>()
+            .Bind(
+                configuration.GetSection(
+                    GitActivityApiOptions.SectionName))
+            .ValidateOnStart();
+
+        services.AddSingleton<
+            IValidateOptions<GitActivityApiOptions>,
+            GitActivityApiOptionsValidator>();
+
+        services.AddTransient<GitActivityApiKeyHandler>();
+        services.AddSingleton(
+            new GitActivityClientOptions(
+                "api/github/activity"));
+
+        services
+            .AddHttpClient<
+                IGitActivityClient,
+                GitActivityClient>((serviceProvider, httpClient) =>
+                {
+                    GitActivityApiOptions options =
+                        serviceProvider
+                            .GetRequiredService<
+                                IOptions<GitActivityApiOptions>>()
+                            .Value;
+
+                    httpClient.BaseAddress =
+                        CreateBaseUri(options.BaseUrl);
+
+                    httpClient.Timeout =
+                        TimeSpan.FromSeconds(10);
+                })
+            .ConfigurePrimaryHttpMessageHandler(
+                static () =>
+                    new HttpClientHandler
+                    {
+                        AllowAutoRedirect = false
+                    })
+            .AddHttpMessageHandler<GitActivityApiKeyHandler>();
+    }
+
+    private static Uri CreateBaseUri(string value)
+    {
+        string normalized = value.EndsWith(
+            "/",
+            StringComparison.Ordinal)
+                ? value
+                : $"{value}/";
+
+        return new Uri(normalized, UriKind.Absolute);
     }
 
     private static bool HasValidMobileApiTokenHash(
