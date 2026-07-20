@@ -1,0 +1,58 @@
+.mobile-settings-page {
+    display: grid;
+    width: min(100%, 48rem);
+    margin: 0 auto;
+    padding: 1rem 0 2rem;
+    gap: 1.25rem;
+}
+
+.settings-header h1 {
+    margin: 0;
+    color: var(--mc-text);
+}
+
+.settings-header p {
+    margin: 0.65rem 0 0;
+    color: var(--mc-text-muted);
+}
+
+.settings-eyebrow {
+    margin-bottom: 0.3rem;
+    color: var(--mc-accent);
+    font-size: 0.7rem;
+    font-weight: 750;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.settings-card {
+    padding: 1.25rem;
+    border: 1px solid var(--mc-border);
+    border-radius: 0.75rem;
+    background: var(--mc-surface);
+}
+
+.settings-card-heading {
+    display: flex;
+    margin-bottom: 1.25rem;
+    align-items: start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+    .settings-card-heading h2 {
+        margin: 0;
+        color: var(--mc-text);
+        font-size: 1.15rem;
+    }
+
+    .settings-card-heading p {
+        margin: 0.35rem 0 0;
+        color: var(--mc-text-muted);
+    }
+
+.settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}

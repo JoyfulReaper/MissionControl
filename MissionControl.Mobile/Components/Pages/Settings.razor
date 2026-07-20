@@ -1,0 +1,224 @@
+﻿@page "/settings"
+
+@inject MobileApiCredentialStore CredentialStore
+@inject MobileApiConnectionClient ConnectionClient
+
+<PageTitle>Settings</PageTitle>
+
+<div class="mobile-settings-page">
+    <header class="settings-header">
+        <div class="settings-eyebrow">
+            Application configuration
+        </div>
+
+        <h1>Settings</h1>
+
+        <p>
+            Configure authenticated access to the Mission Control
+            event archive.
+        </p>
+    </header>
+
+    <section class="settings-card">
+        <div class="settings-card-heading">
+            <div>
+                <h2>Dashboard API</h2>
+
+                <p>
+                    Events are accessed through the authenticated
+                    Dashboard proxy.
+                </p>
+            </div>
+
+            @if (_hasSavedToken)
+            {
+                <span class="badge text-bg-success">
+                    Configured
+                </span>
+            }
+            else
+            {
+                <span class="badge text-bg-secondary">
+                    Not configured
+                </span>
+            }
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">
+                Dashboard URL
+            </label>
+
+            <div>
+                <code>
+                    https://dashboard.kgivler.com/
+                </code>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="mobile-api-token"
+                   class="form-label">
+                Mobile API token
+            </label>
+
+            <input id="mobile-api-token"
+                   type="password"
+                   class="form-control"
+                   placeholder="@TokenPlaceholder"
+                   autocomplete="new-password"
+                   @bind="_token" />
+
+            <div class="form-text">
+                Paste the raw token, not the SHA-256 hash stored
+                by Dashboard.
+            </div>
+        </div>
+
+        <div class="settings-actions">
+            <button type="button"
+                    class="btn btn-primary"
+                    disabled="@_isBusy"
+                    @onclick="SaveAndTestAsync">
+                @(_isBusy
+                    ? "Testing..."
+                    : "Save and test")
+            </button>
+
+            <button type="button"
+                    class="btn btn-outline-danger"
+                    disabled="@(_isBusy || !_hasSavedToken)"
+                    @onclick="RemoveToken">
+                Remove token
+            </button>
+        </div>
+    </section>
+
+    @if (_statusMessage is not null)
+    {
+        <div class="@StatusCssClass"
+             role="status">
+            @_statusMessage
+        </div>
+    }
+</div>
+
+@code {
+    private string? _token;
+    private string? _statusMessage;
+    private bool _hasSavedToken;
+    private bool _isBusy;
+    private bool _statusIsError;
+
+    private string TokenPlaceholder =>
+        _hasSavedToken
+            ? "A token is already stored"
+            : "Paste the raw Mobile API token";
+
+    private string StatusCssClass =>
+        _statusIsError
+            ? "alert alert-danger"
+            : "alert alert-success";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            string? savedToken =
+                await CredentialStore.GetTokenAsync();
+
+            _hasSavedToken =
+                !string.IsNullOrWhiteSpace(savedToken);
+        }
+        catch (Exception exception)
+        {
+            SetError(
+                $"Secure Storage could not be read: " +
+                exception.Message);
+        }
+    }
+
+    private async Task SaveAndTestAsync()
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        _isBusy = true;
+        _statusMessage = null;
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_token))
+            {
+                await CredentialStore.SetTokenAsync(
+                    _token);
+
+                _token = null;
+                _hasSavedToken = true;
+            }
+
+            if (!_hasSavedToken)
+            {
+                SetError(
+                    "Paste the raw Mobile API token first.");
+
+                return;
+            }
+
+            await ConnectionClient.TestAsync();
+
+            SetSuccess(
+                "Connected to the Dashboard Mobile API successfully.");
+        }
+        catch (Exception exception)
+            when (exception is
+                HttpRequestException or
+                TaskCanceledException or
+                InvalidOperationException)
+        {
+            SetError(exception.Message);
+        }
+        catch (Exception exception)
+        {
+            SetError(
+                $"Secure Storage failed: {exception.Message}");
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private void RemoveToken()
+    {
+        try
+        {
+            CredentialStore.RemoveToken();
+
+            _token = null;
+            _hasSavedToken = false;
+
+            SetSuccess(
+                "The saved Mobile API token was removed.");
+        }
+        catch (Exception exception)
+        {
+            SetError(
+                $"Secure Storage failed: {exception.Message}");
+        }
+    }
+
+    private void SetSuccess(string message)
+    {
+        _statusIsError = false;
+        _statusMessage = message;
+    }
+
+    private void SetError(string message)
+    {
+        _statusIsError = true;
+        _statusMessage = message;
+    }
+}

@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using MissionControl.Client.Agent;
+using MissionControl.Client.Archive;
 using MissionControl.Mobile.Services;
 
 namespace MissionControl.Mobile;
@@ -32,6 +33,27 @@ public static class MauiProgram
                     TimeSpan.FromSeconds(10);
             });
 
+        builder.Services.AddSingleton<
+            MobileApiCredentialStore>();
+
+        builder.Services.AddTransient<
+            MobileApiAuthorizationHandler>();
+
+        builder.Services
+            .AddHttpClient<
+                MobileApiConnectionClient>(
+                ConfigureMobileApiClient)
+            .AddHttpMessageHandler<
+                MobileApiAuthorizationHandler>();
+
+        builder.Services
+            .AddHttpClient<
+                IArchiveEventClient,
+                ArchiveEventClient>(
+                ConfigureMobileApiClient)
+            .AddHttpMessageHandler<
+                MobileApiAuthorizationHandler>();
+
         builder.Services.AddSingleton<MobileServiceCatalog>();
         builder.Services.AddSingleton<MobileAgentSnapshotState>();
 
@@ -41,5 +63,16 @@ public static class MauiProgram
 #endif
 
         return builder.Build();
+    }
+
+    private static void ConfigureMobileApiClient(
+        HttpClient httpClient)
+    {
+        httpClient.BaseAddress =
+            new Uri(
+                "https://dashboard.kgivler.com/");
+
+        httpClient.Timeout =
+            TimeSpan.FromSeconds(15);
     }
 }
