@@ -1,4 +1,5 @@
 using MissionControl.Contracts.Archive;
+using System.Net;
 
 namespace MissionControl.Client.Archive;
 
@@ -305,11 +306,26 @@ public sealed class EventFeedController(
     {
         return exception switch
         {
+            HttpRequestException
+            {
+                StatusCode: HttpStatusCode.Unauthorized
+            } =>
+                "The Dashboard rejected the Mobile API token. " +
+                "Update it in Settings.",
+
+            HttpRequestException
+            {
+                StatusCode: HttpStatusCode.BadGateway
+            } =>
+                "The Dashboard could not reach the Mission Control Archive.",
+
             HttpRequestException =>
-                $"Mission Control Archive could not be reached: " +
+                "Mission Control Archive could not be reached: " +
                 exception.Message,
+
             TaskCanceledException =>
                 "The Mission Control Archive request timed out.",
+
             _ => exception.Message
         };
     }
