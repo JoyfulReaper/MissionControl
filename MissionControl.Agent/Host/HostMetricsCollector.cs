@@ -37,13 +37,22 @@ internal sealed class HostMetricsCollector : IHostMetricsCollector
             File.ReadAllTextAsync(
                 "/proc/meminfo",
                 cancellationToken);
+        Task<string> loadAverageTask =
+            File.ReadAllTextAsync(
+                "/proc/loadavg",
+                cancellationToken);
 
-        await Task.WhenAll(statTask, memoryTask);
+        await Task.WhenAll(
+            statTask,
+            memoryTask,
+            loadAverageTask);
 
         CpuSample firstCpu = ParseCpuSample(firstStat);
         CpuSample secondCpu = ParseCpuSample(await statTask);
         (long totalBytes, long availableBytes) =
             ParseMemory(await memoryTask);
+        (double oneMinute, double fiveMinutes, double fifteenMinutes) =
+            ParseLoadAverage(await loadAverageTask);
 
         return new HostMetric(
             LogicalProcessorCount:
@@ -53,7 +62,12 @@ internal sealed class HostMetricsCollector : IHostMetricsCollector
             MemoryTotalBytes:
                 totalBytes,
             MemoryAvailableBytes:
-                availableBytes);
+                availableBytes)
+        {
+            LoadAverage1Minute = oneMinute,
+            LoadAverage5Minutes = fiveMinutes,
+            LoadAverage15Minutes = fifteenMinutes
+        };
     }
 
     internal static CpuSample ParseCpuSample(string contents)
@@ -157,6 +171,27 @@ internal sealed class HostMetricsCollector : IHostMetricsCollector
         return (
             totalBytes,
             Math.Clamp(availableBytes, 0, totalBytes));
+    }
+
+    internal static (
+        double OneMinute,
+        double FiveMinutes,
+        double FifteenMinutes) ParseLoadAverage(string contents)
+    {
+        string[] values = contents.Split(
+            ' ',
+            StringSplitOptions.RemoveEmptyEntries);
+
+        if (values.Length < 3)
+        {
+            throw new InvalidDataException(
+                "The host load average statistics were incomplete.");
+        }
+
+        return (
+            double.Parse(values[0], CultureInfo.InvariantCulture),
+            double.Parse(values[1], CultureInfo.InvariantCulture),
+            double.Parse(values[2], CultureInfo.InvariantCulture));
     }
 
     private static long ParseKilobytes(string value)

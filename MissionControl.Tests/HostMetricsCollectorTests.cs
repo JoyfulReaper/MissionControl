@@ -58,4 +58,23 @@ public sealed class HostMetricsCollectorTests
         Assert.Equal(4_194_304, totalBytes);
         Assert.Equal(1_572_864, availableBytes);
     }
+
+    [Fact]
+    public void ParseLoadAverageReturnsStandardIntervals()
+    {
+        (double oneMinute, double fiveMinutes, double fifteenMinutes) =
+            HostMetricsCollector.ParseLoadAverage(
+                "1.24 0.97 0.81 2/842 12345\n");
+
+        Assert.Equal(1.24, oneMinute);
+        Assert.Equal(0.97, fiveMinutes);
+        Assert.Equal(0.81, fifteenMinutes);
+    }
+
+    [Fact]
+    public void ParseLoadAverageRejectsIncompleteStatistics()
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            HostMetricsCollector.ParseLoadAverage("1.24 0.97"));
+    }
 }

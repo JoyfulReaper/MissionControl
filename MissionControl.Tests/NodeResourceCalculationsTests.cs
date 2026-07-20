@@ -144,4 +144,24 @@ public sealed class NodeResourceCalculationsTests
             "Host resource metrics are unavailable for this snapshot.",
             NodeResourceCalculations.UnavailableMessage);
     }
+
+    [Fact]
+    public void RecognizesCompleteLoadAverageMetrics()
+    {
+        var host = new HostMetricItem(
+            LogicalProcessorCount: 8,
+            CpuPercent: null,
+            MemoryTotalBytes: null,
+            MemoryAvailableBytes: null)
+        {
+            LoadAverage1Minute = 1.24,
+            LoadAverage5Minutes = 0.97,
+            LoadAverage15Minutes = 0.81
+        };
+
+        Assert.True(
+            NodeResourceCalculations.HasLoadAverageMetrics(host));
+        Assert.True(
+            NodeResourceCalculations.HasResourceMetrics(host));
+    }
 }
