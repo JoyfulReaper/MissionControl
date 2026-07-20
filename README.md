@@ -615,8 +615,3 @@ dotnet format MissionControl.slnx --verify-no-changes
 - Host uptime is not collected by the Agent.
 - The repository does not include its externally maintained Compose orchestration or an Agent container image.
 - Automated tests avoid external infrastructure; a real Gateway → RabbitMQ → Archive/GitActivity smoke test is still recommended for deployment validation.
-
-## Planned polish
-
-- Reduce card padding and height at the mobile breakpoint.
-- Preserve current desktop and web layouts while making those mobile-only changes.
