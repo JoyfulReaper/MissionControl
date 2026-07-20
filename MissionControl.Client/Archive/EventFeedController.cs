@@ -1,12 +1,11 @@
-using MissionControl.Client.Archive;
 using MissionControl.Contracts.Archive;
 
-namespace MissionControl.Dashboard.Refresh;
+namespace MissionControl.Client.Archive;
 
-internal sealed class EventFeedController(
+public sealed class EventFeedController(
     IArchiveEventClient client)
 {
-    internal const int PageSize = 50;
+    public const int PageSize = 50;
 
     private readonly RefreshGate refreshGate = new();
 
