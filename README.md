@@ -410,10 +410,13 @@ dotnet test MissionControl.slnx --configuration Debug --no-build
 Build the MAUI client on Windows for the checked-in Windows target:
 
 ```powershell
-dotnet build .\MissionControl.Mobile\MissionControl.Mobile.csproj `
-    -f net10.0-windows10.0.19041.0 `
-    -c Debug
+.\scripts\Build-MissionControlWindows.ps1
 ```
+
+The script builds `Release` for `win-x64` by default and does not publish,
+launch, or install the app. Use `-Configuration Debug` for a development build,
+`-RuntimeIdentifier win-arm64` for Windows on ARM64, or `-NoRestore` when the
+required assets have already been restored.
 
 Build the MAUI client for Android:
 
