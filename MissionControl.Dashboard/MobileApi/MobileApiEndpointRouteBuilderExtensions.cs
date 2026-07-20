@@ -200,10 +200,10 @@ public static class MobileApiEndpointRouteBuilderExtensions
                     "The Mission Control Archive request timed out.",
 
                 HttpRequestException =>
-                    "The Mission Control Archive could not be reached: " +
-                    exception.Message,
+                    "The Mission Control Archive could not be reached.",
 
-                _ => exception.Message
+                _ =>
+                    "The Mission Control Archive request failed."
             };
 
         return Results.Problem(
