@@ -96,6 +96,28 @@
         ]
       },
       {
+        "Id": "happy-discard",
+        "Name": "HappyDiscard",
+        "Group": "Public Services",
+        "Summary": "A modern implementation of the classic Discard protocol.",
+        "Description": "Accepts data over TCP port 9 and discards every byte without decoding, storing, logging, or echoing it.",
+        "ContainerName": "joyful-stack-happydiscard-1",
+        "Visibility": "Public",
+        "Protocol": "Discard / TCP :9",
+        "ProtocolServiceKey": "happydiscard",
+        "Endpoint": "discard.kgivler.com:9",
+        "Image": "happy-discard",
+        "SourceUrl": "https://github.com/JoyfulReaper/HappyDiscard",
+        "SearchTerms": [
+          "discard",
+          "tcp",
+          "port 9",
+          "classic protocol",
+          "networking",
+          "rfc"
+        ]
+      },
+      {
         "Id": "happy-qotd",
         "Name": "HappyQOTD",
         "Group": "Public Services",
