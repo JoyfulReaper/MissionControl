@@ -28,7 +28,8 @@ public static class NatsServiceCollectionExtensions
                             natsOptionsBuilder.Opts with
                             {
                                 Url = configured.Url,
-                                Name = configured.ClientName
+                                Name = configured.ClientName,
+                                RetryOnInitialConnect = true
                             };
                     });
             });
