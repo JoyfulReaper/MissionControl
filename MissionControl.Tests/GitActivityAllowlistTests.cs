@@ -290,16 +290,12 @@ public sealed class GitActivityAllowlistTests
                     ["GitActivity:ApiKey"] = ValidApiKey,
                     ["GitActivity:AllowedRepositories:0"] = " ",
                     ["GitActivity:AllowedBranches:0"] = "dev",
-                    ["RabbitMq:HostName"] = "localhost",
-                    ["RabbitMq:Port"] = "5672",
-                    ["RabbitMq:UserName"] = "guest",
-                    ["RabbitMq:Password"] = "guest",
-                    ["RabbitMq:VirtualHost"] = "/",
-                    ["RabbitMq:ClientProvidedName"] = "allowlist-tests",
-                    ["RabbitMqConsumer:ExchangeName"] = "events",
-                    ["RabbitMqConsumer:QueueName"] = "allowlist-tests",
-                    ["RabbitMqConsumer:RoutingKey"] = "github.push",
-                    ["RabbitMqConsumer:PrefetchCount"] = "10"
+                    ["Nats:Url"] = "nats://localhost:4222",
+                    ["Nats:ClientName"] = "git-activity-tests",
+                    ["Nats:StreamName"] = "MISSION_CONTROL_EVENTS",
+                    ["NatsConsumer:DurableName"] = "mission-control-git-activity-tests",
+                    ["NatsConsumer:FilterSubject"] = "events.github.push.received",
+                    ["NatsConsumer:MaxDeliveries"] = "2"
                 })
             .Build();
     }

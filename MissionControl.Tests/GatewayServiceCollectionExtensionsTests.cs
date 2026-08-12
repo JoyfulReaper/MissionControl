@@ -42,10 +42,6 @@ public sealed class GatewayServiceCollectionExtensionsTests
         HealthCheckServiceOptions healthOptions =
             provider.GetRequiredService<
                 IOptions<HealthCheckServiceOptions>>().Value;
-
-        Assert.DoesNotContain(
-            healthOptions.Registrations,
-            registration => registration.Name == "rabbitmq");
     }
 
     [Fact]

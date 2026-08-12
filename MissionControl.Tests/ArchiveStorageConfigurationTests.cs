@@ -589,10 +589,6 @@ public sealed class ArchiveStorageConfigurationTests
             Assert.Contains(
                 options.Registrations,
                 registration => registration.Name == "sqlite");
-
-            Assert.DoesNotContain(
-                options.Registrations,
-                registration => registration.Name == "rabbitmq");
         }
         finally
         {

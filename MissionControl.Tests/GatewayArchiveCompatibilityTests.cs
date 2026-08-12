@@ -1,9 +1,8 @@
 extern alias ArchiveApp;
-
-using Microsoft.Data.Sqlite;
-using Microsoft.Extensions.Logging.Abstractions;
 using ArchiveApp::MissionControl.Archive.Processing;
 using ArchiveApp::MissionControl.Archive.Storage.Sqlite;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging.Abstractions;
 using MissionControl.Contracts;
 using System.Reflection;
 using System.Text.Json;
@@ -21,12 +20,12 @@ public sealed class GatewayArchiveCompatibilityTests
         IntegrationEventEnvelope gatewayEnvelope =
             await ProduceGitHubEnvelopeAsync();
 
-        byte[] rabbitMqBody =
+        byte[] serializedEnvelope =
             JsonSerializer.SerializeToUtf8Bytes(gatewayEnvelope);
 
         var archiveEnvelope =
             JsonSerializer.Deserialize<IntegrationEventEnvelope>(
-                rabbitMqBody,
+                serializedEnvelope,
                 new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         Assert.NotNull(archiveEnvelope);

@@ -233,7 +233,7 @@
         "Name": "Mission Control Gateway",
         "Group": "Mission Control",
         "Summary": "Receives external events and publishes them internally.",
-        "Description": "Accepts generic integration events and signed GitHub webhooks, validates them, wraps them in a common envelope, and publishes them to RabbitMQ.",
+        "Description": "Accepts generic integration events and signed GitHub webhooks, validates them, wraps them in a common envelope, and publishes them to NATS JetStream.",
         "ContainerName": "joyful-stack-gateway-1",
         "Visibility": "Internal",
         "Protocol": "HTTP / Webhooks",
@@ -247,7 +247,7 @@
           "github",
           "ingress",
           "events",
-          "rabbitmq"
+          "nats"
         ]
       },
       {
@@ -295,23 +295,22 @@
         ]
       },
       {
-        "Id": "rabbitmq",
-        "Name": "RabbitMQ",
+        "Id": "nats",
+        "Name": "NATS JetStream",
         "Group": "Mission Control",
-        "Summary": "Routes Mission Control events to durable consumers.",
-        "Description": "The message broker behind Mission Control. A topic exchange routes integration events to matching durable queues.",
-        "ContainerName": "joyful-stack-rabbitmq-1",
+        "Summary": "Provides durable event streaming for Mission Control.",
+        "Description": "The message broker behind Mission Control. JetStream persists integration events and delivers them to durable consumers.",
+        "ContainerName": "joyful-stack-nats-1",
         "Visibility": "Internal",
-        "Protocol": "AMQP",
-        "Endpoint": "rabbitmq:5672",
-        "Image": "rabbitmq:4-management",
+        "Protocol": "NATS / JetStream",
+        "Endpoint": "nats:4222",
+        "Image": "nats:2.14.3-alpine",
         "SearchTerms": [
-          "rabbitmq",
+          "nats",
+          "jetstream",
           "broker",
-          "queue",
-          "topic exchange",
-          "amqp",
-          "durable events"
+          "events",
+          "durable consumers"
         ]
       },
       {
