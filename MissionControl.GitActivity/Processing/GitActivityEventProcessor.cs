@@ -83,18 +83,25 @@ public sealed class GitActivityEventProcessor
             return;
         }
 
-        if (integrationEvent.SchemaVersion !=
-            SupportedSchemaVersion)
+        if (integrationEvent.SchemaVersion != SupportedSchemaVersion)
         {
-            throw new NotSupportedException(
-                $"GitHub push event schema version " +
-                $"{integrationEvent.SchemaVersion} is not supported.");
+            throw new PermanentIntegrationEventException(
+                $"GitHub push event schema version {integrationEvent.SchemaVersion} is not supported.");
         }
 
-        var push = integrationEvent.Payload
-            .Deserialize<GitHubPushReceivedEvent>(JsonOptions)
-            ?? throw new JsonException(
-                "GitHub push payload deserialized to null.");
+        GitHubPushReceivedEvent push;
+
+        try
+        {
+            push = integrationEvent.Payload.Deserialize<GitHubPushReceivedEvent>(JsonOptions)
+                ?? throw new JsonException("GitHub push payload deserialized to null.");
+        }
+        catch (JsonException exception)
+        {
+            throw new PermanentIntegrationEventException(
+                "GitHub push payload is invalid.",
+                exception);
+        }
 
         if (!_allowedRepositories.Contains(push.Repository))
         {

@@ -112,6 +112,16 @@ public sealed class NatsEventConsumer(
         {
             throw;
         }
+        catch (PermanentIntegrationEventException exception)
+        {
+            logger.LogError(
+                exception,
+                "Terminating permanently unprocessable NATS event {EventId}",
+                message.Data.EventId);
+
+            await message.AckTerminateAsync(
+                cancellationToken: CancellationToken.None);
+        }
         catch (Exception exception)
         {
             logger.LogError(
