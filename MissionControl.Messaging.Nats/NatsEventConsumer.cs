@@ -60,7 +60,8 @@ public sealed class NatsEventConsumer(
             DurableName = _consumerOptions.DurableName,
             FilterSubject = _consumerOptions.FilterSubject,
             AckPolicy = ConsumerConfigAckPolicy.Explicit,
-            MaxDeliver = _consumerOptions.MaxDeliveries
+            MaxDeliver = _consumerOptions.MaxDeliveries,
+            MaxAckPending = 1
         };
 
         var consumer = await jetStream.CreateOrUpdateConsumerAsync(
