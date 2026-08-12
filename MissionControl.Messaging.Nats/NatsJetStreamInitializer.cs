@@ -10,6 +10,10 @@ public sealed class NatsJetStreamInitializer(
     IOptions<NatsOptions> options)
     : IHostedService
 {
+
+    private const long MaxStreamBytes = 256L * 1024 * 1024;
+    private static readonly TimeSpan MaxStreamAge = TimeSpan.FromDays(7);
+
     private readonly NatsOptions _options = options.Value;
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -18,7 +22,13 @@ public sealed class NatsJetStreamInitializer(
             _options.StreamName,
             [NatsSubjects.AllEvents])
         {
-            Description = "Mission Control integration events"
+            Description = "Mission Control integration events",
+            Storage = StreamConfigStorage.File,
+            Retention = StreamConfigRetention.Limits,
+            Discard = StreamConfigDiscard.Old,
+            MaxAge = MaxStreamAge,
+            MaxBytes = MaxStreamBytes,
+            NumReplicas = 1
         };
 
         await jetStream.CreateOrUpdateStreamAsync(config, cancellationToken);
