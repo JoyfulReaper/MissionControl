@@ -53,7 +53,10 @@ public static class GitActivityServiceCollectionExtensions
             .AddCheck<NatsJetStreamHealthCheck>(
                 "nats",
                 tags: ["ready"],
-                timeout: TimeSpan.FromSeconds(2));
+                timeout: TimeSpan.FromSeconds(2))
+            .AddCheck<NatsConsumerHealthCheck>(
+                "nats-consumer",
+                tags: ["ready"]);
 
         return services;
     }

@@ -12,6 +12,7 @@ public sealed class NatsEventConsumer(
     IOptions<NatsOptions> connectionOptions,
     IOptions<NatsConsumerOptions> consumerOptions,
     IIntegrationEventProcessor processor,
+    NatsConsumerStatus status,
     ILogger<NatsEventConsumer> logger)
     : BackgroundService
 {
@@ -43,6 +44,10 @@ public sealed class NatsEventConsumer(
 
                 await Task.Delay(RetryDelay, stoppingToken);
             }
+            finally
+            {
+                status.MarkStopped();
+            }
         }
     }
 
@@ -61,6 +66,8 @@ public sealed class NatsEventConsumer(
             _connectionOptions.StreamName,
             config,
             cancellationToken);
+
+        status.MarkRunning();
 
         logger.LogInformation(
             "Consuming NATS events from {Stream} as {Consumer} with filter {FilterSubject}",

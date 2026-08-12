@@ -53,6 +53,7 @@ public static class NatsServiceCollectionExtensions
     {
         services.AddNatsConnection(configuration);
         services.AddNatsConsumerOptions(configuration);
+        services.AddSingleton<NatsConsumerStatus>();
         services.AddHostedService<NatsEventConsumer>();
 
         return services;
