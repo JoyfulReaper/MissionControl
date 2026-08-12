@@ -179,7 +179,10 @@ public sealed class GatewayServiceCollectionExtensionsTests
             [$"{prefix}EventSources__Sources__0__ApiKey"] =
                 "test-event-source-api-key-32-characters",
             [$"{prefix}GitHubWebhook__Enabled"] = "false",
-            [$"{prefix}GitHubWebhook__MaxPayloadBytes"] = "1048576"
+            [$"{prefix}GitHubWebhook__MaxPayloadBytes"] = "1048576",
+            [$"{prefix}Nats__Url"] = "nats://localhost:4222",
+            [$"{prefix}Nats__ClientName"] = "mission-control-gateway-tests",
+            [$"{prefix}Nats__StreamName"] = "MISSION_CONTROL_EVENTS",
         };
 
         try
@@ -255,6 +258,11 @@ public sealed class GatewayServiceCollectionExtensionsTests
             ["RabbitMq:VirtualHost"] = "/",
             ["RabbitMq:ClientProvidedName"] =
                 "mission-control-gateway-tests",
+
+            ["Nats:Url"] = "nats://localhost:4222",
+            ["Nats:ClientName"] = "mission-control-gateway-tests",
+            ["Nats:StreamName"] = "MISSION_CONTROL_EVENTS",
+
             ["EventSources:Sources:0:Name"] =
                 "test-source",
             ["EventSources:Sources:0:ApiKey"] =

@@ -8,6 +8,7 @@ using MissionControl.Gateway.Integrations.GitHub;
 using MissionControl.Gateway.Messaging.RabbitMq;
 using MissionControl.Gateway.Security;
 using MissionControl.Messaging;
+using MissionControl.Messaging.Nats;
 using MissionControl.Observability.RabbitMq;
 
 namespace MissionControl.Gateway.DependencyInjection;
@@ -46,6 +47,8 @@ public static class GatewayServiceCollectionExtensions
             .AddCheck<RabbitMqConnectionHealthCheck>(
                 "rabbitmq",
                 tags: ["ready"]);
+
+        services.AddNatsConnection(configuration);
 
         return services;
     }
