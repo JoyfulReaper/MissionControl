@@ -4,12 +4,10 @@
  * Licensed under the MIT License
  */
 
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using MissionControl.Gateway.Integrations.GitHub;
-using MissionControl.Gateway.Messaging;
 using MissionControl.Gateway.Messaging.RabbitMq;
 using MissionControl.Gateway.Security;
+using MissionControl.Messaging;
 using MissionControl.Observability.RabbitMq;
 
 namespace MissionControl.Gateway.DependencyInjection;

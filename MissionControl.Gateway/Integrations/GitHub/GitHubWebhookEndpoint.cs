@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
 using MissionControl.Contracts;
 using MissionControl.Contracts.GitHub;
-using MissionControl.Gateway.Messaging;
+using MissionControl.Messaging;
 using System.Buffers;
 using System.Text.Json;
 

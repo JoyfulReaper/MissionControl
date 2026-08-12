@@ -8,6 +8,7 @@
 
 using Microsoft.Extensions.Options;
 using MissionControl.Contracts;
+using MissionControl.Messaging;
 using MissionControl.Observability.RabbitMq;
 using RabbitMQ.Client;
 using System.Text.Json;

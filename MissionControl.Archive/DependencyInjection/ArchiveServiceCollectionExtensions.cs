@@ -10,6 +10,7 @@ using MissionControl.Archive.Health;
 using MissionControl.Archive.Processing;
 using MissionControl.Archive.Storage;
 using MissionControl.Archive.Storage.Sqlite;
+using MissionControl.Messaging;
 using MissionControl.Messaging.RabbitMq;
 using MissionControl.Observability.RabbitMq;
 

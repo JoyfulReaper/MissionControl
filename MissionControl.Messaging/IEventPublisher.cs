@@ -1,10 +1,10 @@
 ﻿using MissionControl.Contracts;
 
-namespace MissionControl.Messaging.RabbitMq;
+namespace MissionControl.Messaging;
 
-public interface IIntegrationEventProcessor
+public interface IEventPublisher
 {
-    Task ProcessAsync(
+    Task PublishAsync(
         IntegrationEventEnvelope integrationEvent,
         CancellationToken cancellationToken = default);
 }

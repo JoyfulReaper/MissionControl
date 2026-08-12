@@ -5,8 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using MissionControl.Contracts;
-using MissionControl.Gateway.Messaging;
 using MissionControl.Gateway.Messaging.RabbitMq;
+using MissionControl.Messaging;
 using MissionControl.Observability.RabbitMq;
 using System.Collections.Concurrent;
 

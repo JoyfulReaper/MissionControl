@@ -10,6 +10,7 @@ using MissionControl.GitActivity.Health;
 using MissionControl.GitActivity.Processing;
 using MissionControl.GitActivity.Storage;
 using MissionControl.GitActivity.Storage.Sqlite;
+using MissionControl.Messaging;
 using MissionControl.Messaging.RabbitMq;
 using MissionControl.Observability.RabbitMq;
 

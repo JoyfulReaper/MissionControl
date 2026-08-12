@@ -5,8 +5,8 @@
  */
 
 using MissionControl.Contracts;
-using MissionControl.Gateway.Messaging;
 using MissionControl.Gateway.Security;
+using MissionControl.Messaging;
 using System.Text.Json;
 
 namespace MissionControl.Gateway.Endpoints;
