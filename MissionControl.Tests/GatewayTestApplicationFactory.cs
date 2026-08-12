@@ -5,7 +5,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using MissionControl.Contracts;
-using MissionControl.Gateway.Messaging.RabbitMq;
 using MissionControl.Messaging;
 using MissionControl.Observability.RabbitMq;
 using System.Collections.Concurrent;
@@ -64,7 +63,6 @@ internal sealed class GatewayTestApplicationFactory : WebApplicationFactory<Prog
             services =>
             {
                 services.RemoveAll<IHostedService>();
-                services.RemoveAll<RabbitMqEventPublisher>();
                 services.RemoveAll<IEventPublisher>();
                 services.RemoveAll<IRabbitMqConnectionStatus>();
 

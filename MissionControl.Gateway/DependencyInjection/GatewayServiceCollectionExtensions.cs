@@ -5,7 +5,6 @@
  */
 
 using MissionControl.Gateway.Integrations.GitHub;
-using MissionControl.Gateway.Messaging.RabbitMq;
 using MissionControl.Gateway.Security;
 using MissionControl.Messaging;
 using MissionControl.Messaging.Nats;
@@ -19,7 +18,6 @@ public static class GatewayServiceCollectionExtensions
         IConfiguration configuration)
     {
         services
-            .AddGatewayRabbitMqOptions(configuration)
             .AddWindowsService(options =>
             {
                 options.ServiceName = "Mission Control Gateway";
@@ -38,42 +36,6 @@ public static class GatewayServiceCollectionExtensions
         services.AddHealthChecks();
 
         services.AddNatsConnection(configuration);
-
-        return services;
-    }
-
-    private static IServiceCollection AddGatewayRabbitMqOptions(
-        this IServiceCollection services,
-        IConfiguration configuration)
-    {
-        IConfigurationSection rabbitMqSection =
-            configuration.GetRequiredSection(
-                RabbitMqOptions.SectionName);
-
-        services
-            .AddOptions<RabbitMqOptions>()
-            .Bind(rabbitMqSection)
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.HostName),
-                "RabbitMQ hostname is required.")
-            .Validate(
-                options => options.Port is > 0 and <= 65535,
-                "RabbitMQ port must be between 1 and 65535.")
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.UserName),
-                "RabbitMQ username is required.")
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.Password),
-                "RabbitMQ password is required.")
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.VirtualHost),
-                "RabbitMQ virtual host is required.")
-            .Validate(
-                options =>
-                    !string.IsNullOrWhiteSpace(
-                        options.ClientProvidedName),
-                "RabbitMQ client-provided name is required.")
-            .ValidateOnStart();
 
         return services;
     }
