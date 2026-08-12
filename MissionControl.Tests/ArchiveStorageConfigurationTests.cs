@@ -1,14 +1,13 @@
 extern alias ArchiveApp;
-
+using ArchiveApp::MissionControl.Archive.DependencyInjection;
+using ArchiveApp::MissionControl.Archive.Storage.Sqlite;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using MissionControl.Messaging.RabbitMq;
-using ArchiveApp::MissionControl.Archive.DependencyInjection;
-using ArchiveApp::MissionControl.Archive.Storage.Sqlite;
+using MissionControl.Messaging.Nats;
 using System.Text;
 using Xunit;
 
@@ -404,17 +403,16 @@ public sealed class ArchiveStorageConfigurationTests
     }
 
     [Fact]
-    public void DirectoryCreationFailureIsStartupFatal()
+    public async Task DirectoryCreationFailureIsStartupFatal()
     {
         string directory = CreateTempDirectory();
         string blockingFile = Path.Combine(directory, "blocking-file");
         File.WriteAllText(blockingFile, "test");
-        string impossibleDirectory =
-            Path.Combine(blockingFile, "child");
+        string impossibleDirectory = Path.Combine(blockingFile, "child");
 
         try
         {
-            using ServiceProvider provider =
+            await using ServiceProvider provider =
                 BuildProvider(
                     ArchiveConfiguration(
                         "archive.db",
@@ -422,6 +420,7 @@ public sealed class ArchiveStorageConfigurationTests
 
             Assert.ThrowsAny<Exception>(
                 () => provider.GetServices<IHostedService>().ToArray());
+
             Assert.False(
                 File.Exists(
                     Path.Combine(
@@ -560,7 +559,7 @@ public sealed class ArchiveStorageConfigurationTests
     }
 
     [Fact]
-    public void ArchiveHealthChecksAndRabbitConsumerRemainRegistered()
+    public void ArchiveHealthChecksAndNatsConsumerAreRegistered()
     {
         string directory = CreateTempDirectory();
 
@@ -569,6 +568,7 @@ public sealed class ArchiveStorageConfigurationTests
             IConfiguration configuration = ArchiveConfiguration(
                 "registrations.db",
                 directory);
+
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddMissionControlArchive(configuration);
@@ -576,19 +576,21 @@ public sealed class ArchiveStorageConfigurationTests
             Assert.Contains(
                 services,
                 descriptor =>
-                    descriptor.ServiceType ==
-                    typeof(RabbitMqEventConsumer));
+                    descriptor.ServiceType == typeof(IHostedService) &&
+                    descriptor.ImplementationType == typeof(NatsEventConsumer));
 
             using ServiceProvider provider =
                 services.BuildServiceProvider();
-            HealthCheckServiceOptions options =
-                provider.GetRequiredService<
-                    IOptions<HealthCheckServiceOptions>>().Value;
+
+            HealthCheckServiceOptions options = provider
+                .GetRequiredService<IOptions<HealthCheckServiceOptions>>()
+                .Value;
 
             Assert.Contains(
                 options.Registrations,
                 registration => registration.Name == "sqlite");
-            Assert.Contains(
+
+            Assert.DoesNotContain(
                 options.Registrations,
                 registration => registration.Name == "rabbitmq");
         }
@@ -606,16 +608,14 @@ public sealed class ArchiveStorageConfigurationTests
         {
             ["EventArchive:DatabaseFileName"] = databaseFileName,
             ["EventArchive:BasePath"] = basePath,
-            ["RabbitMq:HostName"] = "localhost",
-            ["RabbitMq:Port"] = "5672",
-            ["RabbitMq:UserName"] = "guest",
-            ["RabbitMq:Password"] = "guest",
-            ["RabbitMq:VirtualHost"] = "/",
-            ["RabbitMq:ClientProvidedName"] = "archive-tests",
-            ["RabbitMqConsumer:ExchangeName"] = "events",
-            ["RabbitMqConsumer:QueueName"] = "archive-tests",
-            ["RabbitMqConsumer:RoutingKey"] = "#",
-            ["RabbitMqConsumer:PrefetchCount"] = "1"
+
+            ["Nats:Url"] = "nats://localhost:4222",
+            ["Nats:ClientName"] = "mission-control-archive-tests",
+            ["Nats:StreamName"] = "MISSION_CONTROL_EVENTS",
+
+            ["NatsConsumer:DurableName"] = "mission-control-archive-tests",
+            ["NatsConsumer:FilterSubject"] = "events.>",
+            ["NatsConsumer:MaxDeliveries"] = "2"
         };
 
         return new ConfigurationBuilder()
