@@ -41,6 +41,8 @@ public static class NatsServiceCollectionExtensions
             return client.CreateJetStreamContext();
         });
 
+        services.AddSingleton<NatsJetStreamInitializer>();
+
         return services;
     }
 

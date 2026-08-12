@@ -5,6 +5,8 @@
  * Licensed under the MIT License
  */
 
+// NOTE: Currently there is no DLQ for RabbitMQ
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MissionControl.Observability.RabbitMq;
