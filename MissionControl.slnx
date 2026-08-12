@@ -6,6 +6,7 @@
   <Project Path="MissionControl.Dashboard/MissionControl.Dashboard.csproj" />
   <Project Path="MissionControl.Gateway/MissionControl.Gateway.csproj" />
   <Project Path="MissionControl.GitActivity/MissionControl.GitActivity.csproj" Id="d38b3f82-93f6-4872-9484-c1bf74efd075" />
+  <Project Path="MissionControl.Messaging.Nats/MissionControl.Messaging.Nats.csproj" Id="5133cac9-f2b9-464d-af3c-29b01eab5575" />
   <Project Path="MissionControl.Messaging.RabbitMq/MissionControl.Messaging.RabbitMq.csproj" Id="1e707882-81ba-44d4-9a1d-664f76083dc9" />
   <Project Path="MissionControl.Messaging/MissionControl.Messaging.csproj" Id="998da730-9013-4965-a40f-f01c220be5e8" />
   <Project Path="MissionControl.Mobile/MissionControl.Mobile.csproj" Id="aefb2c87-d77b-46e5-8451-03cd413d32a2">
