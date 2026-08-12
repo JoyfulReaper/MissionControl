@@ -1,5 +1,4 @@
 extern alias GitActivityApp;
-
 using GitActivityApp::MissionControl.GitActivity;
 using GitActivityApp::MissionControl.GitActivity.DependencyInjection;
 using GitActivityApp::MissionControl.GitActivity.Processing;
@@ -12,6 +11,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MissionControl.Contracts;
 using MissionControl.Contracts.GitHub;
+using MissionControl.Messaging;
 using System.Reflection;
 using System.Text.Json;
 using Xunit;
@@ -85,6 +85,40 @@ public sealed class GitActivityAllowlistTests
             new GitActivityOptionsValidator().Validate(null, options);
 
         Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task UnsupportedSchemaVersionIsPermanentFailure()
+    {
+        var repository = new RecordingGitActivityRepository();
+        var processor = CreateProcessor(repository);
+        var envelope = CreatePushEnvelope("JoyfulReaper/MissionControl", "dev") with
+        {
+            SchemaVersion = 99
+        };
+
+        var exception = await Assert.ThrowsAsync<PermanentIntegrationEventException>(
+            () => processor.ProcessAsync(envelope));
+
+        Assert.Contains("schema version 99", exception.Message);
+        Assert.Equal(0, repository.UpsertCount);
+    }
+
+    [Fact]
+    public async Task InvalidPushPayloadIsPermanentFailure()
+    {
+        var repository = new RecordingGitActivityRepository();
+        var processor = CreateProcessor(repository);
+        var envelope = CreatePushEnvelope("JoyfulReaper/MissionControl", "dev") with
+        {
+            Payload = JsonSerializer.SerializeToElement("not-a-github-push")
+        };
+
+        var exception = await Assert.ThrowsAsync<PermanentIntegrationEventException>(
+            () => processor.ProcessAsync(envelope));
+
+        Assert.IsType<JsonException>(exception.InnerException);
+        Assert.Equal(0, repository.UpsertCount);
     }
 
     [Fact]
