@@ -46,6 +46,17 @@ public static class NatsServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection AddNatsEventConsumer(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddNatsConnection(configuration);
+        services.AddNatsConsumerOptions(configuration);
+        services.AddHostedService<NatsEventConsumer>();
+
+        return services;
+    }
+
     public static IServiceCollection AddNatsOptions(
         this IServiceCollection services,
         IConfiguration configuration)
