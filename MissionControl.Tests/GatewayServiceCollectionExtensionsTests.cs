@@ -6,8 +6,7 @@ using Microsoft.Extensions.Options;
 using MissionControl.Gateway.DependencyInjection;
 using MissionControl.Gateway.Messaging.RabbitMq;
 using MissionControl.Messaging;
-using MissionControl.Observability.RabbitMq;
-using System.Reflection;
+using MissionControl.Messaging.Nats;
 using Xunit;
 
 namespace MissionControl.Tests;
@@ -30,30 +29,20 @@ public sealed class GatewayServiceCollectionExtensionsTests
                     ValidateScopes = true
                 });
 
-        RabbitMqEventPublisher concretePublisher =
-            provider.GetRequiredService<
-                RabbitMqEventPublisher>();
+        NatsEventPublisher concretePublisher =
+            provider.GetRequiredService<NatsEventPublisher>();
+
         IEventPublisher eventPublisher =
             provider.GetRequiredService<IEventPublisher>();
-        IRabbitMqConnectionStatus connectionStatus =
-            provider.GetRequiredService<
-                IRabbitMqConnectionStatus>();
-        RabbitMqOptions options = provider
-            .GetRequiredService<IOptions<RabbitMqOptions>>()
-            .Value;
-        FieldInfo publisherOptionsField =
-            typeof(RabbitMqEventPublisher).GetField(
-                "_options",
-                BindingFlags.Instance | BindingFlags.NonPublic) ??
-            throw new Xunit.Sdk.XunitException(
-                "Publisher options field was not found.");
 
         Assert.Same(concretePublisher, eventPublisher);
-        Assert.Same(concretePublisher, connectionStatus);
-        Assert.Same(
-            options,
-            publisherOptionsField.GetValue(concretePublisher));
+
         Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service =>
+                service is NatsJetStreamInitializer);
+
+        Assert.DoesNotContain(
             provider.GetServices<IHostedService>(),
             service =>
                 service is RabbitMqPublisherConnectionWorker);
@@ -61,11 +50,11 @@ public sealed class GatewayServiceCollectionExtensionsTests
         HealthCheckServiceOptions healthOptions =
             provider.GetRequiredService<
                 IOptions<HealthCheckServiceOptions>>().Value;
-        Assert.Contains(
+
+        Assert.DoesNotContain(
             healthOptions.Registrations,
             registration =>
-                registration.Name == "rabbitmq" &&
-                registration.Tags.Contains("ready"));
+                registration.Name == "rabbitmq");
     }
 
     [Fact]
@@ -76,6 +65,7 @@ public sealed class GatewayServiceCollectionExtensionsTests
                 new KeyValuePair<string, string?>(
                     "RabbitMq:Password",
                     ""));
+
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMissionControlGateway(configuration);
@@ -83,10 +73,11 @@ public sealed class GatewayServiceCollectionExtensionsTests
         using ServiceProvider provider =
             services.BuildServiceProvider();
 
-        OptionsValidationException exception = Assert.Throws<
-            OptionsValidationException>(
-                () => provider.GetRequiredService<
-                    IOptions<RabbitMqOptions>>().Value);
+        OptionsValidationException exception =
+            Assert.Throws<OptionsValidationException>(
+                () => provider
+                    .GetRequiredService<IOptions<RabbitMqOptions>>()
+                    .Value);
 
         Assert.Contains(
             "RabbitMQ password is required.",
@@ -98,10 +89,10 @@ public sealed class GatewayServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
 
-        InvalidOperationException exception = Assert.Throws<
-            InvalidOperationException>(
-            () => services.AddMissionControlGateway(
-                new ConfigurationBuilder().Build()));
+        InvalidOperationException exception =
+            Assert.Throws<InvalidOperationException>(
+                () => services.AddMissionControlGateway(
+                    new ConfigurationBuilder().Build()));
 
         Assert.Contains("RabbitMq", exception.Message);
     }
@@ -135,13 +126,16 @@ public sealed class GatewayServiceCollectionExtensionsTests
     [InlineData("1", 1)]
     [InlineData("5672", 5672)]
     [InlineData("65535", 65535)]
-    public void RabbitMqValidPortsBind(string configuredPort, int expected)
+    public void RabbitMqValidPortsBind(
+        string configuredPort,
+        int expected)
     {
-        using ServiceProvider provider = CreateProvider(
-            CreateConfiguration(
-                new KeyValuePair<string, string?>(
-                    "RabbitMq:Port",
-                    configuredPort)));
+        using ServiceProvider provider =
+            CreateProvider(
+                CreateConfiguration(
+                    new KeyValuePair<string, string?>(
+                        "RabbitMq:Port",
+                        configuredPort)));
 
         RabbitMqOptions options = provider
             .GetRequiredService<IOptions<RabbitMqOptions>>()
@@ -151,70 +145,106 @@ public sealed class GatewayServiceCollectionExtensionsTests
     }
 
     [Theory]
-    [InlineData("RabbitMq:UserName", "RabbitMQ username is required.")]
-    [InlineData("RabbitMq:Password", "RabbitMQ password is required.")]
-    [InlineData("RabbitMq:VirtualHost", "RabbitMQ virtual host is required.")]
-    [InlineData("RabbitMq:ClientProvidedName", "RabbitMQ client-provided name is required.")]
+    [InlineData(
+        "RabbitMq:UserName",
+        "RabbitMQ username is required.")]
+    [InlineData(
+        "RabbitMq:Password",
+        "RabbitMQ password is required.")]
+    [InlineData(
+        "RabbitMq:VirtualHost",
+        "RabbitMQ virtual host is required.")]
+    [InlineData(
+        "RabbitMq:ClientProvidedName",
+        "RabbitMQ client-provided name is required.")]
     public void RabbitMqRequiredTextSettingsRejectMissingAndBlank(
         string key,
         string expectedFailure)
     {
-        AssertRabbitMqValidationFails(key, null, expectedFailure);
-        AssertRabbitMqValidationFails(key, " ", expectedFailure);
+        AssertRabbitMqValidationFails(
+            key,
+            null,
+            expectedFailure);
+
+        AssertRabbitMqValidationFails(
+            key,
+            " ",
+            expectedFailure);
     }
 
     [Fact]
     public async Task RabbitMqEnvironmentVariablesBindValidatedOptions()
     {
         string prefix = $"MC_GATEWAY_{Guid.NewGuid():N}_";
+
         var variables = new Dictionary<string, string?>
         {
             [$"{prefix}RabbitMq__HostName"] = "broker.internal",
             [$"{prefix}RabbitMq__Port"] = "5673",
             [$"{prefix}RabbitMq__UserName"] = "gateway",
             [$"{prefix}RabbitMq__Password"] = "secret",
-            [$"{prefix}RabbitMq__VirtualHost"] = "/mission-control",
-            [$"{prefix}RabbitMq__ClientProvidedName"] = "gateway-production",
-            [$"{prefix}EventSources__Sources__0__Name"] = "test-source",
+            [$"{prefix}RabbitMq__VirtualHost"] =
+                "/mission-control",
+            [$"{prefix}RabbitMq__ClientProvidedName"] =
+                "gateway-production",
+
+            [$"{prefix}Nats__Url"] =
+                "nats://localhost:4222",
+            [$"{prefix}Nats__ClientName"] =
+                "mission-control-gateway-tests",
+            [$"{prefix}Nats__StreamName"] =
+                "MISSION_CONTROL_EVENTS",
+
+            [$"{prefix}EventSources__Sources__0__Name"] =
+                "test-source",
             [$"{prefix}EventSources__Sources__0__ApiKey"] =
                 "test-event-source-api-key-32-characters",
+
             [$"{prefix}GitHubWebhook__Enabled"] = "false",
-            [$"{prefix}GitHubWebhook__MaxPayloadBytes"] = "1048576",
-            [$"{prefix}Nats__Url"] = "nats://localhost:4222",
-            [$"{prefix}Nats__ClientName"] = "mission-control-gateway-tests",
-            [$"{prefix}Nats__StreamName"] = "MISSION_CONTROL_EVENTS",
+            [$"{prefix}GitHubWebhook__MaxPayloadBytes"] =
+                "1048576"
         };
 
         try
         {
             foreach ((string variable, string? value) in variables)
             {
-                Environment.SetEnvironmentVariable(variable, value);
+                Environment.SetEnvironmentVariable(
+                    variable,
+                    value);
             }
 
             IConfiguration configuration =
                 new ConfigurationBuilder()
                     .AddEnvironmentVariables(prefix)
                     .Build();
+
             await using ServiceProvider provider =
                 CreateProvider(configuration);
 
             RabbitMqOptions options = provider
                 .GetRequiredService<IOptions<RabbitMqOptions>>()
                 .Value;
-            RabbitMqEventPublisher publisher =
-                provider.GetRequiredService<RabbitMqEventPublisher>();
 
-            Assert.Equal("broker.internal", options.HostName);
-            Assert.Equal(5673, options.Port);
-            Assert.Equal("gateway-production", options.ClientProvidedName);
-            Assert.NotNull(publisher);
+            Assert.Equal(
+                "broker.internal",
+                options.HostName);
+
+            Assert.Equal(
+                5673,
+                options.Port);
+
+            Assert.Equal(
+                "gateway-production",
+                options.ClientProvidedName);
         }
         finally
         {
             foreach (string variable in variables.Keys)
             {
-                Environment.SetEnvironmentVariable(variable, null);
+                Environment.SetEnvironmentVariable(
+                    variable,
+                    null);
             }
         }
     }
@@ -224,25 +254,32 @@ public sealed class GatewayServiceCollectionExtensionsTests
         string? value,
         string expectedFailure)
     {
-        using ServiceProvider provider = CreateProvider(
-            CreateConfiguration(
-                new KeyValuePair<string, string?>(key, value)));
+        using ServiceProvider provider =
+            CreateProvider(
+                CreateConfiguration(
+                    new KeyValuePair<string, string?>(
+                        key,
+                        value)));
 
-        OptionsValidationException exception = Assert.Throws<
-            OptionsValidationException>(
-            () => provider
-                .GetRequiredService<IOptions<RabbitMqOptions>>()
-                .Value);
+        OptionsValidationException exception =
+            Assert.Throws<OptionsValidationException>(
+                () => provider
+                    .GetRequiredService<IOptions<RabbitMqOptions>>()
+                    .Value);
 
-        Assert.Contains(expectedFailure, exception.Failures);
+        Assert.Contains(
+            expectedFailure,
+            exception.Failures);
     }
 
     private static ServiceProvider CreateProvider(
         IConfiguration configuration)
     {
         var services = new ServiceCollection();
+
         services.AddLogging();
         services.AddMissionControlGateway(configuration);
+
         return services.BuildServiceProvider();
     }
 
@@ -260,15 +297,19 @@ public sealed class GatewayServiceCollectionExtensionsTests
                 "mission-control-gateway-tests",
 
             ["Nats:Url"] = "nats://localhost:4222",
-            ["Nats:ClientName"] = "mission-control-gateway-tests",
-            ["Nats:StreamName"] = "MISSION_CONTROL_EVENTS",
+            ["Nats:ClientName"] =
+                "mission-control-gateway-tests",
+            ["Nats:StreamName"] =
+                "MISSION_CONTROL_EVENTS",
 
             ["EventSources:Sources:0:Name"] =
                 "test-source",
             ["EventSources:Sources:0:ApiKey"] =
                 "test-event-source-api-key-32-characters",
+
             ["GitHubWebhook:Enabled"] = "false",
-            ["GitHubWebhook:MaxPayloadBytes"] = "1048576"
+            ["GitHubWebhook:MaxPayloadBytes"] =
+                "1048576"
         };
 
         foreach (KeyValuePair<string, string?> item in overrides)

@@ -9,7 +9,6 @@ using MissionControl.Gateway.Messaging.RabbitMq;
 using MissionControl.Gateway.Security;
 using MissionControl.Messaging;
 using MissionControl.Messaging.Nats;
-using MissionControl.Observability.RabbitMq;
 
 namespace MissionControl.Gateway.DependencyInjection;
 
@@ -25,16 +24,10 @@ public static class GatewayServiceCollectionExtensions
             {
                 options.ServiceName = "Mission Control Gateway";
             })
-            .AddSingleton<RabbitMqEventPublisher>()
+            .AddSingleton<NatsEventPublisher>()
             .AddSingleton<IEventPublisher>(
                 serviceProvider =>
-                    serviceProvider.GetRequiredService<
-                        RabbitMqEventPublisher>())
-            .AddSingleton<IRabbitMqConnectionStatus>(
-                serviceProvider =>
-                    serviceProvider.GetRequiredService<
-                        RabbitMqEventPublisher>())
-            .AddHostedService<RabbitMqPublisherConnectionWorker>()
+                    serviceProvider.GetRequiredService<NatsEventPublisher>())
             .AddEventSourceOptions(configuration)
             .AddGitHubWebhookOptions(configuration)
             .AddSingleton<GitHubWebhookSignatureValidator>()
@@ -42,11 +35,7 @@ public static class GatewayServiceCollectionExtensions
                 IEventSourceResolver,
                 ApiKeyEventSourceResolver>();
 
-        services
-            .AddHealthChecks()
-            .AddCheck<RabbitMqConnectionHealthCheck>(
-                "rabbitmq",
-                tags: ["ready"]);
+        services.AddHealthChecks();
 
         services.AddNatsConnection(configuration);
 
