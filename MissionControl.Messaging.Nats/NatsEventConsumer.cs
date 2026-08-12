@@ -127,8 +127,8 @@ public sealed class NatsEventConsumer(
                 "Terminating permanently unprocessable NATS event {EventId}",
                 message.Data.EventId);
 
-            await message.AckTerminateAsync(
-                cancellationToken: CancellationToken.None);
+            using var dispositionCancellation = CreateDispositionCancellationSource(cancellationToken);
+            await message.AckTerminateAsync(cancellationToken: dispositionCancellation.Token);
         }
         catch (Exception exception)
         {
@@ -149,7 +149,7 @@ public sealed class NatsEventConsumer(
     }
 
     private static CancellationTokenSource CreateDispositionCancellationSource(
-    CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
         var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         source.CancelAfter(MessageDispositionTimeout);
