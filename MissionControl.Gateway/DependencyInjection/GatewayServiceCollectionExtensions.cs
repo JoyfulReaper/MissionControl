@@ -8,6 +8,7 @@ using MissionControl.Gateway.Integrations.GitHub;
 using MissionControl.Gateway.Security;
 using MissionControl.Messaging;
 using MissionControl.Messaging.Nats;
+using MissionControl.Observability.Nats;
 
 namespace MissionControl.Gateway.DependencyInjection;
 
@@ -33,7 +34,12 @@ public static class GatewayServiceCollectionExtensions
                 IEventSourceResolver,
                 ApiKeyEventSourceResolver>();
 
-        services.AddHealthChecks();
+        services
+            .AddHealthChecks()
+                .AddCheck<NatsJetStreamHealthCheck>(
+                    "nats",
+                    tags: ["ready"],
+                    timeout: TimeSpan.FromSeconds(2));
 
         services.AddNatsConnection(configuration);
 

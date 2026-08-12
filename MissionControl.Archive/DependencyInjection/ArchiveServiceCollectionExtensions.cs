@@ -12,6 +12,7 @@ using MissionControl.Archive.Storage;
 using MissionControl.Archive.Storage.Sqlite;
 using MissionControl.Messaging;
 using MissionControl.Messaging.Nats;
+using MissionControl.Observability.Nats;
 
 namespace MissionControl.Archive.DependencyInjection;
 
@@ -49,7 +50,11 @@ public static class ArchiveServiceCollectionExtensions
             .AddHealthChecks()
             .AddCheck<SqliteArchiveHealthCheck>(
                 "sqlite",
-                tags: ["ready"]);
+                tags: ["ready"])
+            .AddCheck<NatsJetStreamHealthCheck>(
+                "nats",
+                tags: ["ready"],
+                timeout: TimeSpan.FromSeconds(2));
 
         return services;
     }

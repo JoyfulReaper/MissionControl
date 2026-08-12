@@ -42,6 +42,10 @@ public sealed class GatewayServiceCollectionExtensionsTests
         HealthCheckServiceOptions healthOptions =
             provider.GetRequiredService<
                 IOptions<HealthCheckServiceOptions>>().Value;
+
+        Assert.Contains(
+            healthOptions.Registrations,
+            registration => registration.Name == "nats");
     }
 
     [Fact]

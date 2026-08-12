@@ -12,6 +12,7 @@ using MissionControl.GitActivity.Storage;
 using MissionControl.GitActivity.Storage.Sqlite;
 using MissionControl.Messaging;
 using MissionControl.Messaging.Nats;
+using MissionControl.Observability.Nats;
 
 namespace MissionControl.GitActivity.DependencyInjection;
 
@@ -48,7 +49,11 @@ public static class GitActivityServiceCollectionExtensions
             .AddHealthChecks()
             .AddCheck<SqliteGitActivityHealthCheck>(
                 "sqlite",
-                tags: ["ready"]);
+                tags: ["ready"])
+            .AddCheck<NatsJetStreamHealthCheck>(
+                "nats",
+                tags: ["ready"],
+                timeout: TimeSpan.FromSeconds(2));
 
         return services;
     }
