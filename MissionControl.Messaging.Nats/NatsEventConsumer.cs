@@ -18,6 +18,7 @@ public sealed class NatsEventConsumer(
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
     private readonly NatsOptions _connectionOptions = connectionOptions.Value;
     private readonly NatsConsumerOptions _consumerOptions = consumerOptions.Value;
+    private static readonly TimeSpan ProcessingFailureRetryDelay = TimeSpan.FromSeconds(30);
 
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
@@ -118,7 +119,12 @@ public sealed class NatsEventConsumer(
                 "Failed to process NATS event {EventId}",
                 message.Data.EventId);
 
-            await message.NakAsync(cancellationToken: CancellationToken.None);
+            await message.NakAsync(
+                new AckOpts
+                {
+                    NakDelay = ProcessingFailureRetryDelay
+                },
+                cancellationToken: CancellationToken.None);
         }
     }
 }
