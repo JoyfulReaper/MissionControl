@@ -1,13 +1,13 @@
 # Mission Control
 
-Mission Control is a .NET operations system for collecting integration events and current host/service status. It accepts authenticated events, routes them through RabbitMQ, archives complete event envelopes in SQLite, projects selected GitHub activity, collects host and Docker diagnostics, and presents the results in an authenticated Blazor dashboard.
+Mission Control is a .NET operations system for collecting integration events and current host/service status. It accepts authenticated events, publishes them through NATS JetStream, archives complete event envelopes in SQLite, projects selected GitHub activity, collects host and Docker diagnostics, and presents the results in an authenticated Blazor dashboard.
 
 ## Solution projects
 
 | Project | Purpose |
 | --- | --- |
-| `MissionControl.Gateway` | ASP.NET Core ingress for generic integration events and signed GitHub webhooks. Publishes normalized envelopes to RabbitMQ. |
-| `MissionControl.Archive` | RabbitMQ consumer and HTTP query API backed by a SQLite event archive. |
+| `MissionControl.Gateway` | ASP.NET Core ingress for generic integration events and signed GitHub webhooks. Publishes normalized envelopes to NATS JetStream. |
+| `MissionControl.Archive` | NATS JetStream consumer and HTTP query API backed by a SQLite event archive. |
 | `MissionControl.Agent` | Collects host, Docker, and protocol status; persists the latest node snapshot; optionally publishes operational snapshot events; exposes a sanitized snapshot API. |
 | `MissionControl.Dashboard` | Authenticated Blazor Server UI for archive statistics, events, node resources, containers, probes, and a configured service catalog. Also exposes the bearer-authenticated Mobile API proxy for installed clients. |
 | `MissionControl.GitActivity` | Consumes selected GitHub push events, stores an allowed repository/branch projection in SQLite, and exposes an API-key-protected activity feed. |
@@ -15,8 +15,9 @@ Mission Control is a .NET operations system for collecting integration events an
 | `MissionControl.Client` | Shared Agent, Archive, and GitActivity HTTP clients plus client-side feed state. |
 | `MissionControl.UI` | Razor Class Library with shared Git Activity, event details, overview, and service UI plus the shared Mission Control theme. |
 | `MissionControl.Mobile` | .NET MAUI Blazor Hybrid application sharing the Client, Contracts, and UI projects across Windows and Android builds. |
-| `MissionControl.Messaging.RabbitMq` | Shared RabbitMQ consumer, consumer options, and integration-event processor contract. |
-| `MissionControl.Observability` | Shared liveness/readiness endpoint mapping and RabbitMQ connection health check. |
+| `MissionControl.Messaging` | Broker-independent event publisher and integration-event processor contracts. |
+| `MissionControl.Messaging.Nats` | NATS.Net 3.1.0 publisher, JetStream initialization, durable consumer, and messaging configuration. |
+| `MissionControl.Observability` | Shared liveness/readiness endpoint mapping plus NATS JetStream and consumer health checks. |
 | `MissionControl.Tests` | xUnit unit and focused integration coverage for storage, messaging, Agent, Dashboard, shared client/UI behavior, GitActivity, and API contracts. |
 
 ## Data flow
@@ -26,12 +27,23 @@ The primary integration-event path is:
 ```text
 generic client or GitHub
 -> MissionControl.Gateway
--> RabbitMQ topic exchange
--> MissionControl.Archive
--> SQLite event archive
--> Archive HTTP API
--> MissionControl.Dashboard
+-> NATS JetStream stream MISSION_CONTROL_EVENTS
+   -> mission-control-archive durable consumer
+      -> MissionControl.Archive
+      -> SQLite event archive
+      -> Archive HTTP API
+      -> MissionControl.Dashboard
+   -> mission-control-git-activity durable consumer
+      -> MissionControl.GitActivity
+      -> SQLite Git activity projection
 ```
+
+The Gateway publishes each `IntegrationEventEnvelope` to
+`events.{EventType}`. The application creates or updates the
+`MISSION_CONTROL_EVENTS` stream idempotently with subject `events.>`, file
+storage, limits retention, `DiscardOld`, a 7-day maximum age, a 256 MiB byte
+limit, and one replica. The envelope `EventId` is used as the JetStream message
+ID so JetStream can deduplicate repeated publishes.
 
 The shared cross-platform UI layers sit above those service APIs:
 
@@ -44,8 +56,8 @@ MissionControl.Contracts
    -> MissionControl.Mobile Android MAUI Blazor Hybrid app
 ```
 
-`MissionControl.GitActivity` consumes `github.push.received` events from its own
-RabbitMQ queue. It filters configured repositories and branches, then stores a
+`MissionControl.GitActivity` consumes `events.github.push.received` from its own
+durable JetStream consumer. It filters configured repositories and branches, then stores a
 commit-oriented SQLite projection. Dashboard and Mobile use the private service
 path:
 
@@ -66,6 +78,22 @@ the Dashboard Mobile bearer token; the proxy never returns the GitActivity key
 or service URL. A deployment may separately expose the API-key-protected
 GitActivity endpoint for trusted server-side consumers, but Mobile does not use
 that route.
+
+### JetStream consumers and delivery behavior
+
+| Service | Durable consumer | Filter subject |
+| --- | --- | --- |
+| Archive | `mission-control-archive` | `events.>` |
+| GitActivity | `mission-control-git-activity` | `events.github.push.received` |
+
+Both consumers use explicit acknowledgements, allow at most one unacknowledged
+message (`MaxAckPending: 1`), and are configured for at most five deliveries.
+Successful processing sends an ACK. A malformed outer envelope or a permanent
+processor failure sends TERM and is not retried. Other processor failures send
+a delayed NAK and are eligible for redelivery after 30 seconds. The NATS client
+retries its initial connection and uses its reconnect behavior for connection
+interruptions; the consumer service also restarts its consume loop after a
+failure.
 
 The Agent path is separate:
 
@@ -158,11 +186,11 @@ For building and automated testing:
 - .NET 10 SDK
 - a supported .NET development platform
 
-The test suite uses temporary SQLite databases and controlled HTTP, Docker, and protocol doubles. It does not require a running RabbitMQ broker, Docker daemon, external network service, or production credentials.
+The test suite uses temporary SQLite databases and controlled HTTP, NATS, Docker, and protocol doubles. It does not require a running NATS server, Docker daemon, external network service, or production credentials.
 
 For a complete local event flow:
 
-- RabbitMQ reachable by Gateway, Archive, and GitActivity;
+- NATS with JetStream enabled, reachable by Gateway, Archive, and GitActivity;
 - writable storage for Archive, Agent, Dashboard authentication, and GitActivity SQLite databases;
 - valid API keys and, when enabled, a GitHub webhook secret;
 - Archive and Agent HTTP endpoints reachable by Dashboard.
@@ -175,7 +203,7 @@ All executables use standard ASP.NET Core configuration. Environment variables r
 
 ### Gateway
 
-Important sections are `EventSources`, `RabbitMq`, and `GitHubWebhook`.
+Important sections are `EventSources`, `Nats`, and `GitHubWebhook`.
 
 ```json
 {
@@ -187,13 +215,10 @@ Important sections are `EventSources`, `RabbitMq`, and `GitHubWebhook`.
       }
     ]
   },
-  "RabbitMq": {
-    "HostName": "localhost",
-    "Port": 5672,
-    "UserName": "mission-control",
-    "Password": "replace-with-a-secret",
-    "VirtualHost": "/mission-control",
-    "ClientProvidedName": "mission-control-gateway-local"
+  "Nats": {
+    "Url": "nats://localhost:4222",
+    "ClientName": "mission-control-gateway-local",
+    "StreamName": "MISSION_CONTROL_EVENTS"
   },
   "GitHubWebhook": {
     "Enabled": true,
@@ -206,25 +231,26 @@ Important sections are `EventSources`, `RabbitMq`, and `GitHubWebhook`.
 
 Event-source names and keys must be non-empty and unique; keys must contain at least 32 characters. An enabled GitHub webhook requires a secret of at least 32 characters and an allowed owner. Payload limits must be between 1 byte and 25 MB.
 
+`Nats:Url` must use the `nats` or `tls` scheme. `Nats:ClientName` and
+`Nats:StreamName` are required. The checked-in application settings use
+`MISSION_CONTROL_EVENTS`; all publishers and consumers must point at the same
+stream.
+
 ### Archive
 
-Archive requires `RabbitMq`, `RabbitMqConsumer`, and `EventArchive` settings.
+Archive requires `Nats`, `NatsConsumer`, and `EventArchive` settings.
 
 ```json
 {
-  "RabbitMq": {
-    "HostName": "localhost",
-    "Port": 5672,
-    "UserName": "mission-control",
-    "Password": "replace-with-a-secret",
-    "VirtualHost": "/mission-control",
-    "ClientProvidedName": "mission-control-archive-local"
+  "Nats": {
+    "Url": "nats://localhost:4222",
+    "ClientName": "mission-control-archive-local",
+    "StreamName": "MISSION_CONTROL_EVENTS"
   },
-  "RabbitMqConsumer": {
-    "ExchangeName": "kgivler.events",
-    "QueueName": "mission-control.archive",
-    "RoutingKey": "#",
-    "PrefetchCount": 10
+  "NatsConsumer": {
+    "DurableName": "mission-control-archive",
+    "FilterSubject": "events.>",
+    "MaxDeliveries": 5
   },
   "EventArchive": {
     "DatabaseFileName": "mission-control.db",
@@ -233,7 +259,7 @@ Archive requires `RabbitMq`, `RabbitMqConsumer`, and `EventArchive` settings.
 }
 ```
 
-`EventArchive` and `DatabaseFileName` are required and validated before the RabbitMQ consumer starts. `DatabaseFileName` must be a filename, not a path. A missing or blank `BasePath` resolves to `Data` under the application directory; a relative value is also resolved from the application directory, while an absolute value is used directly. Invalid paths fail startup instead of falling back to another database.
+`EventArchive` and `DatabaseFileName` are required and validated before the NATS consumer starts. `DatabaseFileName` must be a filename, not a path. A missing or blank `BasePath` resolves to `Data` under the application directory; a relative value is also resolved from the application directory, while an absolute value is used directly. Invalid paths fail startup instead of falling back to another database. `NatsConsumer:DurableName` and `NatsConsumer:FilterSubject` are required, and `MaxDeliveries` must be greater than zero.
 
 ### Agent
 
@@ -370,23 +396,19 @@ dotnet run --project MissionControl.Dashboard -- users create operator "Local Op
 
 ### GitActivity
 
-GitActivity uses the shared `RabbitMq` and `RabbitMqConsumer` sections plus `GitActivity`.
+GitActivity uses the shared `Nats` and `NatsConsumer` sections plus `GitActivity`.
 
 ```json
 {
-  "RabbitMq": {
-    "HostName": "localhost",
-    "Port": 5672,
-    "UserName": "mission-control",
-    "Password": "replace-with-a-secret",
-    "VirtualHost": "/mission-control",
-    "ClientProvidedName": "mission-control-git-activity-local"
+  "Nats": {
+    "Url": "nats://localhost:4222",
+    "ClientName": "mission-control-git-activity-local",
+    "StreamName": "MISSION_CONTROL_EVENTS"
   },
-  "RabbitMqConsumer": {
-    "ExchangeName": "kgivler.events",
-    "QueueName": "mission-control.git-activity",
-    "RoutingKey": "github.push.received",
-    "PrefetchCount": 10
+  "NatsConsumer": {
+    "DurableName": "mission-control-git-activity",
+    "FilterSubject": "events.github.push.received",
+    "MaxDeliveries": 5
   },
   "GitActivity": {
     "DatabaseFileName": "git-activity.db",
@@ -424,7 +446,7 @@ The API key must contain at least 32 characters. Both allowlists must be non-emp
 | Agent | `GET /api/snapshot` | Latest sanitized node snapshot; returns 503 until one is stored. |
 | GitActivity | `GET /api/github/activity` | Recent allowed activity; requires `X-Mission-Control-Key`. |
 
-Gateway, Archive, and GitActivity expose `GET /health/live` and `GET /health/ready`. Readiness includes their RabbitMQ status and, for SQLite consumers, database health. Agent exposes `GET /health/live`. Dashboard pages are cookie-authenticated and redirect anonymous users to `/login`.
+Gateway, Archive, and GitActivity expose `GET /health/live` and `GET /health/ready`. Gateway readiness verifies that the configured JetStream stream is available. Archive and GitActivity readiness additionally verifies that their durable NATS consumer is running and their SQLite database is healthy. Agent exposes `GET /health/live`. Dashboard pages are cookie-authenticated and redirect anonymous users to `/login`.
 
 Dashboard pages (`/`, `/events`, `/events/{eventId}`, `/services`,
 `/gitactivity`, `/login`, and `/logout`) use normal cookie authentication. The Dashboard Mobile API uses
@@ -445,6 +467,20 @@ dotnet restore MissionControl.slnx
 dotnet build MissionControl.slnx --configuration Debug
 dotnet test MissionControl.slnx --configuration Debug --no-build
 ```
+
+For a local end-to-end event flow, start NATS with JetStream and persistent
+storage:
+
+```bash
+docker run --name mission-control-nats --rm \
+  -p 4222:4222 \
+  -v mission-control-nats-data:/data/jetstream \
+  nats:2.14.3-alpine -js -sd /data/jetstream
+```
+
+The checked-in settings use `nats://localhost:4222`. The first Gateway,
+Archive, or GitActivity process to connect creates or updates the stream; no
+separate stream-provisioning command is required.
 
 Build the MAUI client on Windows for the checked-in Windows target:
 
@@ -475,7 +511,7 @@ dotnet run --project MissionControl.Dashboard
 dotnet run --project MissionControl.GitActivity
 ```
 
-Checked-in launch profiles use port 5190 for Gateway, 5194 for Agent, 5089/7062 for Dashboard, and 5242 for GitActivity. The explicit Archive command above matches the Dashboard’s checked-in Archive URL. Services that connect to RabbitMQ will not be fully operational until the broker and credentials are available.
+Checked-in launch profiles use port 5190 for Gateway, 5194 for Agent, 5089/7062 for Dashboard, and 5242 for GitActivity. The explicit Archive command above matches the Dashboard’s checked-in Archive URL. Gateway, Archive, and GitActivity will not be ready until NATS JetStream is available at the configured URL.
 
 ## Publishing for personal use
 
@@ -608,15 +644,30 @@ docker build -f Dockerfile.gitactivity -t mission-control-gitactivity .
 There is no Compose file checked into this repository and no Agent Dockerfile.
 Production Compose orchestration is maintained externally in
 [`UsefulScripts/VPS/docker-compose.yaml`](https://github.com/JoyfulReaper/UsefulScripts/blob/main/VPS/docker-compose.yaml)
-and may trail application changes.
+and currently runs `nats:2.14.3-alpine` with JetStream enabled:
 
-- Archive sets `EventArchive__BasePath=/app/data` and declares `/app/data` as a volume; mount persistent storage there.
+```yaml
+nats:
+  image: nats:2.14.3-alpine
+  command: ["-js", "-sd", "/data/jetstream"]
+  volumes:
+    - nats-data:/data/jetstream
+```
+
+Gateway, Archive, and GitActivity join the Compose `backend` network and use
+`Nats__Url=nats://nats:4222`, distinct production `Nats__ClientName` values,
+and `Nats__StreamName=MISSION_CONTROL_EVENTS`. Archive and GitActivity also set
+their `NatsConsumer__DurableName`, `NatsConsumer__FilterSubject`, and
+`NatsConsumer__MaxDeliveries=5` values. The `nats-data` volume is production
+state and must be retained across container replacement.
+
+- The Archive image defaults `EventArchive__BasePath` to `/app/data` and declares that path as a volume. Production Compose overrides it to `/data` and mounts `archive-data` there.
 - Dashboard declares `/app/data` for its authentication database and Data Protection keys.
 - Dashboard requires the private `GitActivityApi__BaseUrl` and matching
   `GitActivityApi__ApiKey`; GitActivity requires the same value through
   `GitActivity__ApiKey`. Supply that value through deployment secrets.
-- Gateway requires RabbitMQ, event-source, and optional webhook secrets through external configuration.
-- GitActivity requires RabbitMQ, API-key, allowlist, and SQLite path configuration. Its Dockerfile does not declare a data volume, so persistent deployment storage must be arranged by the operator.
+- Gateway requires NATS, event-source, and optional webhook configuration through external settings and secrets.
+- GitActivity requires NATS consumer, API-key, allowlist, and SQLite path configuration. Its Dockerfile does not declare a data volume; production Compose mounts `gitactivity-data` at `/data`.
 - An externally containerized Agent would require access to the configured Docker Unix socket, but this repository does not provide or endorse a Compose mounting recipe. Docker socket access is highly privileged.
 
 ## Testing
@@ -625,7 +676,7 @@ The xUnit suite covers:
 
 - generic Gateway authentication, request validation, and cancellation;
 - GitHub signature, payload, owner, and normalization behavior;
-- production Gateway publisher/health DI registration and RabbitMQ option validation;
+- production Gateway publisher/health DI registration and NATS option validation;
 - Gateway-to-Archive serialization, SQLite storage, querying, and deduplication;
 - Archive section, filename, path, environment-variable, startup, and health validation;
 - Agent host collection, Docker state/resource parsing, and collector-failure isolation;
@@ -643,7 +694,7 @@ dotnet format MissionControl.slnx --verify-no-changes
 
 ## Security and operations
 
-- Keep event-source keys, GitActivity keys, RabbitMQ credentials, GitHub webhook secrets, and Dashboard user credentials out of source control.
+- Keep event-source keys, GitActivity keys, NATS credentials if configured, GitHub webhook secrets, and Dashboard user credentials out of source control.
 - Webhook signatures and API keys are validated before event publication; GitActivity compares its API key in fixed time.
 - Keep Mobile API raw tokens, token hashes, Android keystores, signing passwords, and production host secrets out of source control.
 - The Dashboard stores only the configured Mobile API token hash. Installed clients store the raw token independently in MAUI `SecureStorage`.
@@ -655,6 +706,9 @@ dotnet format MissionControl.slnx --verify-no-changes
 - Access to the Docker socket is effectively privileged host access. Grant it only to a trusted Agent process.
 - Agent protocol endpoints and errors are sanitized before public serialization; local collector logs can contain more operational context and should be protected accordingly.
 - SQLite paths are deployment state. Mount or back up Archive, Agent, Dashboard, and GitActivity storage according to the required retention.
+- JetStream storage is deployment state. Persist `/data/jetstream`, monitor the
+  256 MiB stream limit, and account for the configured 7-day retention window
+  when planning recovery and incident investigation.
 
 ## Current limitations
 
@@ -662,4 +716,4 @@ dotnet format MissionControl.slnx --verify-no-changes
 - Linux `/proc` supplies the implemented host CPU, load-average, and memory metrics, and Docker collection currently targets a Unix socket.
 - Host uptime is not collected by the Agent.
 - The repository does not include its externally maintained Compose orchestration or an Agent container image.
-- Automated tests avoid external infrastructure; a real Gateway → RabbitMQ → Archive/GitActivity smoke test is still recommended for deployment validation.
+- Automated tests avoid external infrastructure; a real Gateway → NATS JetStream → Archive/GitActivity smoke test is still recommended for deployment validation.
