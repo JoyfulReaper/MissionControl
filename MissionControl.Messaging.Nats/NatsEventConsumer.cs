@@ -16,10 +16,11 @@ public sealed class NatsEventConsumer(
     ILogger<NatsEventConsumer> logger)
     : BackgroundService
 {
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
     private readonly NatsOptions _connectionOptions = connectionOptions.Value;
     private readonly NatsConsumerOptions _consumerOptions = consumerOptions.Value;
     private static readonly TimeSpan ProcessingFailureRetryDelay = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan MessageDispositionTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
 
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
@@ -99,8 +100,8 @@ public sealed class NatsEventConsumer(
                 "Discarding malformed NATS message on subject {Subject}",
                 message.Subject);
 
-            await message.AckTerminateAsync(
-                cancellationToken: CancellationToken.None);
+            using var dispositionCancellation = CreateDispositionCancellationSource(cancellationToken);
+            await message.AckTerminateAsync(cancellationToken: dispositionCancellation.Token);
 
             return;
         }
@@ -136,12 +137,22 @@ public sealed class NatsEventConsumer(
                 "Failed to process NATS event {EventId}",
                 message.Data.EventId);
 
+            using var dispositionCancellation = CreateDispositionCancellationSource(cancellationToken);
+
             await message.NakAsync(
                 new AckOpts
                 {
                     NakDelay = ProcessingFailureRetryDelay
                 },
-                cancellationToken: CancellationToken.None);
+                cancellationToken: dispositionCancellation.Token);
         }
+    }
+
+    private static CancellationTokenSource CreateDispositionCancellationSource(
+    CancellationToken cancellationToken)
+    {
+        var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        source.CancelAfter(MessageDispositionTimeout);
+        return source;
     }
 }
