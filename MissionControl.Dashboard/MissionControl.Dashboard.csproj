@@ -7,6 +7,21 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="Archive\**" />
+    <Compile Remove="Components\Overview\**" />
+    <Compile Remove="Components\Services\**" />
+    <Content Remove="Archive\**" />
+    <Content Remove="Components\Overview\**" />
+    <Content Remove="Components\Services\**" />
+    <EmbeddedResource Remove="Archive\**" />
+    <EmbeddedResource Remove="Components\Overview\**" />
+    <EmbeddedResource Remove="Components\Services\**" />
+    <None Remove="Archive\**" />
+    <None Remove="Components\Overview\**" />
+    <None Remove="Components\Services\**" />
+  </ItemGroup>
+
 <ItemGroup>
 	<PackageReference Include="JoyfulReaperLib.Sqlite" Version="0.0.9" />
 	<PackageReference Include="Dapper" Version="2.1.79" />
@@ -21,12 +36,6 @@
   <ProjectReference Include="..\MissionControl.Client\MissionControl.Client.csproj" />
   <ProjectReference Include="..\MissionControl.Contracts\MissionControl.Contracts.csproj" />
   <ProjectReference Include="..\MissionControl.UI\MissionControl.UI.csproj" />
-</ItemGroup>
-
-<ItemGroup>
-  <Folder Include="Archive\" />
-  <Folder Include="Components\Overview\" />
-  <Folder Include="Components\Services\" />
 </ItemGroup>
 
 </Project>

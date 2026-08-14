@@ -193,8 +193,9 @@ else
                         HandleEventRowKeyDown(eventArgs, item.EventId)">
                 <div class="event-field event-occurred"
                      data-label="Occurred">
-                    <time datetime="@item.OccurredAt.ToString("O")">
-                        @DateTimeFormatter.Format(item.OccurredAt)
+                    <time datetime="@item.OccurredAt.ToString("O")"
+                          title="@DateTimeFormatter.Format(item.OccurredAt)">
+                        @DateTimeFormatter.FormatRelative(item.OccurredAt)
                     </time>
                 </div>
 
