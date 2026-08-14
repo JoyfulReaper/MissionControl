@@ -10,8 +10,9 @@ using MissionControl.GitActivity.Health;
 using MissionControl.GitActivity.Processing;
 using MissionControl.GitActivity.Storage;
 using MissionControl.GitActivity.Storage.Sqlite;
-using MissionControl.Messaging.RabbitMq;
-using MissionControl.Observability.RabbitMq;
+using MissionControl.Messaging;
+using MissionControl.Messaging.Nats;
+using MissionControl.Observability.Nats;
 
 namespace MissionControl.GitActivity.DependencyInjection;
 
@@ -22,8 +23,7 @@ public static class GitActivityServiceCollectionExtensions
         IConfiguration configuration)
     {
         IConfigurationSection gitActivitySection =
-            configuration.GetRequiredSection(
-                GitActivityOptions.SectionName);
+            configuration.GetRequiredSection(GitActivityOptions.SectionName);
 
         services
             .AddOptions<GitActivityOptions>()
@@ -41,23 +41,21 @@ public static class GitActivityServiceCollectionExtensions
                         "Mission Control Git Activity";
                 })
             .AddSingleton(CreateGitActivityConnection)
-            .AddSingleton<
-                IGitActivityRepository,
-                SqliteGitActivityRepository>()
-            .AddSingleton<
-                IIntegrationEventProcessor,
-                GitActivityEventProcessor>()
-            .AddRabbitMqConsumerOptions(configuration)
-            .AddRabbitMqConnectionOptions(configuration)
-            .AddRabbitMqEventConsumer();
+            .AddSingleton<IGitActivityRepository, SqliteGitActivityRepository>()
+            .AddSingleton<IIntegrationEventProcessor, GitActivityEventProcessor>()
+            .AddNatsEventConsumer(configuration);
 
         services
             .AddHealthChecks()
             .AddCheck<SqliteGitActivityHealthCheck>(
                 "sqlite",
                 tags: ["ready"])
-            .AddCheck<RabbitMqConnectionHealthCheck>(
-                "rabbitmq",
+            .AddCheck<NatsJetStreamHealthCheck>(
+                "nats",
+                tags: ["ready"],
+                timeout: TimeSpan.FromSeconds(2))
+            .AddCheck<NatsConsumerHealthCheck>(
+                "nats-consumer",
                 tags: ["ready"]);
 
         return services;

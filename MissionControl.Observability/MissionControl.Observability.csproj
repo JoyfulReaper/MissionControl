@@ -10,4 +10,8 @@
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <ProjectReference Include="..\MissionControl.Messaging.Nats\MissionControl.Messaging.Nats.csproj" />
+	</ItemGroup>
+
 </Project>

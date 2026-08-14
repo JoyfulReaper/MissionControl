@@ -1,6 +1,6 @@
 ﻿using MissionControl.Archive.Storage;
 using MissionControl.Contracts;
-using MissionControl.Messaging.RabbitMq;
+using MissionControl.Messaging;
 
 namespace MissionControl.Archive.Processing;
 

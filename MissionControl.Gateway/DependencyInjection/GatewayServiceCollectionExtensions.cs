@@ -4,13 +4,11 @@
  * Licensed under the MIT License
  */
 
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using MissionControl.Gateway.Integrations.GitHub;
-using MissionControl.Gateway.Messaging;
-using MissionControl.Gateway.Messaging.RabbitMq;
 using MissionControl.Gateway.Security;
-using MissionControl.Observability.RabbitMq;
+using MissionControl.Messaging;
+using MissionControl.Messaging.Nats;
+using MissionControl.Observability.Nats;
 
 namespace MissionControl.Gateway.DependencyInjection;
 
@@ -21,21 +19,14 @@ public static class GatewayServiceCollectionExtensions
         IConfiguration configuration)
     {
         services
-            .AddGatewayRabbitMqOptions(configuration)
             .AddWindowsService(options =>
             {
                 options.ServiceName = "Mission Control Gateway";
             })
-            .AddSingleton<RabbitMqEventPublisher>()
+            .AddSingleton<NatsEventPublisher>()
             .AddSingleton<IEventPublisher>(
                 serviceProvider =>
-                    serviceProvider.GetRequiredService<
-                        RabbitMqEventPublisher>())
-            .AddSingleton<IRabbitMqConnectionStatus>(
-                serviceProvider =>
-                    serviceProvider.GetRequiredService<
-                        RabbitMqEventPublisher>())
-            .AddHostedService<RabbitMqPublisherConnectionWorker>()
+                    serviceProvider.GetRequiredService<NatsEventPublisher>())
             .AddEventSourceOptions(configuration)
             .AddGitHubWebhookOptions(configuration)
             .AddSingleton<GitHubWebhookSignatureValidator>()
@@ -45,45 +36,12 @@ public static class GatewayServiceCollectionExtensions
 
         services
             .AddHealthChecks()
-            .AddCheck<RabbitMqConnectionHealthCheck>(
-                "rabbitmq",
-                tags: ["ready"]);
+                .AddCheck<NatsJetStreamHealthCheck>(
+                    "nats",
+                    tags: ["ready"],
+                    timeout: TimeSpan.FromSeconds(2));
 
-        return services;
-    }
-
-    private static IServiceCollection AddGatewayRabbitMqOptions(
-        this IServiceCollection services,
-        IConfiguration configuration)
-    {
-        IConfigurationSection rabbitMqSection =
-            configuration.GetRequiredSection(
-                RabbitMqOptions.SectionName);
-
-        services
-            .AddOptions<RabbitMqOptions>()
-            .Bind(rabbitMqSection)
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.HostName),
-                "RabbitMQ hostname is required.")
-            .Validate(
-                options => options.Port is > 0 and <= 65535,
-                "RabbitMQ port must be between 1 and 65535.")
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.UserName),
-                "RabbitMQ username is required.")
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.Password),
-                "RabbitMQ password is required.")
-            .Validate(
-                options => !string.IsNullOrWhiteSpace(options.VirtualHost),
-                "RabbitMQ virtual host is required.")
-            .Validate(
-                options =>
-                    !string.IsNullOrWhiteSpace(
-                        options.ClientProvidedName),
-                "RabbitMQ client-provided name is required.")
-            .ValidateOnStart();
+        services.AddNatsConnection(configuration);
 
         return services;
     }

@@ -1,10 +1,10 @@
 ﻿using MissionControl.Contracts;
 
-namespace MissionControl.Gateway.Messaging;
+namespace MissionControl.Messaging;
 
-public interface IEventPublisher
+public interface IIntegrationEventProcessor
 {
-    Task PublishAsync(
+    Task ProcessAsync(
         IntegrationEventEnvelope integrationEvent,
         CancellationToken cancellationToken = default);
 }

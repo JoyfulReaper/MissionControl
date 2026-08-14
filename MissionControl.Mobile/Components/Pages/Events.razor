@@ -1,5 +1,5 @@
 ﻿@page "/events"
-@implements IDisposable
+@implements IAsyncDisposable
 
 @inject IArchiveEventClient ArchiveClient
 @inject MobileApiCredentialStore CredentialStore
@@ -269,8 +269,9 @@
                                 </h2>
                             </div>
 
-                            <time datetime="@item.OccurredAt.ToString("O")">
-                                @FormatTimestamp(item.OccurredAt)
+                            <time datetime="@item.OccurredAt.ToString("O")"
+                                  title="@FormatTimestamp(item.OccurredAt)">
+                                @FormatRelativeTimestamp(item.OccurredAt)
                             </time>
                         </div>
 
@@ -292,7 +293,10 @@
                             <div>
                                 <dt>Received</dt>
                                 <dd>
-                                    @FormatTimestamp(item.ReceivedAt)
+                                    <time datetime="@item.ReceivedAt.ToString("O")"
+                                          title="@FormatTimestamp(item.ReceivedAt)">
+                                        @FormatRelativeTimestamp(item.ReceivedAt)
+                                    </time>
                                 </dd>
                             </div>
                         </dl>
@@ -343,6 +347,8 @@
     private bool _hasToken;
     private bool _filtersExpanded;
 
+    private Task? _relativeTimeRefreshTask;
+
     private bool IsBusy =>
         _feed?.IsRefreshing == true;
 
@@ -350,11 +356,8 @@
     {
         try
         {
-            string? token =
-                await CredentialStore.GetTokenAsync();
-
-            _hasToken =
-                !string.IsNullOrWhiteSpace(token);
+            string? token = await CredentialStore.GetTokenAsync();
+            _hasToken = !string.IsNullOrWhiteSpace(token);
 
             _configurationChecked = true;
 
@@ -363,12 +366,10 @@
                 return;
             }
 
-            _feed =
-                new EventFeedController(
-                    ArchiveClient);
+            _feed = new EventFeedController(ArchiveClient);
+            await _feed.LoadInitialAsync( _disposeSource.Token);
 
-            await _feed.LoadInitialAsync(
-                _disposeSource.Token);
+            _relativeTimeRefreshTask = RefreshRelativeTimestampsAsync(_disposeSource.Token);
         }
         catch (OperationCanceledException)
             when (_disposeSource.IsCancellationRequested)
@@ -462,12 +463,68 @@
             .ToString("yyyy-MM-dd HH:mm:ss");
     }
 
-    public void Dispose()
+    private static string FormatRelativeTimestamp(
+        DateTimeOffset timestamp)
     {
-        _disposeSource.Cancel();
-        _disposeSource.Dispose();
+        TimeSpan age =DateTimeOffset.UtcNow - timestamp;
+
+        if (age < TimeSpan.Zero)
+        {
+            age = TimeSpan.Zero;
+        }
+
+        if (age < TimeSpan.FromMinutes(1))
+        {
+            return "just now";
+        }
+
+        if (age < TimeSpan.FromHours(1))
+        {
+            return FormatElapsed(
+                (int)age.TotalMinutes,
+                "minute");
+        }
+
+        if (age < TimeSpan.FromHours(24))
+        {
+            return FormatElapsed(
+                (int)age.TotalHours,
+                "hour");
+        }
+
+        return FormatTimestamp(timestamp);
     }
 
+    private static string FormatElapsed(
+        int value,
+        string unit)
+    {
+        string suffix =
+            value == 1
+                ? string.Empty
+                : "s";
+
+        return $"{value} {unit}{suffix} ago";
+    }
+
+    private async Task RefreshRelativeTimestampsAsync(
+        CancellationToken cancellationToken)
+    {
+        using PeriodicTimer timer = new(TimeSpan.FromMinutes(1));
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(
+                       cancellationToken))
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
     private void OpenEventModal(Guid eventId)
     {
         _feed?.SelectEvent(eventId);
@@ -488,5 +545,17 @@
         }
 
         return Task.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _disposeSource.CancelAsync();
+
+        if (_relativeTimeRefreshTask is not null)
+        {
+            await _relativeTimeRefreshTask;
+        }
+
+        _disposeSource.Dispose();
     }
 }

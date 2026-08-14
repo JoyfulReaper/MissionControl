@@ -343,16 +343,12 @@ public sealed class StorageConfigurationHardeningTests
             [$"{prefix}GitActivity__AllowedRepositories__0"] =
                 "JoyfulReaper/MissionControl",
             [$"{prefix}GitActivity__AllowedBranches__0"] = "dev",
-            [$"{prefix}RabbitMq__HostName"] = "localhost",
-            [$"{prefix}RabbitMq__Port"] = "5672",
-            [$"{prefix}RabbitMq__UserName"] = "guest",
-            [$"{prefix}RabbitMq__Password"] = "guest",
-            [$"{prefix}RabbitMq__VirtualHost"] = "/",
-            [$"{prefix}RabbitMq__ClientProvidedName"] = "tests",
-            [$"{prefix}RabbitMqConsumer__ExchangeName"] = "events",
-            [$"{prefix}RabbitMqConsumer__QueueName"] = "git-tests",
-            [$"{prefix}RabbitMqConsumer__RoutingKey"] = "github.push",
-            [$"{prefix}RabbitMqConsumer__PrefetchCount"] = "10"
+            [$"{prefix}Nats__Url"] = "nats://localhost:4222",
+            [$"{prefix}Nats__ClientName"] = "git-activity-tests",
+            [$"{prefix}Nats__StreamName"] = "MISSION_CONTROL_EVENTS",
+            [$"{prefix}NatsConsumer__DurableName"] = "mission-control-git-activity-tests",
+            [$"{prefix}NatsConsumer__FilterSubject"] = "events.github.push.received",
+            [$"{prefix}NatsConsumer__MaxDeliveries"] = "2"
         };
 
         try
@@ -419,16 +415,12 @@ public sealed class StorageConfigurationHardeningTests
             ["GitActivity:AllowedRepositories:0"] =
                 "JoyfulReaper/MissionControl",
             ["GitActivity:AllowedBranches:0"] = "dev",
-            ["RabbitMq:HostName"] = "localhost",
-            ["RabbitMq:Port"] = "5672",
-            ["RabbitMq:UserName"] = "guest",
-            ["RabbitMq:Password"] = "guest",
-            ["RabbitMq:VirtualHost"] = "/",
-            ["RabbitMq:ClientProvidedName"] = "git-storage-tests",
-            ["RabbitMqConsumer:ExchangeName"] = "events",
-            ["RabbitMqConsumer:QueueName"] = "git-storage-tests",
-            ["RabbitMqConsumer:RoutingKey"] = "github.push",
-            ["RabbitMqConsumer:PrefetchCount"] = "10"
+            ["Nats:Url"] = "nats://localhost:4222",
+            ["Nats:ClientName"] = "git-storage-tests",
+            ["Nats:StreamName"] = "MISSION_CONTROL_EVENTS",
+            ["NatsConsumer:DurableName"] = "mission-control-git-activity-tests",
+            ["NatsConsumer:FilterSubject"] = "events.github.push.received",
+            ["NatsConsumer:MaxDeliveries"] = "2"
         };
 
         if (databaseFileName is not null)

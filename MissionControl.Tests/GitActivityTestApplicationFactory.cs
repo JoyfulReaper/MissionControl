@@ -9,11 +9,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using MissionControl.Contracts.GitActivity;
 using MissionControl.Contracts.GitHub;
-using MissionControl.Observability.RabbitMq;
-using GitActivityProgram =
-    GitActivityApp::Program;
-using IGitActivityRepository =
-    GitActivityApp::MissionControl.GitActivity.Storage.IGitActivityRepository;
+using GitActivityProgram = GitActivityApp::Program;
+using IGitActivityRepository = GitActivityApp::MissionControl.GitActivity.Storage.IGitActivityRepository;
 
 namespace MissionControl.Tests;
 
@@ -44,31 +41,19 @@ internal sealed class GitActivityTestApplicationFactory
                 configuration.AddInMemoryCollection(
                     new Dictionary<string, string?>
                     {
-                        ["RabbitMq:HostName"] = "localhost",
-                        ["RabbitMq:Port"] = "5672",
-                        ["RabbitMq:UserName"] = "guest",
-                        ["RabbitMq:Password"] = "guest",
-                        ["RabbitMq:VirtualHost"] = "/",
-                        ["RabbitMq:ClientProvidedName"] =
-                            "git-activity-tests",
+                        ["Nats:Url"] = "nats://localhost:4222",
+                        ["Nats:ClientName"] = "mission-control-git-activity-tests",
+                        ["Nats:StreamName"] = "MISSION_CONTROL_EVENTS",
+                        ["NatsConsumer:DurableName"] = "mission-control-git-activity-tests",
+                        ["NatsConsumer:FilterSubject"] = "events.github.push.received",
+                        ["NatsConsumer:MaxDeliveries"] = "2",
 
-                        ["RabbitMqConsumer:ExchangeName"] =
-                            "kgivler.events",
-                        ["RabbitMqConsumer:QueueName"] =
-                            "mission-control.git-activity.tests",
-                        ["RabbitMqConsumer:RoutingKey"] =
-                            "github.push.received",
-                        ["RabbitMqConsumer:PrefetchCount"] = "10",
-
-                        ["GitActivity:DatabaseFileName"] =
-                            "git-activity.db",
-                        ["GitActivity:BasePath"] =
-                            _databaseDirectory,
+                        ["GitActivity:DatabaseFileName"] = "git-activity.db",
+                        ["GitActivity:BasePath"] = _databaseDirectory,
                         ["GitActivity:DefaultResultLimit"] = "10",
                         ["GitActivity:MaxResultLimit"] = "50",
                         ["GitActivity:ApiKey"] = ApiKey,
-                        ["GitActivity:AllowedRepositories:0"] =
-                            "JoyfulReaper/MissionControl",
+                        ["GitActivity:AllowedRepositories:0"] = "JoyfulReaper/MissionControl",
                         ["GitActivity:AllowedBranches:0"] = "dev"
                     });
             });
@@ -76,17 +61,11 @@ internal sealed class GitActivityTestApplicationFactory
         builder.ConfigureServices(
             services =>
             {
-                // Prevent the real RabbitMQ consumer from starting.
+                // Prevent the real NATS consumer and initializer from starting.
                 services.RemoveAll<IHostedService>();
 
                 services.RemoveAll<IGitActivityRepository>();
-                services.RemoveAll<IRabbitMqConnectionStatus>();
-
-                services.AddSingleton<IGitActivityRepository>(
-                    Repository);
-
-                services.AddSingleton<IRabbitMqConnectionStatus>(
-                    new FakeRabbitMqConnectionStatus());
+                services.AddSingleton<IGitActivityRepository>(Repository);
             });
     }
 

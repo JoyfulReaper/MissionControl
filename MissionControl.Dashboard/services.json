@@ -207,6 +207,71 @@
         ]
       },
       {
+        "Id": "happy-gemini",
+        "Name": "HappyGemini",
+        "Group": "Public Services",
+        "Summary": "A small Gemini protocol server for the text-first web.",
+        "Description": "A .NET 10 Gemini server with TLS, virtual hosts, static content, dynamic pages, and external plugin support.",
+        "ContainerName": "joyful-stack-happygemini-1",
+        "Visibility": "Public",
+        "Protocol": "Gemini / TLS :1965",
+        "Endpoint": "gemini.kgivler.com:1965",
+        "Image": "joyful-stack-happygemini",
+        "SourceUrl": "https://github.com/JoyfulReaper/HappyGemini",
+        "SearchTerms": [
+          "gemini",
+          "tls",
+          "port 1965",
+          "small web",
+          "smolweb",
+          "text",
+          "plugins"
+        ]
+      },
+      {
+        "Id": "happy-gopher-mystery",
+        "Name": "HappyGopher Mystery",
+        "Group": "Public Services",
+        "Summary": "An intentionally strange IPv6-only Gopher endpoint.",
+        "Description": "A separate HappyGopher instance used for the experimental mystery server and its changing, deliberately cryptic content.",
+        "ContainerName": "joyful-stack-happygopher-mystery-1",
+        "Visibility": "Public",
+        "Protocol": "Gopher / TCP :70 / IPv6",
+        "Endpoint": "pipes.verymad.net:70",
+        "Image": "joyful-stack-happygopher-mystery",
+        "SourceUrl": "https://github.com/JoyfulReaper/HappyGopher",
+        "SearchTerms": [
+          "gopher",
+          "ipv6",
+          "mystery",
+          "experimental",
+          "port 70",
+          "small web"
+        ]
+      },
+      {
+        "Id": "smol-search",
+        "Name": "SmolSearch",
+        "Group": "Public Services",
+        "Summary": "Searches a frozen snapshot of Geminispace.",
+        "Description": "A small-web search proof of concept using a read-only SQLite FTS5 index, with a private HTTP search backend consumed by the HappyGemini search plugin.",
+        "ContainerName": "smolsearch-server",
+        "Visibility": "Internal",
+        "Protocol": "HTTP / JSON API / SQLite FTS5",
+        "Endpoint": "Internal",
+        "Image": "smolsearch-smolsearch-server",
+        "SourceUrl": "https://github.com/JoyfulReaper/SmolSearch",
+        "SearchTerms": [
+          "smolsearch",
+          "gemini",
+          "search",
+          "sqlite",
+          "fts5",
+          "small web",
+          "smolweb"
+        ]
+      },
+      {
         "Id": "it-tools",
         "Name": "IT-Tools",
         "Group": "Public Services",
@@ -233,7 +298,7 @@
         "Name": "Mission Control Gateway",
         "Group": "Mission Control",
         "Summary": "Receives external events and publishes them internally.",
-        "Description": "Accepts generic integration events and signed GitHub webhooks, validates them, wraps them in a common envelope, and publishes them to RabbitMQ.",
+        "Description": "Accepts generic integration events and signed GitHub webhooks, validates them, wraps them in a common envelope, and publishes them to NATS JetStream.",
         "ContainerName": "joyful-stack-gateway-1",
         "Visibility": "Internal",
         "Protocol": "HTTP / Webhooks",
@@ -247,7 +312,7 @@
           "github",
           "ingress",
           "events",
-          "rabbitmq"
+          "nats"
         ]
       },
       {
@@ -295,23 +360,22 @@
         ]
       },
       {
-        "Id": "rabbitmq",
-        "Name": "RabbitMQ",
+        "Id": "nats",
+        "Name": "NATS JetStream",
         "Group": "Mission Control",
-        "Summary": "Routes Mission Control events to durable consumers.",
-        "Description": "The message broker behind Mission Control. A topic exchange routes integration events to matching durable queues.",
-        "ContainerName": "joyful-stack-rabbitmq-1",
+        "Summary": "Provides durable event streaming for Mission Control.",
+        "Description": "The message broker behind Mission Control. JetStream persists integration events and delivers them to durable consumers.",
+        "ContainerName": "joyful-stack-nats-1",
         "Visibility": "Internal",
-        "Protocol": "AMQP",
-        "Endpoint": "rabbitmq:5672",
-        "Image": "rabbitmq:4-management",
+        "Protocol": "NATS / JetStream",
+        "Endpoint": "nats:4222",
+        "Image": "nats:2.14.3-alpine",
         "SearchTerms": [
-          "rabbitmq",
+          "nats",
+          "jetstream",
           "broker",
-          "queue",
-          "topic exchange",
-          "amqp",
-          "durable events"
+          "events",
+          "durable consumers"
         ]
       },
       {
