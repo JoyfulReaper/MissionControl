@@ -68,6 +68,7 @@ public static class AgentServiceCollectionExtensions
         services.AddSingleton<IProtocolProbe, GopherProbe>();
         services.AddSingleton<IProtocolProbe, FingerProbe>();
         services.AddSingleton<IProtocolProbe, DaytimeProbe>();
+        services.AddSingleton<IProtocolProbe, DiscardProbe>();
         services.AddSingleton<ProtocolProbeRunner>();
 
         services.AddSingleton(
