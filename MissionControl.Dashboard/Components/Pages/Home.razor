@@ -8,6 +8,7 @@
 @inject IOptions<DashboardRefreshOptions> RefreshOptions
 @inject TimeProvider TimeProvider
 @inject IDashboardPollingLoop PollingLoop
+@inject IOptions<GreenCloudOptions> GreenCloudOptions
 
 <PageTitle>Mission Control</PageTitle>
 
@@ -90,6 +91,12 @@
             </article>
         </section>
     }
+
+    @if (GreenCloudOptions.Value.Enabled)
+    {
+        <BandwidthUsagePanel RefreshSeconds="@GreenCloudOptions.Value.PollSeconds" />
+    }
+
     <DailyWorkPickPanel TimestampFormatter="DateTimeFormatter.Format" />
     <QuickAddTodoPanel />
 </div>

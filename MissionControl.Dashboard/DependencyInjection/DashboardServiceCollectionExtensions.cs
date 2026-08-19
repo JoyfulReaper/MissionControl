@@ -7,12 +7,14 @@ using Microsoft.Extensions.Options;
 using MissionControl.Client.Agent;
 using MissionControl.Client.Archive;
 using MissionControl.Client.GitActivity;
+using MissionControl.Client.Infrastructure;
 using MissionControl.Client.WorkPlanning;
 using MissionControl.Dashboard.Authentication;
 using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Events;
 using MissionControl.Dashboard.Formatting;
 using MissionControl.Dashboard.GitActivity;
+using MissionControl.Dashboard.GreenCloud;
 using MissionControl.Dashboard.MobileApi;
 using MissionControl.Dashboard.Refresh;
 using MissionControl.Dashboard.Security;
@@ -31,31 +33,17 @@ public static class DashboardServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         AddDashboardComponents(services);
-        AddDashboardAuthentication(
-            services,
-            configuration);
-        AddDashboardOptions(
-            services,
-            configuration);
-        AddDashboardAuthenticationStorage(
-            services,
-            configuration);
-        AddArchiveClient(
-            services,
-            configuration);
-        AddAgentClient(
-            services,
-            configuration);
-        AddGitActivityClient(
-            services,
-            configuration);
-        AddWorkPlanningClient(
-            services,
-            configuration);
+        AddDashboardAuthentication(services, configuration);
+        AddDashboardOptions(services, configuration);
+        AddDashboardAuthenticationStorage(services, configuration);
+        AddArchiveClient(services, configuration);
+        AddAgentClient(services, configuration);
+        AddGitActivityClient(services, configuration);
+        AddWorkPlanningClient(services, configuration);
+        AddGreenCloudClient(services, configuration);
         AddDashboardFormatting(services);
-        AddMissionControlEventPublishing(
-            services,
-            configuration);
+        AddMissionControlEventPublishing(services, configuration);
+
         return services;
     }
 
@@ -65,8 +53,7 @@ public static class DashboardServiceCollectionExtensions
     {
         services
             .AddOptions<WorkPlanningApiOptions>()
-            .Bind(
-                configuration.GetSection(WorkPlanningApiOptions.SectionName))
+            .Bind(configuration.GetSection(WorkPlanningApiOptions.SectionName))
             .Validate(
                 options =>
                     Uri.TryCreate(
@@ -108,9 +95,7 @@ public static class DashboardServiceCollectionExtensions
         IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddMissionControlClient(
-            configuration.GetSection(MissionControlClientOptions.SectionName));
-
+        services.AddMissionControlClient(configuration.GetSection(MissionControlClientOptions.SectionName));
         services.AddScoped<DashboardLoginEventPublisher>();
     }
 
@@ -119,17 +104,14 @@ public static class DashboardServiceCollectionExtensions
         DashboardAuthenticationOptions options)
     {
         string keysPath =
-            Path.GetFullPath(
-                options.DataProtectionKeysPath,
-                AppContext.BaseDirectory);
+            Path.GetFullPath(options.DataProtectionKeysPath, AppContext.BaseDirectory);
 
         Directory.CreateDirectory(keysPath);
 
         services
             .AddDataProtection()
             .SetApplicationName("MissionControl.Dashboard")
-            .PersistKeysToFileSystem(
-                new DirectoryInfo(keysPath));
+            .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
     }
 
     private static void AddDashboardAuthenticationStorage(
@@ -142,9 +124,7 @@ public static class DashboardServiceCollectionExtensions
                 .Get<DashboardAuthenticationOptions>()
             ?? new DashboardAuthenticationOptions();
 
-        AddDashboardDataProtection(
-            services,
-            options);
+        AddDashboardDataProtection(services, options);
 
         string connectionString =
             SqliteDatabaseInitializer.Initialize(
@@ -376,6 +356,60 @@ public static class DashboardServiceCollectionExtensions
                         AllowAutoRedirect = false
                     })
             .AddHttpMessageHandler<GitActivityApiKeyHandler>();
+    }
+
+    private static void AddGreenCloudClient(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services
+            .AddOptions<GreenCloudOptions>()
+            .Bind(configuration.GetSection(GreenCloudOptions.SectionName))
+            .Validate(
+                options =>
+                    options.PollSeconds is >= 60 and <= 3600,
+                "GreenCloud PollSeconds must be between 60 and 3600.")
+            .Validate(
+                options =>
+                    !options.Enabled ||
+                    Uri.TryCreate(
+                        options.BaseUrl,
+                        UriKind.Absolute,
+                        out var uri) &&
+                    uri.Scheme == Uri.UriSchemeHttps,
+                "GreenCloud BaseUrl must be an absolute HTTPS URL.")
+            .Validate(
+                options =>
+                    !options.Enabled ||
+                    !string.IsNullOrWhiteSpace(options.ServerId),
+                "GreenCloud ServerId is required when enabled.")
+            .Validate(
+                options =>
+                    !options.Enabled ||
+                    !string.IsNullOrWhiteSpace(options.ApiToken),
+                "GreenCloud API token is required when enabled.")
+            .ValidateOnStart();
+
+        services.AddSingleton<GreenCloudBandwidthRateState>();
+
+        services
+            .AddHttpClient<IBandwidthUsageClient, GreenCloudBandwidthClient>(
+                (serviceProvider, httpClient) =>
+                {
+                    GreenCloudOptions options =
+                        serviceProvider
+                            .GetRequiredService<IOptions<GreenCloudOptions>>()
+                            .Value;
+
+                    httpClient.BaseAddress = CreateBaseUri(options.BaseUrl);
+                    httpClient.Timeout = TimeSpan.FromSeconds(15);
+                })
+            .ConfigurePrimaryHttpMessageHandler(
+                static () =>
+                    new HttpClientHandler
+                    {
+                        AllowAutoRedirect = false
+                    });
     }
 
     private static Uri CreateBaseUri(string value)
