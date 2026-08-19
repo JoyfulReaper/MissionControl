@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MissionControl.UI.Components.Overview;
 using System.Net.Http.Json;
+using System.Text.Json.Serialization.Metadata;
 using Xunit;
 
 namespace MissionControl.Tests;
@@ -587,11 +588,13 @@ public sealed class AgentWorkerDockerFailureTests
         public Task<bool> TryPublishAsync<TPayload>(
             string eventType,
             TPayload payload,
+            JsonTypeInfo<TPayload> payloadTypeInfo,
             DateTimeOffset occurredAt,
             string? correlationId,
             CancellationToken cancellationToken)
         {
             store.RecordPublishObservation();
+
             return Task.FromResult(
                 publishOutcomes.Count > 0 &&
                 publishOutcomes.Dequeue());
@@ -610,12 +613,15 @@ public sealed class AgentWorkerDockerFailureTests
         public Task<bool> TryPublishAsync<TPayload>(
             string eventType,
             TPayload payload,
+            JsonTypeInfo<TPayload> payloadTypeInfo,
             DateTimeOffset occurredAt,
             string? correlationId,
             CancellationToken cancellationToken)
         {
             PublishCallCount++;
-            return Task.FromResult(publishOutcomes.Dequeue());
+
+            return Task.FromResult(
+                publishOutcomes.Dequeue());
         }
     }
 
