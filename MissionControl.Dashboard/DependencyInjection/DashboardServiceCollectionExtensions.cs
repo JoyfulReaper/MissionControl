@@ -240,8 +240,7 @@ public static class DashboardServiceCollectionExtensions
     {
         services
             .AddOptions<DashboardRefreshOptions>()
-            .Bind(
-                configuration.GetSection(DashboardRefreshOptions.SectionName))
+            .Bind(configuration.GetSection(DashboardRefreshOptions.SectionName))
             .ValidateOnStart();
 
         services.AddSingleton<
@@ -291,20 +290,12 @@ public static class DashboardServiceCollectionExtensions
 
         services
             .AddOptions<ServiceCatalogOptions>()
-            .Bind(
-                configuration.GetSection(ServiceCatalogOptions.SectionName))
+            .Bind(configuration.GetSection(ServiceCatalogOptions.SectionName))
             .ValidateOnStart();
 
-        services.AddSingleton<
-            IValidateOptions<ServiceCatalogOptions>,
-            ServiceCatalogOptionsValidator>();
-        services.AddSingleton<
-            IServiceCatalogMonitor,
-            ConfigurationServiceCatalogMonitor>();
-
-        services.AddSingleton<
-            IValidateOptions<DashboardDateTimeOptions>,
-            DashboardDateTimeOptionsValidator>();
+        services.AddSingleton<IValidateOptions<ServiceCatalogOptions>, ServiceCatalogOptionsValidator>();
+        services.AddSingleton<IServiceCatalogMonitor, ConfigurationServiceCatalogMonitor>();
+        services.AddSingleton<IValidateOptions<DashboardDateTimeOptions>, DashboardDateTimeOptionsValidator>();
 
         services
             .AddOptions<DashboardDateTimeOptions>()
