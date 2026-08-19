@@ -1,0 +1,109 @@
+.daily-work-pick {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.daily-work-pick-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+    .daily-work-pick-heading h2 {
+        margin: 0;
+        color: var(--mc-text);
+        font-size: 1.25rem;
+    }
+
+.daily-work-pick-eyebrow {
+    margin-bottom: 0.3rem;
+    color: var(--mc-accent);
+    font-size: 0.7rem;
+    font-weight: 750;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.daily-work-card {
+    position: relative;
+    overflow: hidden;
+    padding: 1.25rem;
+    border: 1px solid rgba(72, 201, 176, 0.4);
+    border-radius: var(--mc-radius);
+    background: linear-gradient( 145deg, var(--mc-accent-subtle), transparent 75%), var(--mc-surface);
+    box-shadow: var(--mc-shadow);
+}
+
+.daily-work-project {
+    margin-bottom: 0.35rem;
+    color: var(--mc-accent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.daily-work-task {
+    color: var(--mc-text);
+    font-size: clamp(1.15rem, 3vw, 1.55rem);
+    font-weight: 700;
+}
+
+.daily-work-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.daily-work-badge {
+    padding: 0.3rem 0.55rem;
+    color: var(--mc-text-muted);
+    font-size: 0.72rem;
+    border: 1px solid var(--mc-border);
+    border-radius: 999px;
+    background: var(--mc-surface);
+}
+
+.daily-work-date {
+    margin-top: 0.8rem;
+    color: var(--mc-text-muted);
+    font-size: 0.72rem;
+}
+
+.daily-work-loading span,
+.daily-work-loading strong {
+    display: block;
+    border-radius: 0.35rem;
+    background: var(--mc-border);
+    opacity: 0.65;
+}
+
+    .daily-work-loading span:first-child {
+        width: 25%;
+        height: 0.7rem;
+        margin-bottom: 0.6rem;
+    }
+
+.daily-work-loading strong {
+    width: 65%;
+    height: 1.5rem;
+}
+
+.daily-work-loading span:last-child {
+    width: 40%;
+    height: 0.7rem;
+    margin-top: 1rem;
+}
+
+@media (max-width: 650px) {
+    .daily-work-pick-heading {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+        .daily-work-pick-heading .btn {
+            align-self: start;
+        }
+}

@@ -1,0 +1,132 @@
+﻿@inject IWorkPlanningClient WorkPlanningClient
+@inject IDashboardDateTimeFormatter DateTimeFormatter
+
+<section class="daily-work-pick"
+         aria-labelledby="daily-work-pick-title">
+    <div class="daily-work-pick-heading">
+        <div>
+            <div class="daily-work-pick-eyebrow">
+                Work planning
+            </div>
+
+            <h2 id="daily-work-pick-title">
+                What should I work on today?
+            </h2>
+        </div>
+
+        <button type="button"
+                class="btn btn-sm btn-outline-primary"
+                disabled="@_isLoading"
+                @onclick="LoadAsync">
+            @(_isLoading
+                ? "Loading..."
+                : "Refresh")
+        </button>
+    </div>
+
+    @if (_isLoading && _pick is null)
+    {
+        <article class="daily-work-card daily-work-loading">
+            <span></span>
+            <strong></strong>
+            <span></span>
+        </article>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger">
+            @_error
+        </div>
+    }
+    else if (_pick is null)
+    {
+        <div class="alert alert-secondary">
+            No eligible work found. Apparently everything is done.
+        </div>
+    }
+    else
+    {
+        <article class="daily-work-card">
+            <div class="daily-work-project">
+                @_pick.Todo.WorkItemName
+            </div>
+
+            <div class="daily-work-task">
+                @_pick.Todo.Task
+            </div>
+
+            <div class="daily-work-meta">
+                <span class="daily-work-badge">
+                    Energy: @_pick.Todo.Energy
+                </span>
+
+                <span class="daily-work-badge">
+                    Effort: @_pick.Todo.Effort
+                </span>
+
+                <span class="daily-work-badge">
+                    Last worked:
+                    @FormatLastWorked()
+                </span>
+            </div>
+
+            <div class="daily-work-date">
+                Pick for @_pick.Date.ToString(
+                                    "dddd, MMMM d")
+            </div>
+        </article>
+    }
+</section>
+
+@code {
+    private DailyWorkPick? _pick;
+    private bool _isLoading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_isLoading)
+        {
+            return;
+        }
+
+        _isLoading = true;
+
+        try
+        {
+            _pick =
+                await WorkPlanningClient
+                    .GetDailyPickAsync();
+
+            _error = null;
+        }
+        catch (HttpRequestException exception)
+        {
+            _error =
+                "Work Planning API could not be reached: " +
+                exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _error =
+                "The Work Planning API request timed out.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private string FormatLastWorked()
+    {
+        return _pick?.LastWorkedAt is null
+            ? "Never"
+            : DateTimeFormatter.Format(
+                _pick.LastWorkedAt.Value);
+    }
+}
