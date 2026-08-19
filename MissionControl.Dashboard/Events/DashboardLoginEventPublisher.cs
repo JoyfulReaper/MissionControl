@@ -7,7 +7,6 @@ public sealed class DashboardLoginEventPublisher(
     IMissionControlClient missionControlClient,
     ILogger<DashboardLoginEventPublisher> logger)
 {
-
     public async Task TryPublishAsync(
         DashboardUser user,
         string? remoteIpAddress,
@@ -16,65 +15,78 @@ public sealed class DashboardLoginEventPublisher(
     {
         ArgumentNullException.ThrowIfNull(user);
 
-        DateTimeOffset occuredAt =
-            DateTimeOffset.UtcNow;
-
+        DateTimeOffset occurredAt = DateTimeOffset.UtcNow;
 
         try
         {
-            bool published = false;
+            bool published;
+
             switch (eventType)
             {
                 case DashBoardEventTypes.LoginSucceeded:
-                    var payloadSucess =
-                        new DashboardLoginSucceededEvent(
-                            UserId: user.Id,
-                            Username: user.Username,
-                            DisplayName: user.DisplayName,
-                            AuthenticatedAtUtc:
-                                occuredAt,
-                            Remote:
-                                remoteIpAddress);
+                    {
+                        var payload =
+                            new DashboardLoginSucceededEvent(
+                                UserId: user.Id,
+                                Username: user.Username,
+                                DisplayName: user.DisplayName,
+                                AuthenticatedAtUtc: occurredAt,
+                                Remote: remoteIpAddress);
 
-                    published =
-                       await missionControlClient.TryPublishAsync(
-                           eventType: DashboardLoginSucceededEvent.EventType,
-                           payload: payloadSucess,
-                           occurredAt: occuredAt,
-                           correlationId: null,
-                           cancellationToken:
-                               cancellationToken);
-                    break;
+                        published =
+                            await missionControlClient.TryPublishAsync(
+                                eventType:
+                                    DashboardLoginSucceededEvent.EventType,
+                                payload: payload,
+                                payloadTypeInfo:
+                                    DashboardEventJsonContext
+                                        .Default
+                                        .DashboardLoginSucceededEvent,
+                                occurredAt: occurredAt,
+                                correlationId: null,
+                                cancellationToken: cancellationToken);
+
+                        break;
+                    }
+
                 case DashBoardEventTypes.LoginFailed:
-                    var payloadFailure =
-                        new DashboardLoginFailedEvent(
-                            Username: user.Username,
-                            FailedAtUtc:
-                                occuredAt,
-                            Remote:
-                                remoteIpAddress);
+                    {
+                        var payload =
+                            new DashboardLoginFailedEvent(
+                                Username: user.Username,
+                                FailedAtUtc: occurredAt,
+                                Remote: remoteIpAddress);
 
-                    published =
-                       await missionControlClient.TryPublishAsync(
-                           eventType: DashboardLoginFailedEvent.EventType,
-                           payload: payloadFailure,
-                           occurredAt: occuredAt,
-                           correlationId: null,
-                           cancellationToken:
-                               cancellationToken);
-                    break;
+                        published =
+                            await missionControlClient.TryPublishAsync(
+                                eventType:
+                                    DashboardLoginFailedEvent.EventType,
+                                payload: payload,
+                                payloadTypeInfo:
+                                    DashboardEventJsonContext
+                                        .Default
+                                        .DashboardLoginFailedEvent,
+                                occurredAt: occurredAt,
+                                correlationId: null,
+                                cancellationToken: cancellationToken);
+
+                        break;
+                    }
+
                 default:
                     logger.LogWarning(
                         "Unknown dashboard login event type {EventType} for user {UserId}.",
                         eventType,
                         user.Id);
-                    break;
+
+                    return;
             }
 
             if (!published)
             {
                 logger.LogWarning(
-                    "Mission Control rejected or failed to publish the successful login event for dashboard user {UserId}.",
+                    "Mission Control rejected or failed to publish dashboard login event {EventType} for user {UserId}.",
+                    eventType,
                     user.Id);
             }
         }
@@ -82,14 +94,16 @@ public sealed class DashboardLoginEventPublisher(
             when (cancellationToken.IsCancellationRequested)
         {
             logger.LogDebug(
-                "Publishing the successful login event was canceled for dashboard user {UserId}.",
+                "Publishing dashboard login event {EventType} was canceled for user {UserId}.",
+                eventType,
                 user.Id);
         }
         catch (Exception exception)
         {
             logger.LogWarning(
                 exception,
-                "Failed to publish the successful login event for dashboard user {UserId}.",
+                "Failed to publish dashboard login event {EventType} for user {UserId}.",
+                eventType,
                 user.Id);
         }
     }
