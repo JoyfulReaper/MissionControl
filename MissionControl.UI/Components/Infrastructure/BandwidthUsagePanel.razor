@@ -187,17 +187,31 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadAsync(isManualRefresh: false);
+        CancellationToken cancellationToken =
+            _disposeSource.Token;
 
-        _pollingTask = PollAsync( _disposeSource.Token);
+        await LoadAsync(
+            isManualRefresh: false,
+            cancellationToken);
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _pollingTask = PollAsync(cancellationToken);
     }
 
     private Task RefreshAsync()
     {
-        return LoadAsync(isManualRefresh: true);
+        return LoadAsync(
+            isManualRefresh: true,
+            _disposeSource.Token);
     }
 
-    private async Task LoadAsync(bool isManualRefresh)
+    private async Task LoadAsync(
+        bool isManualRefresh,
+        CancellationToken cancellationToken)
     {
         if (_isRefreshing)
         {
@@ -209,11 +223,11 @@
 
         try
         {
-            _snapshot = await BandwidthClient.GetAsync( _disposeSource.Token);
+            _snapshot = await BandwidthClient.GetAsync(cancellationToken);
             _error = null;
         }
         catch (OperationCanceledException)
-            when (_disposeSource.IsCancellationRequested)
+            when (cancellationToken.IsCancellationRequested)
         {
         }
         catch (HttpRequestException exception)
@@ -256,7 +270,7 @@
                 await InvokeAsync(
                     async () =>
                     {
-                        await LoadAsync(isManualRefresh: false);
+                        await LoadAsync(isManualRefresh: false, cancellationToken);
 
                         StateHasChanged();
                     });
