@@ -198,9 +198,7 @@ public static class DashboardServiceCollectionExtensions
                     options.AccessDeniedPath = "/login";
                     options.ReturnUrlParameter = "returnUrl";
 
-                    options.ExpireTimeSpan =
-                        TimeSpan.FromHours(authenticationOptions.CookieLifetimeHours);
-
+                    options.ExpireTimeSpan = TimeSpan.FromHours(authenticationOptions.CookieLifetimeHours);
                     options.SlidingExpiration = true;
 
                     options.Cookie.Name = "__Host-MissionControl.Dashboard";
@@ -210,14 +208,16 @@ public static class DashboardServiceCollectionExtensions
 
                     options.Cookie.SameSite = SameSiteMode.Strict;
                     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+
+                    options.EventsType = typeof(DashboardCookieAuthenticationEvents);
                 })
-            .AddScheme<
-                MobileApiAuthenticationOptions,
-                MobileApiAuthenticationHandler>(
-                MobileApiAuthenticationDefaults.Scheme,
+            .AddScheme<MobileApiAuthenticationOptions,
+                MobileApiAuthenticationHandler>(MobileApiAuthenticationDefaults.Scheme,
                 _ =>
                 {
                 });
+
+        services.AddScoped<DashboardCookieAuthenticationEvents>();
 
         services
             .AddAuthorizationBuilder()
