@@ -64,7 +64,7 @@ public static class MauiProgram
     private static void ConfigureMobileApiClient(
         HttpClient httpClient)
     {
-        httpClient.BaseAddress = new Uri("http://localhost:5089/");
+        httpClient.BaseAddress = new Uri("https://dashboard.kgivler.com/");
         httpClient.Timeout = TimeSpan.FromSeconds(15);
     }
 }
