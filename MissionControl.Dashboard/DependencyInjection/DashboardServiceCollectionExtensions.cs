@@ -78,28 +78,23 @@ public static class DashboardServiceCollectionExtensions
                 "Work Planning API BaseUrl must be an absolute HTTP or HTTPS URL.")
             .Validate(
                 options =>
-                    !string.IsNullOrWhiteSpace(
-                        options.ApiKey),
+                    !string.IsNullOrWhiteSpace(options.ApiKey),
                 "Work Planning API key is required.")
             .ValidateOnStart();
 
         services.AddTransient<WorkPlanningApiKeyHandler>();
+        services.AddSingleton(new WorkPlanningClientOptions("api/"));
+        services.AddHttpClient<IWorkPlanningClient, WorkPlanningClient>(
+            (serviceProvider, httpClient) =>
+            {
+                var options =
+                    serviceProvider
+                        .GetRequiredService<IOptions<WorkPlanningApiOptions>>()
+                        .Value;
 
-        services
-            .AddHttpClient<
-                IWorkPlanningClient,
-                WorkPlanningClient>(
-                (serviceProvider, httpClient) =>
-                {
-                    var options =
-                        serviceProvider
-                            .GetRequiredService<
-                                IOptions<WorkPlanningApiOptions>>()
-                            .Value;
-
-                    httpClient.BaseAddress = CreateBaseUri(options.BaseUrl);
-                    httpClient.Timeout = TimeSpan.FromSeconds(10);
-                })
+                httpClient.BaseAddress = CreateBaseUri(options.BaseUrl);
+                httpClient.Timeout = TimeSpan.FromSeconds(10);
+            })
             .ConfigurePrimaryHttpMessageHandler(
                 static () =>
                     new HttpClientHandler
@@ -170,8 +165,7 @@ public static class DashboardServiceCollectionExtensions
     {
         services.AddRazorPages();
 
-        services
-            .AddRazorComponents()
+        services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
         services.AddCascadingAuthenticationState();
@@ -369,8 +363,7 @@ public static class DashboardServiceCollectionExtensions
                 {
                     GitActivityApiOptions options =
                         serviceProvider
-                            .GetRequiredService<
-                                IOptions<GitActivityApiOptions>>()
+                            .GetRequiredService<IOptions<GitActivityApiOptions>>()
                             .Value;
 
                     httpClient.BaseAddress = CreateBaseUri(options.BaseUrl);
