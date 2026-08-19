@@ -10,6 +10,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MissionControl.Client.Archive;
 using MissionControl.Client.GitActivity;
+using MissionControl.Client.Infrastructure;
+using MissionControl.Client.WorkPlanning;
 using MissionControl.Contracts.Archive;
 using MissionControl.Contracts.GitActivity;
 using System.Net;
@@ -161,9 +163,70 @@ public sealed class MobileApiEndpointTests
         Assert.DoesNotContain("gitactivity:8080", body);
     }
 
+    [Fact]
+    public async Task BandwidthProxyReturnsSnapshotAndDisablesCaching()
+    {
+        BandwidthUsageSnapshot snapshot = CreateBandwidthSnapshot();
+        var bandwidthClient =
+            new RecordingBandwidthUsageClient(snapshot);
+        await using WebApplication app = CreateApplication(
+            new FailingArchiveEventClient(
+                new HttpRequestException()),
+            bandwidthClient: bandwidthClient);
+        await app.StartAsync();
+        using HttpClient client = app.GetTestClient();
+        using var request = CreateAuthorizedRequest(
+            "/api/mobile/bandwidth");
+
+        using HttpResponseMessage response =
+            await client.SendAsync(request);
+        BandwidthUsageSnapshot? actual =
+            await response.Content
+                .ReadFromJsonAsync<BandwidthUsageSnapshot>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(snapshot, actual);
+        Assert.True(bandwidthClient.WasCalled);
+        Assert.Contains(
+            "no-store",
+            response.Headers.CacheControl?.ToString());
+        Assert.Contains(
+            "no-cache",
+            response.Headers.Pragma.ToString());
+    }
+
+    [Fact]
+    public async Task BandwidthProxySanitizesDownstreamFailures()
+    {
+        const string secret =
+            "private-greencloud-api-key";
+        var bandwidthClient =
+            new RecordingBandwidthUsageClient(
+                new HttpRequestException(
+                    $"Connection refused using {secret} at http://greencloud:8080"));
+        await using WebApplication app = CreateApplication(
+            new FailingArchiveEventClient(
+                new HttpRequestException()),
+            bandwidthClient: bandwidthClient);
+        await app.StartAsync();
+        using HttpClient client = app.GetTestClient();
+        using var request = CreateAuthorizedRequest(
+            "/api/mobile/bandwidth");
+
+        using HttpResponseMessage response =
+            await client.SendAsync(request);
+        string body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        Assert.Contains("GreenCloud could not be reached.", body);
+        Assert.DoesNotContain(secret, body);
+        Assert.DoesNotContain("greencloud:8080", body);
+    }
+
     private static WebApplication CreateApplication(
         IArchiveEventClient archiveClient,
-        IGitActivityClient? gitActivityClient = null)
+        IGitActivityClient? gitActivityClient = null,
+        IBandwidthUsageClient? bandwidthClient = null)
     {
         WebApplicationBuilder builder =
             WebApplication.CreateBuilder();
@@ -198,6 +261,12 @@ public sealed class MobileApiEndpointTests
         builder.Services.AddSingleton(
             gitActivityClient ??
             new RecordingGitActivityClient([]));
+        builder.Services.AddSingleton(
+            bandwidthClient ??
+            new RecordingBandwidthUsageClient(
+                CreateBandwidthSnapshot()));
+        builder.Services.AddSingleton<IWorkPlanningClient>(
+            new StubWorkPlanningClient());
 
         WebApplication app =
             builder.Build();
@@ -215,6 +284,31 @@ public sealed class MobileApiEndpointTests
         var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Authorization = new("Test", "accepted");
         return request;
+    }
+
+    private static BandwidthUsageSnapshot CreateBandwidthSnapshot()
+    {
+        return new BandwidthUsageSnapshot(
+            "test-server",
+            "running",
+            1_000_000,
+            200_000,
+            100_000,
+            300_000,
+            700_000,
+            30,
+            70,
+            DateTimeOffset.Parse("2026-08-01T00:00:00Z"),
+            DateTimeOffset.Parse("2026-09-01T00:00:00Z"),
+            18,
+            13,
+            16_666.67,
+            53_846.15,
+            516_666.71,
+            51.67,
+            1_024,
+            512,
+            DateTimeOffset.Parse("2026-08-19T16:00:00Z"));
     }
 
     private sealed class FailingArchiveEventClient(
@@ -315,6 +409,65 @@ public sealed class MobileApiEndpointTests
                 ? Task.FromResult(items!)
                 : Task.FromException<IReadOnlyList<GitActivityItem>>(
                     exception);
+        }
+    }
+
+    private sealed class RecordingBandwidthUsageClient
+        : IBandwidthUsageClient
+    {
+        private readonly BandwidthUsageSnapshot? snapshot;
+        private readonly Exception? exception;
+
+        public RecordingBandwidthUsageClient(
+            BandwidthUsageSnapshot snapshot)
+        {
+            this.snapshot = snapshot;
+        }
+
+        public RecordingBandwidthUsageClient(Exception exception)
+        {
+            this.exception = exception;
+        }
+
+        public bool WasCalled { get; private set; }
+
+        public Task<BandwidthUsageSnapshot> GetAsync(
+            CancellationToken cancellationToken = default)
+        {
+            WasCalled = true;
+
+            return exception is null
+                ? Task.FromResult(snapshot!)
+                : Task.FromException<BandwidthUsageSnapshot>(
+                    exception);
+        }
+    }
+
+    private sealed class StubWorkPlanningClient
+        : IWorkPlanningClient
+    {
+        public Task<DailyWorkPick?> GetDailyPickAsync(
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<DailyWorkPick?>(null);
+        }
+
+        public Task<IReadOnlyList<WorkPlanningWorkItem>>
+            GetWorkItemsAsync(
+                CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<WorkPlanningWorkItem>>(
+                []);
+        }
+
+        public Task<WorkPlanningTodo> CreateTodoAsync(
+            int workItemId,
+            CreateWorkPlanningTodoRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromException<WorkPlanningTodo>(
+                new InvalidOperationException(
+                    "Todo creation is not configured for this test."));
         }
     }
 }
