@@ -2,6 +2,7 @@
 using MissionControl.Client.Agent;
 using MissionControl.Client.Archive;
 using MissionControl.Client.GitActivity;
+using MissionControl.Client.Infrastructure;
 using MissionControl.Client.WorkPlanning;
 using MissionControl.Mobile.Services;
 
@@ -44,6 +45,9 @@ public static class MauiProgram
             .AddHttpMessageHandler<MobileApiAuthorizationHandler>();
 
         builder.Services.AddHttpClient<IWorkPlanningClient, WorkPlanningClient>(ConfigureMobileApiClient)
+            .AddHttpMessageHandler<MobileApiAuthorizationHandler>();
+
+        builder.Services.AddHttpClient<IBandwidthUsageClient, BandwidthUsageClient>(ConfigureMobileApiClient)
             .AddHttpMessageHandler<MobileApiAuthorizationHandler>();
 
         builder.Services.AddSingleton<MobileServiceCatalog>();

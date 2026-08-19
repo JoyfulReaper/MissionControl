@@ -64,6 +64,7 @@ public static class MobileApiEndpointRouteBuilderExtensions
             .RequireAuthorization(MobileApiAuthenticationDefaults.Policy);
 
         endpoints.MapWorkPlanningMobileApiEndpoints();
+        endpoints.MapBandwidthMobileApiEndpoint();
 
         return endpoints;
     }
@@ -80,9 +81,7 @@ public static class MobileApiEndpointRouteBuilderExtensions
         try
         {
             IReadOnlyList<GitActivityItem> activity =
-                await gitActivityClient.GetRecentAsync(
-                    Math.Clamp(limit ?? 25, 1, 50),
-                    cancellationToken);
+                await gitActivityClient.GetRecentAsync(Math.Clamp(limit ?? 25, 1, 50), cancellationToken);
 
             return Results.Ok(activity);
         }
@@ -98,8 +97,7 @@ public static class MobileApiEndpointRouteBuilderExtensions
         }
         catch (Exception exception)
         {
-            ILogger logger = loggerFactory.CreateLogger(
-                "MissionControl.Dashboard.MobileApi.GitActivity");
+            ILogger logger = loggerFactory.CreateLogger("MissionControl.Dashboard.MobileApi.GitActivity");
 
             logger.LogError(
                 exception,
@@ -184,8 +182,7 @@ public static class MobileApiEndpointRouteBuilderExtensions
 
         try
         {
-            ArchiveStatisticsItem statistics =
-                await archiveClient.GetStatisticsAsync(cancellationToken);
+            ArchiveStatisticsItem statistics = await archiveClient.GetStatisticsAsync(cancellationToken);
 
             return Results.Ok(statistics);
         }

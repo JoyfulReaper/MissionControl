@@ -156,9 +156,9 @@
                 –
                 @_snapshot.PeriodEnd.ToString("yyyy-MM-dd")
                 · Updated
-                @_snapshot.UpdatedAt
+                @(_snapshot.UpdatedAt
                 .ToLocalTime()
-                .ToString("HH:mm:ss")
+                .ToString("HH:mm:ss"))
             </div>
         </div>
     }
