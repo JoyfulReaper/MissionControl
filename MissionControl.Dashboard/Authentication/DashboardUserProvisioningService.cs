@@ -14,14 +14,9 @@ public sealed class DashboardUserProvisioningService(
         string password,
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(
-            username);
-
-        ArgumentException.ThrowIfNullOrWhiteSpace(
-            displayName);
-
-        ArgumentException.ThrowIfNullOrWhiteSpace(
-            password);
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
         if (password.Length < MinimumPasswordLength)
         {
@@ -32,10 +27,7 @@ public sealed class DashboardUserProvisioningService(
         }
 
         string trimmedUsername = username.Trim();
-
-        string normalizedUsername =
-            DashboardUsernameNormalizer.Normalize(
-                trimmedUsername);
+        string normalizedUsername = DashboardUsernameNormalizer.Normalize(trimmedUsername);
 
         DashboardUser? existingUser =
             await userStore
@@ -50,18 +42,14 @@ public sealed class DashboardUserProvisioningService(
                 "already exists.");
         }
 
-        DateTimeOffset createdAtUtc =
-            DateTimeOffset.UtcNow;
-
-        string securityStamp =
-            Guid.NewGuid().ToString("N");
+        DateTimeOffset createdAtUtc = DateTimeOffset.UtcNow;
+        string securityStamp = Guid.NewGuid().ToString("N");
 
         var passwordHashSubject =
             new DashboardUser(
                 Id: 0,
                 Username: trimmedUsername,
-                NormalizedUsername:
-                    normalizedUsername,
+                NormalizedUsername: normalizedUsername,
                 DisplayName: displayName.Trim(),
                 PasswordHash: string.Empty,
                 IsEnabled: true,
@@ -71,23 +59,57 @@ public sealed class DashboardUserProvisioningService(
                 CreatedAtUtc: createdAtUtc,
                 UpdatedAtUtc: createdAtUtc);
 
-        string passwordHash =
-            passwordHasher.HashPassword(
-                passwordHashSubject,
-                password);
+        string passwordHash = passwordHasher.HashPassword(passwordHashSubject, password);
 
         var newUser =
             new NewDashboardUser(
                 Username: trimmedUsername,
-                NormalizedUsername:
-                    normalizedUsername,
+                NormalizedUsername: normalizedUsername,
                 DisplayName: displayName.Trim(),
                 PasswordHash: passwordHash,
                 SecurityStamp: securityStamp,
                 CreatedAtUtc: createdAtUtc);
 
-        return await userStore.CreateAsync(
-            newUser,
+        return await userStore.CreateAsync(newUser, cancellationToken);
+    }
+
+    public async Task ResetPasswordAsync(
+        string username,
+        string password,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+        if (password.Length < MinimumPasswordLength)
+        {
+            throw new ArgumentException(
+                $"Password must be at least " +
+                $"{MinimumPasswordLength} characters.",
+                nameof(password));
+        }
+
+        string normalizedUsername = DashboardUsernameNormalizer.Normalize(username);
+
+        DashboardUser? user =
+            await userStore
+                .FindByNormalizedUsernameAsync(normalizedUsername, cancellationToken);
+
+        if (user is null)
+        {
+            throw new InvalidOperationException(
+                $"Dashboard user '{username.Trim()}' " +
+                "does not exist.");
+        }
+
+        string passwordHash = passwordHasher.HashPassword(user, password);
+        string securityStamp = Guid.NewGuid().ToString("N");
+
+        await userStore.ResetPasswordAsync(
+            user.Id,
+            passwordHash,
+            securityStamp,
+            DateTimeOffset.UtcNow,
             cancellationToken);
     }
 }
