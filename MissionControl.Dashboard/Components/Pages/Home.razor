@@ -23,7 +23,7 @@
             Live Archive activity, host resources, containers, and protocol status.
         </p>
     </header>
-    <DailyWorkPickPanel />
+
     <ArchiveStatisticsPanel Statistics="_statistics"
                             IsLoading="_archiveIsLoading"
                             IsRefreshing="_archiveIsRefreshing"
@@ -57,6 +57,7 @@
         <NodeResourceCards Host="CurrentSnapshot?.Host"
                            IsLoading="_agentRefresh.IsInitialLoading"
                            ErrorMessage="@ResourceError" />
+
     </section>
 
     @if (CurrentSnapshot is not null)
@@ -89,6 +90,8 @@
             </article>
         </section>
     }
+    <DailyWorkPickPanel />
+    <QuickAddTodoPanel />
 </div>
 
 @code 
