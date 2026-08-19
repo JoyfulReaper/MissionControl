@@ -1,8 +1,6 @@
 ﻿@inject IWorkPlanningClient WorkPlanningClient
-@inject IDashboardDateTimeFormatter DateTimeFormatter
 
-<section class="daily-work-pick"
-         aria-labelledby="daily-work-pick-title">
+<section class="daily-work-pick" aria-labelledby="daily-work-pick-title">
     <div class="daily-work-pick-heading">
         <div>
             <div class="daily-work-pick-eyebrow">
@@ -65,20 +63,21 @@
                 </span>
 
                 <span class="daily-work-badge">
-                    Last worked:
-                    @FormatLastWorked()
+                    Last worked: @FormatLastWorked()
                 </span>
             </div>
 
             <div class="daily-work-date">
-                Pick for @_pick.Date.ToString(
-                                    "dddd, MMMM d")
+                Pick for @_pick.Date.ToString("dddd, MMMM d")
             </div>
         </article>
     }
 </section>
 
 @code {
+    [Parameter]
+    public Func<DateTimeOffset, string>? TimestampFormatter { get; set; }
+
     private DailyWorkPick? _pick;
     private bool _isLoading;
     private string? _error;
@@ -99,22 +98,18 @@
 
         try
         {
-            _pick =
-                await WorkPlanningClient
-                    .GetDailyPickAsync();
-
+            _pick = await WorkPlanningClient.GetDailyPickAsync();
             _error = null;
         }
         catch (HttpRequestException exception)
         {
             _error =
-                "Work Planning API could not be reached: " +
+                "Work Planning could not be reached: " +
                 exception.Message;
         }
         catch (TaskCanceledException)
         {
-            _error =
-                "The Work Planning API request timed out.";
+            _error = "The Work Planning request timed out.";
         }
         finally
         {
@@ -124,9 +119,16 @@
 
     private string FormatLastWorked()
     {
-        return _pick?.LastWorkedAt is null
-            ? "Never"
-            : DateTimeFormatter.Format(
-                _pick.LastWorkedAt.Value);
+        if (_pick?.LastWorkedAt is not
+            DateTimeOffset lastWorkedAt)
+        {
+            return "Never";
+        }
+
+        return TimestampFormatter?.Invoke(lastWorkedAt)
+               ?? lastWorkedAt
+                   .ToLocalTime()
+                   .ToString(
+                       "yyyy-MM-dd HH:mm:ss zzz");
     }
 }

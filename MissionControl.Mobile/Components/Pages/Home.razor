@@ -16,7 +16,8 @@
         <h1>Mission Control</h1>
 
         <p>
-            Live Archive activity, host resources, containers, and protocol status.
+            Work planning, Archive activity, host resources,
+            containers, and protocol status.
         </p>
     </header>
 
@@ -30,11 +31,11 @@
     {
         <div class="alert alert-warning">
             <div>
-                Configure the Mobile API token to view Archive activity.
+                Configure the Mobile API token to view
+                Work Planning and Archive activity.
             </div>
 
-            <NavLink class="alert-link"
-                     href="settings">
+            <NavLink class="alert-link" href="settings">
                 Open Settings
             </NavLink>
         </div>
@@ -105,6 +106,26 @@
             </article>
         </section>
     }
+
+    @if (!_hasArchiveToken)
+    {
+        <div class="alert alert-warning">
+            <div>
+                Configure the Mobile API token to view
+                Work Planning and Archive activity.
+            </div>
+
+            <NavLink class="alert-link" href="settings">
+                Open Settings
+            </NavLink>
+        </div>
+    }
+    else
+    {
+        <DailyWorkPickPanel TimestampFormatter="FormatTimestamp" />
+        <QuickAddTodoPanel />
+    }
+
 </div>
 
 @code {
