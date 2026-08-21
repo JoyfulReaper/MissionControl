@@ -1,7 +1,6 @@
 ﻿using MissionControl.Client.Archive;
-using MissionControl.Contracts.Archive;
-
 using MissionControl.Client.GitActivity;
+using MissionControl.Contracts.Archive;
 using MissionControl.Contracts.GitActivity;
 
 namespace MissionControl.Dashboard.MobileApi;
@@ -28,15 +27,13 @@ public static class MobileApiEndpointRouteBuilderExtensions
                 })
             .WithName("GetMobileApiPing")
             .WithTags("Mobile API")
-            .RequireAuthorization(
-                MobileApiAuthenticationDefaults.Policy);
+            .RequireAuthorization(MobileApiAuthenticationDefaults.Policy);
 
         RouteGroupBuilder eventApi =
             endpoints
                 .MapGroup("/api/events")
                 .WithTags("Mobile API", "Events")
-                .RequireAuthorization(
-                    MobileApiAuthenticationDefaults.Policy);
+                .RequireAuthorization(MobileApiAuthenticationDefaults.Policy);
 
         eventApi
             .MapGet(
@@ -62,12 +59,12 @@ public static class MobileApiEndpointRouteBuilderExtensions
                 HandleGetGitActivityAsync)
             .WithName("GetMobileApiGitActivity")
             .WithTags("Mobile API", "Git Activity")
-            .Produces<IReadOnlyList<GitActivityItem>>(
-                StatusCodes.Status200OK)
-            .ProducesProblem(
-                StatusCodes.Status502BadGateway)
-            .RequireAuthorization(
-                MobileApiAuthenticationDefaults.Policy);
+            .Produces<IReadOnlyList<GitActivityItem>>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .RequireAuthorization(MobileApiAuthenticationDefaults.Policy);
+
+        endpoints.MapWorkPlanningMobileApiEndpoints();
+        endpoints.MapBandwidthMobileApiEndpoint();
 
         return endpoints;
     }
@@ -84,9 +81,7 @@ public static class MobileApiEndpointRouteBuilderExtensions
         try
         {
             IReadOnlyList<GitActivityItem> activity =
-                await gitActivityClient.GetRecentAsync(
-                    Math.Clamp(limit ?? 25, 1, 50),
-                    cancellationToken);
+                await gitActivityClient.GetRecentAsync(Math.Clamp(limit ?? 25, 1, 50), cancellationToken);
 
             return Results.Ok(activity);
         }
@@ -102,8 +97,7 @@ public static class MobileApiEndpointRouteBuilderExtensions
         }
         catch (Exception exception)
         {
-            ILogger logger = loggerFactory.CreateLogger(
-                "MissionControl.Dashboard.MobileApi.GitActivity");
+            ILogger logger = loggerFactory.CreateLogger("MissionControl.Dashboard.MobileApi.GitActivity");
 
             logger.LogError(
                 exception,
@@ -143,8 +137,7 @@ public static class MobileApiEndpointRouteBuilderExtensions
                 detail:
                     "beforeOccurredAt, beforeReceivedAt, and " +
                     "beforeEventId must be provided together.",
-                statusCode:
-                    StatusCodes.Status400BadRequest);
+                statusCode: StatusCodes.Status400BadRequest);
         }
 
         ArchiveEventCursor? cursor =
@@ -189,9 +182,7 @@ public static class MobileApiEndpointRouteBuilderExtensions
 
         try
         {
-            ArchiveStatisticsItem statistics =
-                await archiveClient.GetStatisticsAsync(
-                    cancellationToken);
+            ArchiveStatisticsItem statistics = await archiveClient.GetStatisticsAsync(cancellationToken);
 
             return Results.Ok(statistics);
         }
@@ -298,17 +289,13 @@ public static class MobileApiEndpointRouteBuilderExtensions
         return Results.Problem(
             title: "Mission Control Archive unavailable.",
             detail: detail,
-            statusCode:
-                StatusCodes.Status502BadGateway);
+            statusCode: StatusCodes.Status502BadGateway);
     }
 
     private static void DisableResponseCaching(
         HttpResponse response)
     {
-        response.Headers["Cache-Control"] =
-            "no-store";
-
-        response.Headers["Pragma"] =
-            "no-cache";
+        response.Headers["Cache-Control"] = "no-store";
+        response.Headers["Pragma"] = "no-cache";
     }
 }

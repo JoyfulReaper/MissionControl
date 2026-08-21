@@ -7,15 +7,19 @@ using Microsoft.Extensions.Options;
 using MissionControl.Client.Agent;
 using MissionControl.Client.Archive;
 using MissionControl.Client.GitActivity;
+using MissionControl.Client.Infrastructure;
+using MissionControl.Client.WorkPlanning;
 using MissionControl.Dashboard.Authentication;
 using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Events;
 using MissionControl.Dashboard.Formatting;
 using MissionControl.Dashboard.GitActivity;
+using MissionControl.Dashboard.GreenCloud;
 using MissionControl.Dashboard.MobileApi;
 using MissionControl.Dashboard.Refresh;
 using MissionControl.Dashboard.Security;
 using MissionControl.Dashboard.Services;
+using MissionControl.Dashboard.WorkPlanning;
 
 namespace MissionControl.Dashboard.DependencyInjection;
 
@@ -29,41 +33,70 @@ public static class DashboardServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         AddDashboardComponents(services);
-        AddDashboardAuthentication(
-            services,
-            configuration);
-        AddDashboardOptions(
-            services,
-            configuration);
-        AddDashboardAuthenticationStorage(
-            services,
-            configuration);
-        AddArchiveClient(
-            services,
-            configuration);
-        AddAgentClient(
-            services,
-            configuration);
-        AddGitActivityClient(
-            services,
-            configuration);
+        AddDashboardAuthentication(services, configuration);
+        AddDashboardOptions(services, configuration);
+        AddDashboardAuthenticationStorage(services, configuration);
+        AddArchiveClient(services, configuration);
+        AddAgentClient(services, configuration);
+        AddGitActivityClient(services, configuration);
+        AddWorkPlanningClient(services, configuration);
+        AddGreenCloudClient(services, configuration);
         AddDashboardFormatting(services);
-        AddMissionControlEventPublishing(
-            services,
-            configuration);
+        AddMissionControlEventPublishing(services, configuration);
+
         return services;
+    }
+
+    private static void AddWorkPlanningClient(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services
+            .AddOptions<WorkPlanningApiOptions>()
+            .Bind(configuration.GetSection(WorkPlanningApiOptions.SectionName))
+            .Validate(
+                options =>
+                    Uri.TryCreate(
+                        options.BaseUrl,
+                        UriKind.Absolute,
+                        out var uri) &&
+                    (uri.Scheme == Uri.UriSchemeHttp ||
+                     uri.Scheme == Uri.UriSchemeHttps),
+                "Work Planning API BaseUrl must be an absolute HTTP or HTTPS URL.")
+            .Validate(
+                options =>
+                    !string.IsNullOrWhiteSpace(options.ApiKey),
+                "Work Planning API key is required.")
+            .ValidateOnStart();
+
+        services.AddTransient<WorkPlanningApiKeyHandler>();
+        services.AddSingleton(new WorkPlanningClientOptions("api/"));
+        services.AddHttpClient<IWorkPlanningClient, WorkPlanningClient>(
+            (serviceProvider, httpClient) =>
+            {
+                var options =
+                    serviceProvider
+                        .GetRequiredService<IOptions<WorkPlanningApiOptions>>()
+                        .Value;
+
+                httpClient.BaseAddress = CreateBaseUri(options.BaseUrl);
+                httpClient.Timeout = TimeSpan.FromSeconds(10);
+            })
+            .ConfigurePrimaryHttpMessageHandler(
+                static () =>
+                    new HttpClientHandler
+                    {
+                        AllowAutoRedirect = false
+                    })
+            .AddHttpMessageHandler<WorkPlanningApiKeyHandler>();
     }
 
     private static void AddMissionControlEventPublishing(
         IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddMissionControlClient(
-            configuration.GetSection(
-                MissionControlClientOptions.SectionName));
-
-        services.AddScoped<
-            DashboardLoginEventPublisher>();
+        services.AddMissionControlClient(configuration.GetSection(MissionControlClientOptions.SectionName));
+        services.AddScoped<DashboardLoginEventPublisher>();
     }
 
     private static void AddDashboardDataProtection(
@@ -71,18 +104,14 @@ public static class DashboardServiceCollectionExtensions
         DashboardAuthenticationOptions options)
     {
         string keysPath =
-            Path.GetFullPath(
-                options.DataProtectionKeysPath,
-                AppContext.BaseDirectory);
+            Path.GetFullPath(options.DataProtectionKeysPath, AppContext.BaseDirectory);
 
         Directory.CreateDirectory(keysPath);
 
         services
             .AddDataProtection()
-            .SetApplicationName(
-                "MissionControl.Dashboard")
-            .PersistKeysToFileSystem(
-                new DirectoryInfo(keysPath));
+            .SetApplicationName("MissionControl.Dashboard")
+            .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
     }
 
     private static void AddDashboardAuthenticationStorage(
@@ -91,14 +120,11 @@ public static class DashboardServiceCollectionExtensions
     {
         DashboardAuthenticationOptions options =
             configuration
-                .GetSection(
-                    DashboardAuthenticationOptions.SectionName)
+                .GetSection(DashboardAuthenticationOptions.SectionName)
                 .Get<DashboardAuthenticationOptions>()
             ?? new DashboardAuthenticationOptions();
 
-        AddDashboardDataProtection(
-            services,
-            options);
+        AddDashboardDataProtection(services, options);
 
         string connectionString =
             SqliteDatabaseInitializer.Initialize(
@@ -106,26 +132,12 @@ public static class DashboardServiceCollectionExtensions
                 DashboardAuthenticationSchema.Sql,
                 options.BasePath);
 
-        services.AddSingleton(
-            new DashboardAuthenticationDatabase(
-                connectionString));
-
-        services.AddSingleton<
-            IDashboardUserStore,
-            SqliteDashboardUserStore>();
-
-        services.AddSingleton<
-            IPasswordHasher<DashboardUser>,
-            PasswordHasher<DashboardUser>>();
-
-        services.AddSingleton<
-            DashboardUserProvisioningService>();
-
-        services.AddSingleton<TimeProvider>(
-            TimeProvider.System);
-
-        services.AddSingleton<
-            DashboardPasswordAuthenticationService>();
+        services.AddSingleton(new DashboardAuthenticationDatabase(connectionString));
+        services.AddSingleton<IDashboardUserStore, SqliteDashboardUserStore>();
+        services.AddSingleton<IPasswordHasher<DashboardUser>, PasswordHasher<DashboardUser>>();
+        services.AddSingleton<DashboardUserProvisioningService>();
+        services.AddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddSingleton<DashboardPasswordAuthenticationService>();
     }
 
     private static void AddDashboardComponents(
@@ -133,14 +145,11 @@ public static class DashboardServiceCollectionExtensions
     {
         services.AddRazorPages();
 
-        services
-            .AddRazorComponents()
+        services.AddRazorComponents()
             .AddInteractiveServerComponents();
 
         services.AddCascadingAuthenticationState();
-        services.AddSingleton<
-            IDashboardPollingLoop,
-            DashboardPollingLoop>();
+        services.AddSingleton<IDashboardPollingLoop, DashboardPollingLoop>();
     }
 
     private static void AddDashboardAuthentication(
@@ -149,51 +158,40 @@ public static class DashboardServiceCollectionExtensions
     {
         DashboardAuthenticationOptions authenticationOptions =
             configuration
-                .GetSection(
-                    DashboardAuthenticationOptions.SectionName)
+                .GetSection(DashboardAuthenticationOptions.SectionName)
                 .Get<DashboardAuthenticationOptions>()
             ?? new DashboardAuthenticationOptions();
 
         services
-            .AddAuthentication(
-                DashboardAuthenticationDefaults.Scheme)
+            .AddAuthentication(DashboardAuthenticationDefaults.Scheme)
             .AddCookie(
                 DashboardAuthenticationDefaults.Scheme,
                 options =>
                 {
                     options.LoginPath = "/login";
                     options.AccessDeniedPath = "/login";
+                    options.ReturnUrlParameter = "returnUrl";
 
-                    options.ReturnUrlParameter =
-                        "returnUrl";
-
-                    options.ExpireTimeSpan =
-                        TimeSpan.FromHours(
-                            authenticationOptions
-                                .CookieLifetimeHours);
-
+                    options.ExpireTimeSpan = TimeSpan.FromHours(authenticationOptions.CookieLifetimeHours);
                     options.SlidingExpiration = true;
 
-                    options.Cookie.Name =
-                        "__Host-MissionControl.Dashboard";
-
+                    options.Cookie.Name = "__Host-MissionControl.Dashboard";
                     options.Cookie.Path = "/";
                     options.Cookie.HttpOnly = true;
                     options.Cookie.IsEssential = true;
 
-                    options.Cookie.SameSite =
-                        SameSiteMode.Strict;
+                    options.Cookie.SameSite = SameSiteMode.Strict;
+                    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
 
-                    options.Cookie.SecurePolicy =
-                        CookieSecurePolicy.Always;
+                    options.EventsType = typeof(DashboardCookieAuthenticationEvents);
                 })
-            .AddScheme<
-                MobileApiAuthenticationOptions,
-                MobileApiAuthenticationHandler>(
-                MobileApiAuthenticationDefaults.Scheme,
+            .AddScheme<MobileApiAuthenticationOptions,
+                MobileApiAuthenticationHandler>(MobileApiAuthenticationDefaults.Scheme,
                 _ =>
                 {
                 });
+
+        services.AddScoped<DashboardCookieAuthenticationEvents>();
 
         services
             .AddAuthorizationBuilder()
@@ -201,9 +199,7 @@ public static class DashboardServiceCollectionExtensions
                 MobileApiAuthenticationDefaults.Policy,
                 policy =>
                 {
-                    policy.AddAuthenticationSchemes(
-                        MobileApiAuthenticationDefaults.Scheme);
-
+                    policy.AddAuthenticationSchemes(MobileApiAuthenticationDefaults.Scheme);
                     policy.RequireAuthenticatedUser();
                 })
             .SetFallbackPolicy(
@@ -218,9 +214,7 @@ public static class DashboardServiceCollectionExtensions
     {
         services
             .AddOptions<DashboardRefreshOptions>()
-            .Bind(
-                configuration.GetSection(
-                    DashboardRefreshOptions.SectionName))
+            .Bind(configuration.GetSection(DashboardRefreshOptions.SectionName))
             .ValidateOnStart();
 
         services.AddSingleton<
@@ -228,11 +222,9 @@ public static class DashboardServiceCollectionExtensions
             DashboardRefreshOptionsValidator>();
 
         services
-            .AddOptions<MobileApiAuthenticationOptions>(
-                MobileApiAuthenticationDefaults.Scheme)
+            .AddOptions<MobileApiAuthenticationOptions>(MobileApiAuthenticationDefaults.Scheme)
             .Bind(
-                configuration.GetSection(
-                    MobileApiAuthenticationOptions.SectionName))
+                configuration.GetSection(MobileApiAuthenticationOptions.SectionName))
             .Validate(
                 HasValidMobileApiTokenHash,
                 "Dashboard Mobile API TokenHash must be a " +
@@ -242,17 +234,14 @@ public static class DashboardServiceCollectionExtensions
         services
             .AddOptions<DashboardAuthenticationOptions>()
             .Bind(
-                configuration.GetSection(
-                    DashboardAuthenticationOptions.SectionName))
+                configuration.GetSection(DashboardAuthenticationOptions.SectionName))
             .Validate(
                 options =>
-                    !string.IsNullOrWhiteSpace(
-                        options.DatabaseFileName),
+                    !string.IsNullOrWhiteSpace(options.DatabaseFileName),
                 "Dashboard authentication database filename is required.")
             .Validate(
                 options =>
-                    !string.IsNullOrWhiteSpace(
-                        options.BasePath),
+                    !string.IsNullOrWhiteSpace(options.BasePath),
                 "Dashboard authentication base path is required.")
             .Validate(
                 options =>
@@ -275,27 +264,16 @@ public static class DashboardServiceCollectionExtensions
 
         services
             .AddOptions<ServiceCatalogOptions>()
-            .Bind(
-                configuration.GetSection(
-                    ServiceCatalogOptions.SectionName))
+            .Bind(configuration.GetSection(ServiceCatalogOptions.SectionName))
             .ValidateOnStart();
 
-        services.AddSingleton<
-            IValidateOptions<ServiceCatalogOptions>,
-            ServiceCatalogOptionsValidator>();
-        services.AddSingleton<
-            IServiceCatalogMonitor,
-            ConfigurationServiceCatalogMonitor>();
-
-        services.AddSingleton<
-            IValidateOptions<DashboardDateTimeOptions>,
-            DashboardDateTimeOptionsValidator>();
+        services.AddSingleton<IValidateOptions<ServiceCatalogOptions>, ServiceCatalogOptionsValidator>();
+        services.AddSingleton<IServiceCatalogMonitor, ConfigurationServiceCatalogMonitor>();
+        services.AddSingleton<IValidateOptions<DashboardDateTimeOptions>, DashboardDateTimeOptionsValidator>();
 
         services
             .AddOptions<DashboardDateTimeOptions>()
-            .Bind(
-                configuration.GetSection(
-                    DashboardDateTimeOptions.SectionName))
+            .Bind(configuration.GetSection(DashboardDateTimeOptions.SectionName))
             .ValidateOnStart();
     }
 
@@ -312,11 +290,8 @@ public static class DashboardServiceCollectionExtensions
             IArchiveEventClient,
             ArchiveEventClient>(httpClient =>
             {
-                httpClient.BaseAddress =
-                    new Uri(archiveBaseUrl);
-
-                httpClient.Timeout =
-                    TimeSpan.FromSeconds(10);
+                httpClient.BaseAddress = new Uri(archiveBaseUrl);
+                httpClient.Timeout = TimeSpan.FromSeconds(10);
             });
     }
 
@@ -333,16 +308,12 @@ public static class DashboardServiceCollectionExtensions
             IAgentSnapshotClient,
             AgentSnapshotClient>(httpClient =>
             {
-                httpClient.BaseAddress =
-                    new Uri(agentBaseUrl);
-
-                httpClient.Timeout =
-                    TimeSpan.FromSeconds(10);
+                httpClient.BaseAddress = new Uri(agentBaseUrl);
+                httpClient.Timeout = TimeSpan.FromSeconds(10);
             });
     }
 
-    private static void AddDashboardFormatting(
-        IServiceCollection services)
+    private static void AddDashboardFormatting(IServiceCollection services)
     {
         services.AddSingleton<
             IDashboardDateTimeFormatter,
@@ -355,9 +326,7 @@ public static class DashboardServiceCollectionExtensions
     {
         services
             .AddOptions<GitActivityApiOptions>()
-            .Bind(
-                configuration.GetSection(
-                    GitActivityApiOptions.SectionName))
+            .Bind(configuration.GetSection(GitActivityApiOptions.SectionName))
             .ValidateOnStart();
 
         services.AddSingleton<
@@ -365,9 +334,7 @@ public static class DashboardServiceCollectionExtensions
             GitActivityApiOptionsValidator>();
 
         services.AddTransient<GitActivityApiKeyHandler>();
-        services.AddSingleton(
-            new GitActivityClientOptions(
-                "api/github/activity"));
+        services.AddSingleton(new GitActivityClientOptions("api/github/activity"));
 
         services
             .AddHttpClient<
@@ -376,15 +343,11 @@ public static class DashboardServiceCollectionExtensions
                 {
                     GitActivityApiOptions options =
                         serviceProvider
-                            .GetRequiredService<
-                                IOptions<GitActivityApiOptions>>()
+                            .GetRequiredService<IOptions<GitActivityApiOptions>>()
                             .Value;
 
-                    httpClient.BaseAddress =
-                        CreateBaseUri(options.BaseUrl);
-
-                    httpClient.Timeout =
-                        TimeSpan.FromSeconds(10);
+                    httpClient.BaseAddress = CreateBaseUri(options.BaseUrl);
+                    httpClient.Timeout = TimeSpan.FromSeconds(10);
                 })
             .ConfigurePrimaryHttpMessageHandler(
                 static () =>
@@ -393,6 +356,60 @@ public static class DashboardServiceCollectionExtensions
                         AllowAutoRedirect = false
                     })
             .AddHttpMessageHandler<GitActivityApiKeyHandler>();
+    }
+
+    private static void AddGreenCloudClient(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services
+            .AddOptions<GreenCloudOptions>()
+            .Bind(configuration.GetSection(GreenCloudOptions.SectionName))
+            .Validate(
+                options =>
+                    options.PollSeconds is >= 60 and <= 3600,
+                "GreenCloud PollSeconds must be between 60 and 3600.")
+            .Validate(
+                options =>
+                    !options.Enabled ||
+                    Uri.TryCreate(
+                        options.BaseUrl,
+                        UriKind.Absolute,
+                        out var uri) &&
+                    uri.Scheme == Uri.UriSchemeHttps,
+                "GreenCloud BaseUrl must be an absolute HTTPS URL.")
+            .Validate(
+                options =>
+                    !options.Enabled ||
+                    !string.IsNullOrWhiteSpace(options.ServerId),
+                "GreenCloud ServerId is required when enabled.")
+            .Validate(
+                options =>
+                    !options.Enabled ||
+                    !string.IsNullOrWhiteSpace(options.ApiToken),
+                "GreenCloud API token is required when enabled.")
+            .ValidateOnStart();
+
+        services.AddSingleton<GreenCloudBandwidthRateState>();
+
+        services
+            .AddHttpClient<IBandwidthUsageClient, GreenCloudBandwidthClient>(
+                (serviceProvider, httpClient) =>
+                {
+                    GreenCloudOptions options =
+                        serviceProvider
+                            .GetRequiredService<IOptions<GreenCloudOptions>>()
+                            .Value;
+
+                    httpClient.BaseAddress = CreateBaseUri(options.BaseUrl);
+                    httpClient.Timeout = TimeSpan.FromSeconds(15);
+                })
+            .ConfigurePrimaryHttpMessageHandler(
+                static () =>
+                    new HttpClientHandler
+                    {
+                        AllowAutoRedirect = false
+                    });
     }
 
     private static Uri CreateBaseUri(string value)
@@ -414,17 +431,14 @@ public static class DashboardServiceCollectionExtensions
             return true;
         }
 
-        if (string.IsNullOrWhiteSpace(
-                options.TokenHash))
+        if (string.IsNullOrWhiteSpace(options.TokenHash))
         {
             return false;
         }
 
         try
         {
-            byte[] hash =
-                Convert.FromBase64String(
-                    options.TokenHash);
+            byte[] hash = Convert.FromBase64String(options.TokenHash);
 
             return hash.Length == 32;
         }

@@ -19,8 +19,7 @@ internal sealed class AgentWorker(
     SnapshotPublicationGate publicationGate,
     IOptions<AgentOptions> options) : BackgroundService
 {
-    private const string SnapshotEventType =
-        "missioncontrol.agent.node.snapshot";
+    private const string SnapshotEventType = "missioncontrol.agent.node.snapshot";
 
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
@@ -153,6 +152,7 @@ internal sealed class AgentWorker(
                 await missionControlClient.TryPublishAsync(
                     eventType: SnapshotEventType,
                     payload: snapshot,
+                    payloadTypeInfo: AgentEventJsonContext.Default.NodeSnapshotEvent,
                     occurredAt: snapshot.CapturedAt,
                     correlationId: null,
                     cancellationToken: cancellationToken);

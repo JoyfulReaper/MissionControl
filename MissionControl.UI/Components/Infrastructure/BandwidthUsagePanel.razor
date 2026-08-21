@@ -1,0 +1,333 @@
+﻿@implements IAsyncDisposable
+@inject IBandwidthUsageClient BandwidthClient
+
+<section class="bandwidth-panel"
+         aria-labelledby="bandwidth-title">
+    <div class="bandwidth-heading">
+        <div>
+            <div class="bandwidth-eyebrow">
+                GreenCloud VPS
+            </div>
+
+            <h2 id="bandwidth-title">
+                Bandwidth usage
+            </h2>
+        </div>
+
+        <button type="button"
+                class="btn btn-sm btn-outline-primary"
+                disabled="@(_isLoading || _isRefreshing)"
+                @onclick="RefreshAsync">
+            @(_isRefreshing
+                ? "Refreshing..."
+                : "Refresh")
+        </button>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="bandwidth-card">
+            Loading GreenCloud bandwidth...
+        </div>
+    }
+    else if (_snapshot is null)
+    {
+        <div class="alert alert-danger">
+            @(_error ?? "Bandwidth data is unavailable.")
+        </div>
+    }
+    else
+    {
+        @if (_error is not null)
+        {
+            <div class="alert alert-warning">
+                @_error
+            </div>
+        }
+
+        <div class="bandwidth-card">
+            <div class="bandwidth-summary">
+                <div>
+                    <span>Used</span>
+                    <strong>
+                        @FormatBytes(_snapshot.UsedBytes)
+                    </strong>
+                    <small>
+                        @_snapshot.UsedPercent.ToString("N2")%
+                    </small>
+                </div>
+
+                <div>
+                    <span>Remaining</span>
+                    <strong>
+                        @FormatBytes(_snapshot.RemainingBytes)
+                    </strong>
+                    <small>
+                        @_snapshot.RemainingPercent.ToString("N2")%
+                    </small>
+                </div>
+
+                <div>
+                    <span>Monthly limit</span>
+                    <strong>
+                        @FormatBytes(_snapshot.MonthlyLimitBytes)
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Projected</span>
+                    <strong>
+                        @FormatBytes(_snapshot.ProjectedBytes)
+                    </strong>
+                    <small>
+                        @_snapshot.ProjectedPercent.ToString("N1")%
+                    </small>
+                </div>
+            </div>
+
+            <div class="bandwidth-progress"
+                 role="progressbar"
+                 aria-valuenow="@ProgressValue"
+                 aria-valuemin="0"
+                 aria-valuemax="100">
+                <div style="@ProgressStyle"></div>
+            </div>
+
+            <div class="bandwidth-details">
+                <div>
+                    <span>RX total</span>
+                    <strong>@FormatBytes(_snapshot.RxBytes)</strong>
+                </div>
+
+                <div>
+                    <span>TX total</span>
+                    <strong>@FormatBytes(_snapshot.TxBytes)</strong>
+                </div>
+
+                <div>
+                    <span>RX rate</span>
+                    <strong>
+                        @FormatRate(
+                            _snapshot.RxBytesPerSecond)
+                    </strong>
+                </div>
+
+                <div>
+                    <span>TX rate</span>
+                    <strong>
+                        @FormatRate(
+                            _snapshot.TxBytesPerSecond)
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Average/day</span>
+                    <strong>
+                        @FormatBytes(
+                            _snapshot.AverageBytesPerDay)
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Available/day</span>
+                    <strong>
+                        @FormatBytes(
+                            _snapshot.AvailableBytesPerDay)
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Days remaining</span>
+                    <strong>
+                        @_snapshot.DaysRemaining.ToString("N1")
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Status</span>
+                    <strong>@_snapshot.Status</strong>
+                </div>
+            </div>
+
+            <div class="bandwidth-footer">
+                @_snapshot.ServerName
+                · Period
+                @_snapshot.PeriodStart.ToString("yyyy-MM-dd")
+                –
+                @_snapshot.PeriodEnd.ToString("yyyy-MM-dd")
+                · Updated
+                @(_snapshot.UpdatedAt
+                .ToLocalTime()
+                .ToString("HH:mm:ss"))
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public int RefreshSeconds { get; set; } = 300;
+
+    private readonly CancellationTokenSource
+        _disposeSource = new();
+
+    private BandwidthUsageSnapshot? _snapshot;
+    private Task? _pollingTask;
+    private string? _error;
+    private bool _isLoading = true;
+    private bool _isRefreshing;
+
+    private int ProgressValue =>
+        _snapshot is null
+            ? 0
+            : (int)Math.Clamp(_snapshot.UsedPercent, 0,100);
+
+    private string ProgressStyle =>
+        $"width: {ProgressValue}%";
+
+    protected override async Task OnInitializedAsync()
+    {
+        CancellationToken cancellationToken =
+            _disposeSource.Token;
+
+        await LoadAsync(
+            isManualRefresh: false,
+            cancellationToken);
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _pollingTask = PollAsync(cancellationToken);
+    }
+
+    private Task RefreshAsync()
+    {
+        return LoadAsync(
+            isManualRefresh: true,
+            _disposeSource.Token);
+    }
+
+    private async Task LoadAsync(
+        bool isManualRefresh,
+        CancellationToken cancellationToken)
+    {
+        if (_isRefreshing)
+        {
+            return;
+        }
+
+        _isLoading = _snapshot is null;
+        _isRefreshing = isManualRefresh;
+
+        try
+        {
+            _snapshot = await BandwidthClient.GetAsync(cancellationToken);
+            _error = null;
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (HttpRequestException exception)
+        {
+            _error =
+                exception.StatusCode ==
+                System.Net.HttpStatusCode.Unauthorized
+                    ? "GreenCloud rejected the API token."
+                    : "GreenCloud could not be reached: " +
+                      exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _error = "The GreenCloud request timed out.";
+        }
+        catch (Exception exception)
+            when (exception is
+                InvalidOperationException or
+                System.Text.Json.JsonException)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+            _isRefreshing = false;
+        }
+    }
+
+    private async Task PollAsync(
+        CancellationToken cancellationToken)
+    {
+        using var timer =
+            new PeriodicTimer(TimeSpan.FromSeconds( Math.Clamp(RefreshSeconds,60,3600)));
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await InvokeAsync(
+                    async () =>
+                    {
+                        await LoadAsync(isManualRefresh: false, cancellationToken);
+
+                        StateHasChanged();
+                    });
+            }
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
+    private static string FormatBytes(
+        double bytes)
+    {
+        const double gb = 1024d * 1024 * 1024;
+        const double tb = gb * 1024;
+
+        return bytes >= tb
+            ? $"{bytes / tb:N2} TB"
+            : $"{bytes / gb:N2} GB";
+    }
+
+    private static string FormatRate(
+        double? bytesPerSecond)
+    {
+        if (bytesPerSecond is null)
+        {
+            return "Calculating...";
+        }
+
+        double mbps =bytesPerSecond.Value *  8 /  1_000_000d;
+
+        if (mbps >= 1)
+        {
+            return $"{mbps:N2} Mbps";
+        }
+
+        double kbps = bytesPerSecond.Value *  8 / 1_000d;
+
+        return $"{kbps:N2} Kbps";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposeSource.Cancel();
+
+        if (_pollingTask is not null)
+        {
+            try
+            {
+                await _pollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _disposeSource.Dispose();
+    }
+}

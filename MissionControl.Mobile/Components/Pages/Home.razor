@@ -16,21 +16,23 @@
         <h1>Mission Control</h1>
 
         <p>
-            Live Archive activity, host resources, containers, and protocol status.
+            Work planning, bandwidth, Archive activity,
+            host resources, containers, and protocol status.
         </p>
     </header>
 
     @if (!_archiveConfigurationChecked)
     {
         <div class="alert alert-info">
-            Checking Archive configuration...
+            Checking Mobile API configuration...
         </div>
     }
     else if (!_hasArchiveToken)
     {
         <div class="alert alert-warning">
             <div>
-                Configure the Mobile API token to view Archive activity.
+                Configure the Mobile API token to view
+                Archive activity, bandwidth, and Work Planning.
             </div>
 
             <NavLink class="alert-link"
@@ -90,8 +92,8 @@
                 <span>Successful probes</span>
                 <strong>
                     @(SnapshotState.Snapshot.Protocols
-                    .Count(protocol => protocol.Succeeded)
-                    .ToString("N0"))
+                        .Count(protocol => protocol.Succeeded)
+                        .ToString("N0"))
                 </strong>
             </article>
 
@@ -99,11 +101,20 @@
                 <span>Failed probes</span>
                 <strong>
                     @(SnapshotState.Snapshot.Protocols
-                    .Count(protocol => !protocol.Succeeded)
-                    .ToString("N0"))
+                        .Count(protocol => !protocol.Succeeded)
+                        .ToString("N0"))
                 </strong>
             </article>
         </section>
+    }
+
+    @if (_hasArchiveToken)
+    {
+        <BandwidthUsagePanel />
+
+        <DailyWorkPickPanel TimestampFormatter="FormatTimestamp" />
+
+        <QuickAddTodoPanel />
     }
 </div>
 
@@ -122,31 +133,26 @@
     {
         SnapshotState.Changed += HandleSnapshotStateChanged;
 
-        Task snapshotTask =
-            SnapshotState.EnsureLoadedAsync(
-                _disposeSource.Token);
+        Task snapshotTask = SnapshotState.EnsureLoadedAsync(_disposeSource.Token);
 
         try
         {
-            string? token =
-                await CredentialStore.GetTokenAsync();
+            string? token = await CredentialStore.GetTokenAsync();
 
-            _hasArchiveToken =
-                !string.IsNullOrWhiteSpace(token);
-
+            _hasArchiveToken =!string.IsNullOrWhiteSpace(token);
             _archiveConfigurationChecked = true;
 
             if (_hasArchiveToken)
             {
-                await LoadArchiveStatisticsAsync(
-                    isManualRefresh: false);
+                await LoadArchiveStatisticsAsync(isManualRefresh: false);
             }
         }
         catch (Exception exception)
         {
             _archiveConfigurationChecked = true;
+
             _archiveError =
-                $"Could not read the Mobile API configuration: " +
+                "Could not read the Mobile API configuration: " +
                 exception.Message;
         }
 
@@ -155,29 +161,24 @@
 
     private Task RefreshArchiveStatisticsAsync()
     {
-        return LoadArchiveStatisticsAsync(
-            isManualRefresh: true);
+        return LoadArchiveStatisticsAsync(isManualRefresh: true);
     }
 
     private async Task LoadArchiveStatisticsAsync(
         bool isManualRefresh)
     {
-        if (_archiveIsLoading || _archiveIsRefreshing)
+        if (_archiveIsLoading ||
+            _archiveIsRefreshing)
         {
             return;
         }
 
-        _archiveIsLoading =
-            _archiveStatistics is null;
-
-        _archiveIsRefreshing =
-            isManualRefresh;
+        _archiveIsLoading = _archiveStatistics is null;
+        _archiveIsRefreshing = isManualRefresh;
 
         try
         {
-            _archiveStatistics =
-                await ArchiveClient.GetStatisticsAsync(
-                    _disposeSource.Token);
+            _archiveStatistics = await ArchiveClient.GetStatisticsAsync(_disposeSource.Token);
 
             _archiveError = null;
         }
@@ -191,8 +192,7 @@
                 TaskCanceledException or
                 InvalidOperationException)
         {
-            _archiveError =
-                CreateArchiveErrorMessage(exception);
+            _archiveError = CreateArchiveErrorMessage(exception);
         }
         finally
         {
@@ -208,16 +208,14 @@
         {
             HttpRequestException
             {
-                StatusCode:
-                    System.Net.HttpStatusCode.Unauthorized
+                StatusCode: System.Net.HttpStatusCode.Unauthorized
             } =>
                 "The Dashboard rejected the Mobile API token. " +
                 "Update it in Settings.",
 
             HttpRequestException
             {
-                StatusCode:
-                    System.Net.HttpStatusCode.BadGateway
+                StatusCode: System.Net.HttpStatusCode.BadGateway
             } =>
                 "The Dashboard could not reach the Mission Control Archive.",
 
@@ -234,8 +232,7 @@
 
     private Task RefreshSnapshotAsync()
     {
-        return SnapshotState.RefreshAsync(
-            isManualRefresh: true);
+        return SnapshotState.RefreshAsync(isManualRefresh: true);
     }
 
     private void HandleSnapshotStateChanged()

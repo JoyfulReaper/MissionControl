@@ -4,8 +4,7 @@ using System.Globalization;
 namespace MissionControl.Dashboard.Authentication;
 
 public sealed class SqliteDashboardUserStore(
-    DashboardAuthenticationDatabase database)
-    : IDashboardUserStore
+    DashboardAuthenticationDatabase database) : IDashboardUserStore
 {
     public async Task RecordSuccessfulLoginAsync(
         long userId,
@@ -15,8 +14,7 @@ public sealed class SqliteDashboardUserStore(
     {
         if (userId <= 0)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(userId));
+            throw new ArgumentOutOfRangeException(nameof(userId));
         }
 
         const string sql =
@@ -36,29 +34,21 @@ public sealed class SqliteDashboardUserStore(
         var parameters = new
         {
             UserId = userId,
-            ReplacementPasswordHash =
-                replacementPasswordHash,
-            AuthenticatedAtUtc =
-                FormatTimestamp(authenticatedAtUtc)
+            ReplacementPasswordHash = replacementPasswordHash,
+            AuthenticatedAtUtc = FormatTimestamp(authenticatedAtUtc)
         };
 
-        await using var connection =
-            database.CreateConnection();
-
-        await connection.OpenAsync(
-            cancellationToken);
+        await using var connection = database.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
 
         int affectedRows =
             await connection.ExecuteAsync(
                 new CommandDefinition(
                     sql,
                     parameters,
-                    cancellationToken:
-                        cancellationToken));
+                    cancellationToken: cancellationToken));
 
-        EnsureOneUserUpdated(
-            affectedRows,
-            userId);
+        EnsureOneUserUpdated(affectedRows, userId);
     }
 
     public async Task RecordFailedLoginAsync(
@@ -70,14 +60,12 @@ public sealed class SqliteDashboardUserStore(
     {
         if (userId <= 0)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(userId));
+            throw new ArgumentOutOfRangeException(nameof(userId));
         }
 
         if (maxFailedAttempts <= 0)
         {
-            throw new ArgumentOutOfRangeException(
-                nameof(maxFailedAttempts));
+            throw new ArgumentOutOfRangeException(nameof(maxFailedAttempts));
         }
 
         const string sql =
@@ -115,39 +103,29 @@ public sealed class SqliteDashboardUserStore(
         {
             UserId = userId,
             MaxFailedAttempts = maxFailedAttempts,
-            AttemptedAtUtc =
-                FormatTimestamp(attemptedAtUtc),
-            NewLockoutEndUtc =
-                FormatTimestamp(newLockoutEndUtc)
+            AttemptedAtUtc = FormatTimestamp(attemptedAtUtc),
+            NewLockoutEndUtc = FormatTimestamp(newLockoutEndUtc)
         };
 
-        await using var connection =
-            database.CreateConnection();
+        await using var connection = database.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
 
-        await connection.OpenAsync(
-            cancellationToken);
+        int affectedRows = await connection.ExecuteAsync(
+            new CommandDefinition(
+                sql,
+                parameters,
+                cancellationToken: cancellationToken));
 
-        int affectedRows =
-            await connection.ExecuteAsync(
-                new CommandDefinition(
-                    sql,
-                    parameters,
-                    cancellationToken:
-                        cancellationToken));
-
-        EnsureOneUserUpdated(
-            affectedRows,
-            userId);
+        EnsureOneUserUpdated(affectedRows, userId);
     }
 
     private static void EnsureOneUserUpdated(
         int affectedRows,
-    long userId)
+        long userId)
     {
         if (affectedRows != 1)
         {
-            throw new InvalidOperationException(
-                $"Dashboard user '{userId}' was not updated.");
+            throw new InvalidOperationException($"Dashboard user '{userId}' was not updated.");
         }
     }
 
@@ -156,8 +134,7 @@ public sealed class SqliteDashboardUserStore(
             string normalizedUsername,
             CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(
-            normalizedUsername);
+        ArgumentException.ThrowIfNullOrWhiteSpace(normalizedUsername);
 
         const string sql =
             """
@@ -178,11 +155,8 @@ public sealed class SqliteDashboardUserStore(
             LIMIT 1;
             """;
 
-        await using var connection =
-            database.CreateConnection();
-
-        await connection.OpenAsync(
-            cancellationToken);
+        await using var connection = database.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
 
         DashboardUserRow? row =
             await connection
@@ -191,11 +165,9 @@ public sealed class SqliteDashboardUserStore(
                         sql,
                         new
                         {
-                            NormalizedUsername =
-                                normalizedUsername
+                            NormalizedUsername = normalizedUsername
                         },
-                        cancellationToken:
-                            cancellationToken));
+                        cancellationToken: cancellationToken));
 
         return row is null
             ? null
@@ -275,10 +247,56 @@ public sealed class SqliteDashboardUserStore(
                 new CommandDefinition(
                     sql,
                     parameters,
-                    cancellationToken:
-                        cancellationToken));
+                    cancellationToken: cancellationToken));
 
         return Map(row);
+    }
+
+    public async Task ResetPasswordAsync(
+        long userId,
+        string passwordHash,
+        string securityStamp,
+        DateTimeOffset updatedAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        if (userId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(userId));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(passwordHash);
+        ArgumentException.ThrowIfNullOrWhiteSpace(securityStamp);
+
+        const string sql =
+            """
+            UPDATE DashboardUsers
+            SET
+                PasswordHash = @PasswordHash,
+                FailedLoginCount = 0,
+                LockoutEndUtc = NULL,
+                SecurityStamp = @SecurityStamp,
+                UpdatedAtUtc = @UpdatedAtUtc
+            WHERE Id = @UserId;
+            """;
+
+        var parameters = new
+        {
+            UserId = userId,
+            PasswordHash = passwordHash,
+            SecurityStamp = securityStamp,
+            UpdatedAtUtc = FormatTimestamp(updatedAtUtc)
+        };
+
+        await using var connection = database.CreateConnection();
+        await connection.OpenAsync(cancellationToken);
+
+        int affectedRows = await connection.ExecuteAsync(
+            new CommandDefinition(
+                sql,
+                parameters,
+                cancellationToken: cancellationToken));
+
+        EnsureOneUserUpdated(affectedRows, userId);
     }
 
     private static DashboardUser Map(
@@ -287,21 +305,15 @@ public sealed class SqliteDashboardUserStore(
         return new DashboardUser(
             Id: row.Id,
             Username: row.Username,
-            NormalizedUsername:
-                row.NormalizedUsername,
+            NormalizedUsername: row.NormalizedUsername,
             DisplayName: row.DisplayName,
             PasswordHash: row.PasswordHash,
             IsEnabled: row.IsEnabled != 0,
-            FailedLoginCount:
-                checked((int)row.FailedLoginCount),
-            LockoutEndUtc:
-                ParseOptionalTimestamp(
-                    row.LockoutEndUtc),
+            FailedLoginCount: checked((int)row.FailedLoginCount),
+            LockoutEndUtc: ParseOptionalTimestamp(row.LockoutEndUtc),
             SecurityStamp: row.SecurityStamp,
-            CreatedAtUtc:
-                ParseTimestamp(row.CreatedAtUtc),
-            UpdatedAtUtc:
-                ParseTimestamp(row.UpdatedAtUtc));
+            CreatedAtUtc: ParseTimestamp(row.CreatedAtUtc),
+            UpdatedAtUtc: ParseTimestamp(row.UpdatedAtUtc));
     }
 
     private static DateTimeOffset ParseTimestamp(
@@ -315,8 +327,7 @@ public sealed class SqliteDashboardUserStore(
     }
 
     private static DateTimeOffset?
-        ParseOptionalTimestamp(
-            string? value)
+        ParseOptionalTimestamp(string? value)
     {
         return string.IsNullOrWhiteSpace(value)
             ? null
@@ -328,37 +339,25 @@ public sealed class SqliteDashboardUserStore(
     {
         return value
             .ToUniversalTime()
-            .ToString(
-                "O",
-                CultureInfo.InvariantCulture);
+            .ToString("O", CultureInfo.InvariantCulture);
     }
 
     private sealed class DashboardUserRow
     {
         public long Id { get; init; }
-
         public required string Username { get; init; }
-
         public required string NormalizedUsername
         {
             get;
             init;
         }
-
         public required string DisplayName { get; init; }
-
         public required string PasswordHash { get; init; }
-
         public long IsEnabled { get; init; }
-
         public long FailedLoginCount { get; init; }
-
         public string? LockoutEndUtc { get; init; }
-
         public required string SecurityStamp { get; init; }
-
         public required string CreatedAtUtc { get; init; }
-
         public required string UpdatedAtUtc { get; init; }
     }
 }

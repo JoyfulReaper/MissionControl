@@ -22,4 +22,11 @@ public interface IDashboardUserStore
         string? replacementPasswordHash,
         DateTimeOffset authenticatedAtUtc,
         CancellationToken cancellationToken = default);
+
+    Task ResetPasswordAsync(
+        long userId,
+        string passwordHash,
+        string securityStamp,
+        DateTimeOffset updatedAtUtc,
+        CancellationToken cancellationToken = default);
 }

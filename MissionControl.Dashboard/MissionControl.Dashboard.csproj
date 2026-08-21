@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <UserSecretsId>6d939bc5-a993-4f43-9d31-c2a22141eee4</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -25,7 +26,7 @@
 <ItemGroup>
 	<PackageReference Include="JoyfulReaperLib.Sqlite" Version="0.0.9" />
 	<PackageReference Include="Dapper" Version="2.1.79" />
-	<PackageReference Include="JoyfulReaperLib.MissionControl" Version="0.0.1" />
+	<PackageReference Include="JoyfulReaperLib.MissionControl" Version="0.0.3" />
 </ItemGroup>
 
 <ItemGroup>

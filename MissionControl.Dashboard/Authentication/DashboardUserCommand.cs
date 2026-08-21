@@ -21,11 +21,7 @@ public static class DashboardUserCommand
             return null;
         }
 
-        if (args.Length is < 3 or > 4 ||
-            !string.Equals(
-                args[1],
-                "create",
-                StringComparison.OrdinalIgnoreCase))
+        if (args.Length < 2)
         {
             WriteUsage();
             return 2;
@@ -33,9 +29,36 @@ public static class DashboardUserCommand
 
         if (Console.IsInputRedirected)
         {
-            Console.Error.WriteLine(
-                "An interactive terminal is required.");
+            Console.Error.WriteLine("An interactive terminal is required.");
+            return 2;
+        }
 
+        return args[1].ToLowerInvariant() switch
+        {
+            "create" =>
+                await RunCreateAsync(
+                    args,
+                    services,
+                    cancellationToken),
+
+            "reset-password" =>
+                await RunResetPasswordAsync(
+                    args,
+                    services,
+                    cancellationToken),
+
+            _ => InvalidUsage()
+        };
+    }
+
+    private static async Task<int> RunCreateAsync(
+        string[] args,
+        IServiceProvider services,
+        CancellationToken cancellationToken)
+    {
+        if (args.Length is < 3 or > 4)
+        {
+            WriteUsage();
             return 2;
         }
 
@@ -46,31 +69,18 @@ public static class DashboardUserCommand
                 ? args[3]
                 : username;
 
-        Console.Write("Password: ");
-        string password = ReadSecret();
-        Console.WriteLine();
+        string? password = ReadConfirmedPassword();
 
-        Console.Write("Confirm password: ");
-        string confirmation = ReadSecret();
-        Console.WriteLine();
-
-        if (!string.Equals(
-                password,
-                confirmation,
-                StringComparison.Ordinal))
+        if (password is null)
         {
-            Console.Error.WriteLine(
-                "Passwords do not match.");
-
             return 1;
         }
 
         try
         {
-            using IServiceScope scope =
-                services.CreateScope();
+            using IServiceScope scope = services.CreateScope();
 
-            DashboardUserProvisioningService provisioningService =
+            var provisioningService =
                 scope.ServiceProvider
                     .GetRequiredService<
                         DashboardUserProvisioningService>();
@@ -82,25 +92,98 @@ public static class DashboardUserCommand
                     password,
                     cancellationToken);
 
-            Console.WriteLine(
-                $"Created dashboard user '{user.Username}'.");
+            Console.WriteLine($"Created dashboard user '{user.Username}'.");
 
             return 0;
         }
         catch (ArgumentException exception)
         {
-            Console.Error.WriteLine(
-                exception.Message);
+            Console.Error.WriteLine(exception.Message);
 
             return 1;
         }
         catch (InvalidOperationException exception)
         {
-            Console.Error.WriteLine(
-                exception.Message);
+            Console.Error.WriteLine(exception.Message);
 
             return 1;
         }
+    }
+
+    private static async Task<int>
+        RunResetPasswordAsync(
+            string[] args,
+            IServiceProvider services,
+            CancellationToken cancellationToken)
+    {
+        if (args.Length != 3)
+        {
+            WriteUsage();
+            return 2;
+        }
+
+        string username = args[2];
+        string? password = ReadConfirmedPassword();
+
+        if (password is null)
+        {
+            return 1;
+        }
+
+        try
+        {
+            using IServiceScope scope = services.CreateScope();
+
+            var provisioningService =
+                scope.ServiceProvider
+                    .GetRequiredService<DashboardUserProvisioningService>();
+
+            await provisioningService.ResetPasswordAsync(
+                username,
+                password,
+                cancellationToken);
+
+            Console.WriteLine(
+                $"Reset password for dashboard user " +
+                $"'{username}'.");
+
+            return 0;
+        }
+        catch (ArgumentException exception)
+        {
+            Console.Error.WriteLine(exception.Message);
+
+            return 1;
+        }
+        catch (InvalidOperationException exception)
+        {
+            Console.Error.WriteLine(exception.Message);
+
+            return 1;
+        }
+    }
+
+    private static string? ReadConfirmedPassword()
+    {
+        Console.Write("Password: ");
+        string password = ReadSecret();
+        Console.WriteLine();
+
+        Console.Write("Confirm password: ");
+        string confirmation = ReadSecret();
+        Console.WriteLine();
+
+        if (string.Equals(
+                password,
+                confirmation,
+                StringComparison.Ordinal))
+        {
+            return password;
+        }
+
+        Console.Error.WriteLine("Passwords do not match.");
+
+        return null;
     }
 
     private static string ReadSecret()
@@ -109,8 +192,7 @@ public static class DashboardUserCommand
 
         while (true)
         {
-            ConsoleKeyInfo key =
-                Console.ReadKey(intercept: true);
+            ConsoleKeyInfo key = Console.ReadKey(intercept: true);
 
             if (key.Key == ConsoleKey.Enter)
             {
@@ -134,12 +216,16 @@ public static class DashboardUserCommand
         }
     }
 
+    private static int InvalidUsage()
+    {
+        WriteUsage();
+        return 2;
+    }
+
     private static void WriteUsage()
     {
-        Console.Error.WriteLine(
-            "Usage:");
-
-        Console.Error.WriteLine(
-            "  users create <username> [display-name]");
+        Console.Error.WriteLine("Usage:");
+        Console.Error.WriteLine("  users create <username> [display-name]");
+        Console.Error.WriteLine("  users reset-password <username>");
     }
 }

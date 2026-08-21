@@ -1,0 +1,92 @@
+.quick-add-todo {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.quick-add-heading h2 {
+    margin: 0;
+    color: var(--mc-text);
+    font-size: 1.25rem;
+}
+
+.quick-add-eyebrow {
+    margin-bottom: 0.3rem;
+    color: var(--mc-accent);
+    font-size: 0.7rem;
+    font-weight: 750;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.quick-add-card {
+    padding: 1.25rem;
+    border: 1px solid var(--mc-border);
+    border-radius: var(--mc-radius);
+    background: var(--mc-surface);
+    box-shadow: var(--mc-shadow);
+}
+
+.quick-add-fields {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) minmax(16rem, 2fr) minmax(8rem, 0.6fr) minmax(8rem, 0.6fr);
+    gap: 0.8rem;
+}
+
+.quick-add-field {
+    display: grid;
+    gap: 0.35rem;
+}
+
+    .quick-add-field label {
+        color: var(--mc-text-muted);
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+.quick-add-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin-top: 1rem;
+}
+
+.quick-add-success {
+    color: var(--mc-accent);
+    font-size: 0.85rem;
+}
+
+.quick-add-error {
+    margin-top: 1rem;
+    margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+    .quick-add-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .quick-add-task-field {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 650px) {
+    .quick-add-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .quick-add-task-field {
+        grid-column: auto;
+    }
+
+    .quick-add-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+        .quick-add-actions .btn {
+            align-self: start;
+        }
+}

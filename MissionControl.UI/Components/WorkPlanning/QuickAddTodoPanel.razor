@@ -1,0 +1,234 @@
+﻿@inject IWorkPlanningClient WorkPlanningClient
+
+<section class="quick-add-todo"
+         aria-labelledby="quick-add-todo-title">
+    <div class="quick-add-heading">
+        <div>
+            <div class="quick-add-eyebrow">
+                Work planning
+            </div>
+
+            <h2 id="quick-add-todo-title">
+                Quick add todo
+            </h2>
+        </div>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="quick-add-card">
+            Loading work items...
+        </div>
+    }
+    else if (_loadError is not null)
+    {
+        <div class="alert alert-danger">
+            @_loadError
+        </div>
+    }
+    else if (_workItems.Count == 0)
+    {
+        <div class="alert alert-secondary">
+            No active work items are available.
+        </div>
+    }
+    else
+    {
+        <div class="quick-add-card">
+            <div class="quick-add-fields">
+                <div class="quick-add-field">
+                    <label for="quick-add-work-item">
+                        Work item
+                    </label>
+
+                    <select id="quick-add-work-item"
+                            class="form-select"
+                            @bind="_selectedWorkItemId"
+                            disabled="@_isSaving">
+                        @foreach (var workItem in _workItems)
+                        {
+                            <option value="@workItem.Id">
+                                @workItem.Name
+                            </option>
+                        }
+                    </select>
+                </div>
+
+                <div class="quick-add-field quick-add-task-field">
+                    <label for="quick-add-task">
+                        Todo
+                    </label>
+
+                    <input id="quick-add-task"
+                           class="form-control"
+                           maxlength="500"
+                           placeholder="What needs doing?"
+                           @bind="_task"
+                           @bind:event="oninput"
+                           disabled="@_isSaving" />
+                </div>
+
+                <div class="quick-add-field">
+                    <label for="quick-add-energy">
+                        Energy
+                    </label>
+
+                    <select id="quick-add-energy"
+                            class="form-select"
+                            @bind="_energy"
+                            disabled="@_isSaving">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+
+                <div class="quick-add-field">
+                    <label for="quick-add-effort">
+                        Effort
+                    </label>
+
+                    <select id="quick-add-effort"
+                            class="form-select"
+                            @bind="_effort"
+                            disabled="@_isSaving">
+                        <option value="Short">Short</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Long">Long</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="quick-add-actions">
+                <button type="button"
+                        class="btn btn-primary"
+                        disabled="@(!CanSave)"
+                        @onclick="CreateTodoAsync">
+                    @(_isSaving
+                        ? "Adding..."
+                        : "Add todo")
+                </button>
+
+                @if (_successMessage is not null)
+                {
+                    <span class="quick-add-success">
+                        @_successMessage
+                    </span>
+                }
+            </div>
+
+            @if (_saveError is not null)
+            {
+                <div class="alert alert-danger quick-add-error">
+                    @_saveError
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<WorkPlanningWorkItem> _workItems = [];
+
+    private int _selectedWorkItemId;
+    private string _task = string.Empty;
+    private string _energy = "Medium";
+    private string _effort = "Medium";
+
+    private bool _isLoading = true;
+    private bool _isSaving;
+
+    private string? _loadError;
+    private string? _saveError;
+    private string? _successMessage;
+
+    private bool CanSave =>
+        !_isSaving &&
+        _selectedWorkItemId > 0 &&
+        !string.IsNullOrWhiteSpace(_task);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWorkItemsAsync();
+    }
+
+    private async Task LoadWorkItemsAsync()
+    {
+        _isLoading = true;
+
+        try
+        {
+            var workItems = await WorkPlanningClient
+                    .GetWorkItemsAsync();
+
+            _workItems = workItems
+                .Where(x =>
+                    x.CompletedAt is null &&
+                    x.ArchivedAt is null)
+                .OrderBy(x => x.Name)
+                .ToList();
+
+            _selectedWorkItemId = _workItems.FirstOrDefault()?.Id ?? 0;
+            _loadError = null;
+        }
+        catch (HttpRequestException exception)
+        {
+            _loadError =
+                "Work Planning API could not be reached: " +
+                exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _loadError = "The Work Planning API request timed out.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateTodoAsync()
+    {
+        if (!CanSave)
+        {
+            return;
+        }
+
+        _isSaving = true;
+        _saveError = null;
+        _successMessage = null;
+
+        try
+        {
+            string task = _task.Trim();
+
+            WorkPlanningTodo todo =
+                await WorkPlanningClient.CreateTodoAsync(_selectedWorkItemId,
+                    new CreateWorkPlanningTodoRequest(
+                        task,
+                        _energy,
+                        _effort));
+
+            _task = string.Empty;
+
+            _successMessage =
+                $"Added '{todo.Task}' to " +
+                $"{todo.WorkItemName}.";
+        }
+        catch (HttpRequestException exception)
+        {
+            _saveError =
+                "Todo could not be added: " +
+                exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _saveError =
+                "The Work Planning API request timed out.";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+}

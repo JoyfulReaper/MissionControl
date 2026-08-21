@@ -74,6 +74,31 @@
         ]
       },
       {
+        "Id": "what-should-i-work-on-today",
+        "Name": "What Should I Work On Today?",
+        "Group": "Operations",
+        "Summary": "Surfaces neglected projects and gives me something concrete to work on.",
+        "Description": "A private work-planning application for tracking projects and todos, recording when work was last performed, and choosing a daily task based on neglect, energy, and effort.",
+        "ContainerName": "joyful-stack-wsiwot-1",
+        "Visibility": "Private",
+        "Protocol": "HTTP / Blazor Server / JSON API",
+        "Endpoint": "127.0.0.1:5080",
+        "Image": "joyful-stack-wsiwot",
+        "SourceUrl": "https://github.com/JoyfulReaper/WhatShouldIWorkOnToday",
+        "SearchTerms": [
+          "work planning",
+          "what should i work on today",
+          "wsiwot",
+          "projects",
+          "todos",
+          "daily pick",
+          "productivity",
+          "blazor",
+          "sqlite",
+          "private"
+        ]
+      },
+      {
         "Id": "happy-echo",
         "Name": "HappyEcho",
         "Group": "Public Services",
