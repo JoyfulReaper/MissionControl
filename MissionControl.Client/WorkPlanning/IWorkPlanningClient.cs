@@ -4,6 +4,10 @@ public interface IWorkPlanningClient
 {
     Task<DailyWorkPick?> GetDailyPickAsync(CancellationToken cancellationToken = default);
 
+    Task<RandomWorkPick?> GetRandomPickAsync(
+        bool favorPriority = false,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<WorkPlanningWorkItem>>
         GetWorkItemsAsync(CancellationToken cancellationToken = default);
 

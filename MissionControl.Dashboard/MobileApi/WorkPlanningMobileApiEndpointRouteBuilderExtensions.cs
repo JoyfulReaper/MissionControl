@@ -25,6 +25,11 @@ public static class
             .WithName("GetMobileWorkPlanningDailyPick");
 
         api.MapGet(
+            "/random-pick",
+            GetRandomPickAsync)
+        .WithName("GetMobileWorkPlanningRandomPick");
+
+        api.MapGet(
                 "/work-items",
                 GetWorkItemsAsync)
             .WithName("GetMobileWorkPlanningWorkItems");
@@ -50,6 +55,38 @@ public static class
             DailyWorkPick? pick =
                 await workPlanningClient
                     .GetDailyPickAsync(cancellationToken);
+
+            return pick is null
+                ? Results.NoContent()
+                : Results.Ok(pick);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+            when (IsExpectedException(exception))
+        {
+            return CreateUnavailableResult(exception);
+        }
+    }
+
+    private static async Task<IResult>
+    GetRandomPickAsync(
+        bool? favorPriority,
+        IWorkPlanningClient workPlanningClient,
+        HttpResponse response,
+        CancellationToken cancellationToken)
+    {
+        DisableResponseCaching(response);
+
+        try
+        {
+            RandomWorkPick? pick = await workPlanningClient
+                .GetRandomPickAsync(
+                    favorPriority ?? false,
+                    cancellationToken);
 
             return pick is null
                 ? Results.NoContent()

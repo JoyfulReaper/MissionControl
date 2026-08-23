@@ -11,7 +11,10 @@ public sealed record WorkPlanningWorkItem(
     DateTimeOffset? CompletedAt,
     DateTimeOffset? ArchivedAt,
     int TodoCount,
-    int ActiveTodoCount);
+    int ActiveTodoCount)
+{
+    public string Priority { get; init; } = "Normal";
+}
 
 public sealed record WorkPlanningTodo(
     int Id,
@@ -21,12 +24,19 @@ public sealed record WorkPlanningTodo(
     string Energy,
     string Effort,
     DateTimeOffset CreatedAt,
-    DateTimeOffset? CompletedAt);
+    DateTimeOffset? CompletedAt)
+{
+    public string Priority { get; init; } = "Normal";
+}
 
 public sealed record DailyWorkPick(
     DateOnly Date,
     WorkPlanningTodo Todo,
     DateTimeOffset? LastWorkedAt);
+
+public sealed record RandomWorkPick(
+    WorkPlanningTodo Todo,
+    bool FavorPriority);
 
 public sealed record CreateWorkPlanningTodoRequest(
     string Task,

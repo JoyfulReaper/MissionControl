@@ -1,0 +1,217 @@
+.mobile-work-page {
+    display: grid;
+    width: min(100%, 76rem);
+    margin: 0 auto;
+    padding: 1rem 0 2rem;
+    gap: 1.25rem;
+}
+
+.mobile-work-section {
+    display: grid;
+    gap: 0.75rem;
+}
+
+    .mobile-work-section h2 {
+        margin: 0;
+        color: var(--mc-text);
+        font-size: 1.15rem;
+    }
+
+.mobile-work-heading-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+    .mobile-work-heading-row h2,
+    .mobile-work-heading-row h3 {
+        margin: 0;
+        color: var(--mc-text);
+    }
+
+    .mobile-work-heading-row h3 {
+        font-size: 1rem;
+    }
+
+    .mobile-work-heading-row span {
+        color: var(--mc-text-muted);
+        font-size: 0.85rem;
+        white-space: nowrap;
+    }
+
+.mobile-work-card {
+    border: 1px solid var(--mc-border);
+    border-radius: var(--mc-radius);
+    padding: 1rem;
+    background: var(--mc-surface);
+    color: var(--mc-text);
+}
+
+.mobile-random-card {
+    background: var(--mc-background-elevated);
+}
+
+.mobile-work-project {
+    color: var(--mc-text-muted);
+    font-size: 0.85rem;
+    margin-bottom: 0.25rem;
+}
+
+.mobile-work-task {
+    color: var(--mc-text);
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.mobile-work-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+}
+
+    .mobile-work-badges span,
+    .mobile-work-list li span {
+        border: 1px solid var(--mc-border);
+        border-radius: 999px;
+        padding: 0.15rem 0.5rem;
+        background: var(--mc-background-elevated);
+        color: var(--mc-text-muted);
+        font-size: 0.75rem;
+    }
+
+.mobile-work-muted {
+    color: var(--mc-text-muted);
+    font-size: 0.875rem;
+    margin: 0.75rem 0 0;
+}
+
+.mobile-random-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.mobile-random-priority {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--mc-text-muted);
+    font-size: 0.9rem;
+}
+
+.mobile-work-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+    .mobile-work-stat-grid article {
+        border: 1px solid var(--mc-border);
+        border-radius: var(--mc-radius);
+        padding: 0.9rem;
+        background: var(--mc-surface);
+    }
+
+    .mobile-work-stat-grid span {
+        display: block;
+        color: var(--mc-text-muted);
+        font-size: 0.8rem;
+    }
+
+    .mobile-work-stat-grid strong {
+        display: block;
+        margin-top: 0.25rem;
+        color: var(--mc-text);
+        font-size: 1.5rem;
+        line-height: 1;
+    }
+
+.mobile-work-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 0.75rem 0 0;
+    padding-left: 1.25rem;
+}
+
+    .mobile-work-list li {
+        color: var(--mc-text);
+    }
+
+        .mobile-work-list li::marker {
+            color: var(--mc-text-muted);
+        }
+
+        .mobile-work-list li > div {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            flex-wrap: wrap;
+        }
+
+    .mobile-work-list small {
+        color: var(--mc-text-muted);
+    }
+
+::deep .quick-add-todo,
+::deep .daily-work-pick {
+    color: var(--mc-text);
+}
+
+::deep .quick-add-card,
+::deep .daily-work-card {
+    border-color: var(--mc-border);
+    background: var(--mc-surface);
+    color: var(--mc-text);
+}
+
+::deep .quick-add-heading h2,
+::deep .daily-work-pick-heading h2 {
+    color: var(--mc-text);
+}
+
+::deep .quick-add-eyebrow,
+::deep .daily-work-pick-eyebrow {
+    color: var(--mc-accent);
+}
+
+::deep .daily-work-project,
+::deep .daily-work-date {
+    color: var(--mc-text-muted);
+}
+
+::deep .daily-work-task {
+    color: var(--mc-text);
+}
+
+::deep .daily-work-badge {
+    border-color: var(--mc-border);
+    background: var(--mc-background-elevated);
+    color: var(--mc-text-muted);
+}
+
+@media (max-width: 650px) {
+    .mobile-work-page {
+        padding-top: 0.5rem;
+        gap: 0.85rem;
+    }
+
+    .mobile-work-section {
+        gap: 0.55rem;
+    }
+}
+
+@media (max-width: 420px) {
+    .mobile-random-actions {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+        .mobile-random-actions .btn {
+            width: 100%;
+        }
+}

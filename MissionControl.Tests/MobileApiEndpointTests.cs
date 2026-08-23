@@ -452,6 +452,13 @@ public sealed class MobileApiEndpointTests
             return Task.FromResult<DailyWorkPick?>(null);
         }
 
+        public Task<RandomWorkPick?> GetRandomPickAsync(
+            bool favorPriority = false,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<RandomWorkPick?>(null);
+        }
+
         public Task<IReadOnlyList<WorkPlanningWorkItem>>
             GetWorkItemsAsync(
                 CancellationToken cancellationToken = default)

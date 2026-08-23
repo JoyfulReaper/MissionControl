@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace MissionControl.Client.WorkPlanning;
 
@@ -23,6 +24,24 @@ public sealed class WorkPlanningClient(
         response.EnsureSuccessStatusCode();
 
         return await ReadRequiredAsync<DailyWorkPick>(response, cancellationToken);
+    }
+
+    public async Task<RandomWorkPick?> GetRandomPickAsync(
+        bool favorPriority = false,
+        CancellationToken cancellationToken = default)
+    {
+        string path = $"random-pick?favorPriority={favorPriority.ToString().ToLowerInvariant()}";
+
+        using HttpResponseMessage response = await client.GetAsync(BuildPath(path), cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NoContent)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        return await ReadRequiredAsync<RandomWorkPick>(response, cancellationToken);
     }
 
     public async Task<IReadOnlyList<WorkPlanningWorkItem>>
@@ -80,21 +99,30 @@ public sealed class WorkPlanningClient(
                 "prefix must be relative.");
         }
 
-        return value.EndsWith(
-            "/",
-            StringComparison.Ordinal)
-                ? value
-                : $"{value}/";
+        return value.EndsWith('/') ? value : $"{value}/";
     }
 
     private static async Task<T> ReadRequiredAsync<T>(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
-        T? value =
-            await response.Content.ReadFromJsonAsync<T>(cancellationToken);
+        try
+        {
+            T? value = await response.Content.ReadFromJsonAsync<T>(cancellationToken);
 
-        return value ??
-            throw new InvalidOperationException("The Work Planning API response was empty.");
+            return value ??
+                throw new InvalidOperationException(
+                    "The Work Planning API response was empty.");
+        }
+        catch (JsonException exception)
+        {
+            string? contentType = response.Content.Headers.ContentType?.ToString();
+
+            throw new InvalidOperationException(
+                "The Work Planning API returned invalid JSON. " +
+                $"Status: {(int)response.StatusCode} {response.ReasonPhrase}. " +
+                $"Content-Type: {contentType ?? "unknown"}.",
+                exception);
+        }
     }
 }

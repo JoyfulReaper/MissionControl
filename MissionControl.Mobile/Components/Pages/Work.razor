@@ -1,0 +1,492 @@
+@page "/work"
+@using MissionControl.Client.WorkPlanning
+
+@inject IWorkPlanningClient WorkPlanningClient
+
+<PageTitle>Work</PageTitle>
+
+<div class="mobile-work-page">
+    <header class="mobile-page-header">
+        <div>
+            <div class="page-eyebrow">
+                Work planning
+            </div>
+
+            <h1>Work</h1>
+
+            <p>
+                Daily pick, random pick, and quick todo capture from
+                What Should I Work On Today.
+            </p>
+        </div>
+
+        <button type="button"
+                class="btn btn-outline-primary"
+                disabled="@_isLoading"
+                @onclick="LoadAsync">
+            @(_isLoading ? "Refreshing..." : "Refresh")
+        </button>
+    </header>
+
+    <section class="mobile-work-section"
+             aria-labelledby="mobile-daily-pick-title">
+        <h2 id="mobile-daily-pick-title">
+            Daily pick
+        </h2>
+
+        @if (_isDailyPickLoading && _dailyPick is null)
+        {
+            <div class="mobile-work-card">
+                Loading daily pick...
+            </div>
+        }
+        else if (_dailyPickError is not null)
+        {
+            <div class="alert alert-danger">
+                @_dailyPickError
+            </div>
+        }
+        else if (_dailyPick is null)
+        {
+            <div class="alert alert-info">
+                No eligible daily pick is available.
+            </div>
+        }
+        else
+        {
+            <article class="mobile-work-card">
+                <div class="mobile-work-project">
+                    @_dailyPick.Todo.WorkItemName
+                </div>
+
+                <div class="mobile-work-task">
+                    @_dailyPick.Todo.Task
+                </div>
+
+                <div class="mobile-work-badges">
+                    <span>Energy: @_dailyPick.Todo.Energy</span>
+                    <span>Effort: @_dailyPick.Todo.Effort</span>
+                    <span>Priority: @_dailyPick.Todo.Priority</span>
+                </div>
+
+                <div class="mobile-work-muted">
+                    Pick for @_dailyPick.Date.ToString("dddd, MMMM d")
+                </div>
+
+                @if (_dailyPick.LastWorkedAt is DateTimeOffset lastWorkedAt)
+                {
+                    <div class="mobile-work-muted">
+                        Last worked @FormatRelativeTimestamp(lastWorkedAt)
+                    </div>
+                }
+            </article>
+        }
+    </section>
+
+    <section class="mobile-work-section"
+             aria-labelledby="mobile-random-pick-title">
+        <div class="mobile-work-heading-row">
+            <h2 id="mobile-random-pick-title">
+                Random pick
+            </h2>
+
+            <span>
+                @(_randomPick?.FavorPriority == true
+                    ? "Priority weighted"
+                    : "Uniform")
+            </span>
+        </div>
+
+        <div class="mobile-random-actions">
+            <label class="mobile-random-priority">
+                <input type="checkbox"
+                       class="form-check-input"
+                       @bind="_favorPriorityForRandomPick"
+                       disabled="@_isRandomPickLoading" />
+
+                Favor priority
+            </label>
+
+            <button type="button"
+                    class="btn btn-primary"
+                    disabled="@_isRandomPickLoading"
+                    @onclick="LoadRandomPickAsync">
+                @(_isRandomPickLoading ? "Picking..." : "Pick random")
+            </button>
+        </div>
+
+        @if (_randomPickError is not null)
+        {
+            <div class="alert alert-danger">
+                @_randomPickError
+            </div>
+        }
+        else if (_randomPick is null)
+        {
+            <p class="mobile-work-muted">
+                Tap the button when you want chaos goblin mode.
+            </p>
+        }
+        else
+        {
+            <article class="mobile-work-card mobile-random-card">
+                <div class="mobile-work-project">
+                    @_randomPick.Todo.WorkItemName
+                </div>
+
+                <div class="mobile-work-task">
+                    @_randomPick.Todo.Task
+                </div>
+
+                <div class="mobile-work-badges">
+                    <span>Energy: @_randomPick.Todo.Energy</span>
+                    <span>Effort: @_randomPick.Todo.Effort</span>
+                    <span>Priority: @_randomPick.Todo.Priority</span>
+                </div>
+            </article>
+        }
+    </section>
+
+    <section class="mobile-work-section"
+             aria-labelledby="mobile-work-summary-title">
+        <div class="mobile-work-heading-row">
+            <h2 id="mobile-work-summary-title">
+                Summary
+            </h2>
+
+            <span>
+                @_workItems.Count.ToString("N0") total
+            </span>
+        </div>
+
+        @if (_isLoading && _workItems.Count == 0)
+        {
+            <div class="mobile-work-card">
+                Loading work items...
+            </div>
+        }
+        else if (_workItemsError is not null)
+        {
+            <div class="alert alert-danger">
+                @_workItemsError
+            </div>
+        }
+        else
+        {
+            <div class="mobile-work-stat-grid">
+                <article>
+                    <span>Active</span>
+                    <strong>@ActiveWorkItems.Count.ToString("N0")</strong>
+                </article>
+
+                <article>
+                    <span>Open todos</span>
+                    <strong>@OpenTodoCount.ToString("N0")</strong>
+                </article>
+
+                <article>
+                    <span>Completed</span>
+                    <strong>@CompletedWorkItemCount.ToString("N0")</strong>
+                </article>
+
+                <article>
+                    <span>Archived</span>
+                    <strong>@ArchivedWorkItemCount.ToString("N0")</strong>
+                </article>
+            </div>
+
+            <article class="mobile-work-card">
+                <div class="mobile-work-heading-row">
+                    <h3>Recently worked</h3>
+                    <span>Newest first</span>
+                </div>
+
+                @if (RecentlyWorked.Count == 0)
+                {
+                    <p class="mobile-work-muted">
+                        No recent work history is available.
+                    </p>
+                }
+                else
+                {
+                    <ol class="mobile-work-list">
+                        @foreach (WorkPlanningWorkItem item in RecentlyWorked)
+                        {
+                            <li>
+                                <div>
+                                    <strong>@item.Name</strong>
+                                    <span>@item.Priority</span>
+                                </div>
+
+                                <small>
+                                    @FormatRelativeTimestamp(item.LastWorkedAt!.Value)
+                                </small>
+                            </li>
+                        }
+                    </ol>
+                }
+            </article>
+
+            <article class="mobile-work-card">
+                <div class="mobile-work-heading-row">
+                    <h3>Active backlog</h3>
+                    <span>Most todos</span>
+                </div>
+
+                @if (ActiveWorkItemsByTodoCount.Count == 0)
+                {
+                    <p class="mobile-work-muted">
+                        No active work items. Weirdly responsible.
+                    </p>
+                }
+                else
+                {
+                    <ol class="mobile-work-list">
+                        @foreach (WorkPlanningWorkItem item in ActiveWorkItemsByTodoCount)
+                        {
+                            <li>
+                                <div>
+                                    <strong>@item.Name</strong>
+                                    <span>@item.Priority</span>
+                                </div>
+
+                                <small>
+                                    @item.ActiveTodoCount open
+                                </small>
+                            </li>
+                        }
+                    </ol>
+                }
+            </article>
+        }
+    </section>
+
+    <section class="mobile-work-section"
+             aria-labelledby="mobile-quick-add-title">
+        <h2 id="mobile-quick-add-title">
+            Quick add
+        </h2>
+
+        <QuickAddTodoPanel />
+    </section>
+</div>
+
+@code {
+    private DailyWorkPick? _dailyPick;
+    private RandomWorkPick? _randomPick;
+    private IReadOnlyList<WorkPlanningWorkItem> _workItems = [];
+
+    private bool _isLoading;
+    private bool _isDailyPickLoading;
+    private bool _isRandomPickLoading;
+    private bool _favorPriorityForRandomPick = true;
+
+    private string? _dailyPickError;
+    private string? _randomPickError;
+    private string? _workItemsError;
+
+    private IReadOnlyList<WorkPlanningWorkItem> ActiveWorkItems =>
+        _workItems
+            .Where(item =>
+                item.CompletedAt is null &&
+                item.ArchivedAt is null)
+            .OrderBy(item => item.Name)
+            .ToList();
+
+    private IReadOnlyList<WorkPlanningWorkItem> ActiveWorkItemsByTodoCount =>
+        ActiveWorkItems
+            .OrderByDescending(item => item.ActiveTodoCount)
+            .ThenBy(item => item.Name)
+            .Take(6)
+            .ToList();
+
+    private IReadOnlyList<WorkPlanningWorkItem> RecentlyWorked =>
+        _workItems
+            .Where(item => item.LastWorkedAt is not null)
+            .OrderByDescending(item => item.LastWorkedAt)
+            .Take(6)
+            .ToList();
+
+    private int OpenTodoCount =>
+        ActiveWorkItems.Sum(item => item.ActiveTodoCount);
+
+    private int CompletedWorkItemCount =>
+        _workItems.Count(item => item.CompletedAt is not null);
+
+    private int ArchivedWorkItemCount =>
+        _workItems.Count(item => item.ArchivedAt is not null);
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_isLoading)
+        {
+            return;
+        }
+
+        _isLoading = true;
+
+        try
+        {
+            await Task.WhenAll(
+                LoadDailyPickAsync(),
+                LoadWorkItemsAsync());
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task LoadDailyPickAsync()
+    {
+        if (_isDailyPickLoading)
+        {
+            return;
+        }
+
+        _isDailyPickLoading = true;
+
+        try
+        {
+            _dailyPick =
+                await WorkPlanningClient.GetDailyPickAsync();
+
+            _dailyPickError = null;
+        }
+        catch (Exception exception)
+            when (IsExpectedWorkPlanningException(exception))
+        {
+            _dailyPickError = CreateWorkPlanningErrorMessage("daily pick", exception);
+        }
+        finally
+        {
+            _isDailyPickLoading = false;
+        }
+    }
+
+    private async Task LoadRandomPickAsync()
+    {
+        if (_isRandomPickLoading)
+        {
+            return;
+        }
+
+        _isRandomPickLoading = true;
+
+        try
+        {
+            _randomPick =
+                await WorkPlanningClient.GetRandomPickAsync(_favorPriorityForRandomPick);
+
+            _randomPickError = null;
+        }
+        catch (Exception exception)
+            when (IsExpectedWorkPlanningException(exception))
+        {
+            _randomPickError =
+                CreateWorkPlanningErrorMessage(
+                    "random pick",
+                    exception);
+        }
+        finally
+        {
+            _isRandomPickLoading = false;
+        }
+    }
+
+    private async Task LoadWorkItemsAsync()
+    {
+        try
+        {
+            _workItems = await WorkPlanningClient.GetWorkItemsAsync();
+            _workItemsError = null;
+        }
+        catch (Exception exception)
+            when (IsExpectedWorkPlanningException(exception))
+        {
+            _randomPickError = CreateWorkPlanningErrorMessage("random pick",exception);
+        }
+    }
+
+    private static string FormatRelativeTimestamp(
+        DateTimeOffset timestamp)
+    {
+        TimeSpan age = DateTimeOffset.UtcNow - timestamp;
+
+        if (age < TimeSpan.Zero)
+        {
+            age = TimeSpan.Zero;
+        }
+
+        if (age < TimeSpan.FromMinutes(1))
+        {
+            return "just now";
+        }
+
+        if (age < TimeSpan.FromHours(1))
+        {
+            return FormatElapsed(
+                (int)age.TotalMinutes,
+                "minute");
+        }
+
+        if (age < TimeSpan.FromHours(24))
+        {
+            return FormatElapsed(
+                (int)age.TotalHours,
+                "hour");
+        }
+
+        return timestamp
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd");
+    }
+
+    private static string FormatElapsed(
+        int value,
+        string unit)
+    {
+        string suffix =
+            value == 1
+                ? string.Empty
+                : "s";
+
+        return $"{value} {unit}{suffix} ago";
+    }
+
+    private static bool IsExpectedWorkPlanningException(
+    Exception exception)
+    {
+        return exception is
+            HttpRequestException or
+            TaskCanceledException or
+            InvalidOperationException;
+    }
+
+    private static string CreateWorkPlanningErrorMessage(
+        string operation,
+        Exception exception)
+    {
+        return exception switch
+        {
+            TaskCanceledException =>
+                $"The {operation} request timed out.",
+
+            HttpRequestException httpException
+                when httpException.StatusCode is
+                    System.Net.HttpStatusCode.BadGateway =>
+                "Dashboard could not reach WSIWOT. Is WhatShouldIWorkOnToday running?",
+
+            HttpRequestException httpException =>
+                $"{operation} could not be loaded: {httpException.Message}",
+
+            _ =>
+                $"{operation} failed: {exception.Message}"
+        };
+    }
+}
