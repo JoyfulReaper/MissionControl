@@ -159,22 +159,72 @@
                     }
                 </article>
 
-                <article class="work-panel work-panel-muted">
+                <article class="work-panel">
                     <div class="work-panel-heading">
                         <h3>Random pick</h3>
-                        <span>Not wired yet</span>
+                        <span>
+                            @(_randomPick?.FavorPriority == true
+                                ? "Priority weighted"
+                                : "Uniform")
+                        </span>
                     </div>
 
-                    <p>
-                        Mission Control can show the daily pick and work-item summary now,
-                        but the current Work Planning client does not expose a random-pick
-                        endpoint yet.
-                    </p>
+                    <div class="random-pick-actions">
+                        <label class="random-pick-priority">
+                            <input type="checkbox"
+                                   class="form-check-input"
+                                   @bind="_favorPriorityForRandomPick"
+                                   disabled="@_isRandomPickLoading" />
 
-                    <p class="work-empty">
-                        Next slice: add a WSIWOT API endpoint for random pick, then wire
-                        this card to it.
-                    </p>
+                            Favor priority
+                        </label>
+
+                        <button type="button"
+                                class="btn btn-sm btn-outline-primary"
+                                disabled="@_isRandomPickLoading"
+                                @onclick="LoadRandomPickAsync">
+                            @(_isRandomPickLoading ? "Picking..." : "Pick random")
+                        </button>
+                    </div>
+
+                    @if (_randomPickError is not null)
+                    {
+                        <div class="alert alert-danger random-pick-error">
+                            @_randomPickError
+                        </div>
+                    }
+                    else if (_randomPick is null)
+                    {
+                        <p class="work-empty">
+                            Hit the button when you want chaos goblin mode.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="random-pick-card">
+                            <div class="daily-work-project">
+                                @_randomPick.Todo.WorkItemName
+                            </div>
+
+                            <div class="daily-work-task">
+                                @_randomPick.Todo.Task
+                            </div>
+
+                            <div class="daily-work-meta">
+                                <span class="daily-work-badge">
+                                    Energy: @_randomPick.Todo.Energy
+                                </span>
+
+                                <span class="daily-work-badge">
+                                    Effort: @_randomPick.Todo.Effort
+                                </span>
+
+                                <span class="daily-work-badge">
+                                    Priority: @_randomPick.Todo.Priority
+                                </span>
+                            </div>
+                        </div>
+                    }
                 </article>
             </div>
         }
@@ -185,6 +235,11 @@
     private IReadOnlyList<WorkPlanningWorkItem> _workItems = [];
     private bool _isLoading;
     private string? _error;
+
+    private RandomWorkPick? _randomPick;
+    private bool _isRandomPickLoading;
+    private bool _favorPriorityForRandomPick = true;
+    private string? _randomPickError;
 
     private IReadOnlyList<WorkPlanningWorkItem> ActiveWorkItems =>
         _workItems
@@ -249,6 +304,34 @@
         finally
         {
             _isLoading = false;
+        }
+    }
+
+    private async Task LoadRandomPickAsync()
+    {
+        if (_isRandomPickLoading)
+        {
+            return;
+        }
+
+        _isRandomPickLoading = true;
+
+        try
+        {
+            _randomPick = await WorkPlanningClient.GetRandomPickAsync(_favorPriorityForRandomPick);
+            _randomPickError = null;
+        }
+        catch (HttpRequestException exception)
+        {
+            _randomPickError = "Random pick could not be loaded: " + exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _randomPickError = "The random pick request timed out.";
+        }
+        finally
+        {
+            _isRandomPickLoading = false;
         }
     }
 }

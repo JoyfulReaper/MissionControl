@@ -148,3 +148,37 @@
         gap: 0.25rem;
     }
 }
+
+.random-pick-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.random-pick-priority {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--bs-secondary-color);
+    font-size: 0.875rem;
+}
+
+.random-pick-card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    background: var(--bs-tertiary-bg);
+}
+
+.random-pick-error {
+    margin-top: 0.75rem;
+}
+
+@media (max-width: 575.98px) {
+    .random-pick-actions {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

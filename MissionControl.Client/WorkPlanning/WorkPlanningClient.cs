@@ -25,6 +25,26 @@ public sealed class WorkPlanningClient(
         return await ReadRequiredAsync<DailyWorkPick>(response, cancellationToken);
     }
 
+    public async Task<RandomWorkPick?> GetRandomPickAsync(
+        bool favorPriority = false,
+        CancellationToken cancellationToken = default)
+    {
+        string path = favorPriority
+            ? "random-pick?favorPriority=true"
+            : "random-pick";
+
+        using HttpResponseMessage response = await client.GetAsync(BuildPath(path), cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NoContent)
+        {
+            return null;
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        return await ReadRequiredAsync<RandomWorkPick>(response, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<WorkPlanningWorkItem>>
         GetWorkItemsAsync(CancellationToken cancellationToken = default)
     {
@@ -80,11 +100,7 @@ public sealed class WorkPlanningClient(
                 "prefix must be relative.");
         }
 
-        return value.EndsWith(
-            "/",
-            StringComparison.Ordinal)
-                ? value
-                : $"{value}/";
+        return value.EndsWith('/') ? value : $"{value}/";
     }
 
     private static async Task<T> ReadRequiredAsync<T>(

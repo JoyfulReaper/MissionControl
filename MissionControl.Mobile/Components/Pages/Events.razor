@@ -294,8 +294,8 @@
                                 <dt>Received</dt>
                                 <dd>
                                     <time datetime="@item.ReceivedAt.ToString("O")"
-                                          title="@FormatTimestamp(item.ReceivedAt)">
-                                        @FormatRelativeTimestamp(item.ReceivedAt)
+                                          title="@FormatRelativeTimestamp(item.ReceivedAt)">
+                                        @FormatTimestamp(item.ReceivedAt)
                                     </time>
                                 </dd>
                             </div>
@@ -460,7 +460,7 @@
     {
         return timestamp
             .ToLocalTime()
-            .ToString("yyyy-MM-dd HH:mm:ss");
+            .ToString("yyyy-MM-dd HH:mm:ss zzz");
     }
 
     private static string FormatRelativeTimestamp(
