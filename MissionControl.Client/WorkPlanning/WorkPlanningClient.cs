@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace MissionControl.Client.WorkPlanning;
 
@@ -29,9 +30,7 @@ public sealed class WorkPlanningClient(
         bool favorPriority = false,
         CancellationToken cancellationToken = default)
     {
-        string path = favorPriority
-            ? "random-pick?favorPriority=true"
-            : "random-pick";
+        string path = $"random-pick?favorPriority={favorPriority.ToString().ToLowerInvariant()}";
 
         using HttpResponseMessage response = await client.GetAsync(BuildPath(path), cancellationToken);
 
@@ -107,10 +106,23 @@ public sealed class WorkPlanningClient(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {
-        T? value =
-            await response.Content.ReadFromJsonAsync<T>(cancellationToken);
+        try
+        {
+            T? value = await response.Content.ReadFromJsonAsync<T>(cancellationToken);
 
-        return value ??
-            throw new InvalidOperationException("The Work Planning API response was empty.");
+            return value ??
+                throw new InvalidOperationException(
+                    "The Work Planning API response was empty.");
+        }
+        catch (JsonException exception)
+        {
+            string? contentType = response.Content.Headers.ContentType?.ToString();
+
+            throw new InvalidOperationException(
+                "The Work Planning API returned invalid JSON. " +
+                $"Status: {(int)response.StatusCode} {response.ReasonPhrase}. " +
+                $"Content-Type: {contentType ?? "unknown"}.",
+                exception);
+        }
     }
 }

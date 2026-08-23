@@ -74,7 +74,7 @@ public static class
 
     private static async Task<IResult>
     GetRandomPickAsync(
-        bool favorPriority,
+        bool? favorPriority,
         IWorkPlanningClient workPlanningClient,
         HttpResponse response,
         CancellationToken cancellationToken)
@@ -85,7 +85,7 @@ public static class
         {
             RandomWorkPick? pick = await workPlanningClient
                 .GetRandomPickAsync(
-                    favorPriority,
+                    favorPriority ?? false,
                     cancellationToken);
 
             return pick is null
