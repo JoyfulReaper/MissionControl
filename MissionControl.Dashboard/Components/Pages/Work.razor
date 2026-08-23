@@ -1,0 +1,254 @@
+﻿@page "/work"
+@using MissionControl.Client.WorkPlanning
+
+@inject IWorkPlanningClient WorkPlanningClient
+@inject IDashboardDateTimeFormatter DateTimeFormatter
+
+<PageTitle>Work</PageTitle>
+
+<div class="work-page">
+    <header class="page-header">
+        <div class="page-eyebrow">
+            Work planning
+        </div>
+
+        <h1>What Should I Work On Today?</h1>
+
+        <p class="page-description">
+            Daily pick, quick capture, and a small overview of active work.
+        </p>
+    </header>
+
+    <section class="work-actions-grid"
+             aria-label="Work planning actions">
+        <DailyWorkPickPanel TimestampFormatter="DateTimeFormatter.Format" />
+        <QuickAddTodoPanel />
+    </section>
+
+    <section class="work-summary-section"
+             aria-labelledby="work-summary-title">
+        <div class="section-heading">
+            <div>
+                <div class="page-eyebrow">
+                    WSIWOT overview
+                </div>
+
+                <h2 id="work-summary-title">
+                    Work summary
+                </h2>
+            </div>
+
+            <button type="button"
+                    class="btn btn-outline-primary"
+                    disabled="@_isLoading"
+                    @onclick="LoadAsync">
+                @(_isLoading ? "Loading..." : "Refresh")
+            </button>
+        </div>
+
+        @if (_isLoading && _workItems.Count == 0)
+        {
+            <div class="work-summary-loading">
+                Loading work items...
+            </div>
+        }
+        else if (_error is not null)
+        {
+            <div class="alert alert-danger">
+                @_error
+            </div>
+        }
+        else
+        {
+            <div class="work-stat-grid">
+                <article class="work-stat-card">
+                    <span>Active work items</span>
+                    <strong>@ActiveWorkItems.Count.ToString("N0")</strong>
+                </article>
+
+                <article class="work-stat-card">
+                    <span>Open todos</span>
+                    <strong>@OpenTodoCount.ToString("N0")</strong>
+                </article>
+
+                <article class="work-stat-card">
+                    <span>Completed work items</span>
+                    <strong>@CompletedWorkItemCount.ToString("N0")</strong>
+                </article>
+
+                <article class="work-stat-card">
+                    <span>Archived work items</span>
+                    <strong>@ArchivedWorkItemCount.ToString("N0")</strong>
+                </article>
+            </div>
+
+            <div class="work-panels-grid">
+                <article class="work-panel">
+                    <div class="work-panel-heading">
+                        <h3>Recently worked</h3>
+                        <span>Newest first</span>
+                    </div>
+
+                    @if (RecentlyWorked.Count == 0)
+                    {
+                        <p class="work-empty">
+                            No recent work history is available from the current API.
+                        </p>
+                    }
+                    else
+                    {
+                        <ol class="work-list">
+                            @foreach (WorkPlanningWorkItem item in RecentlyWorked)
+                            {
+                                <li>
+                                    <div>
+                                        <strong>@item.Name</strong>
+
+                                        @if (!string.IsNullOrWhiteSpace(item.Kind))
+                                        {
+                                            <span class="work-kind">
+                                                @item.Kind
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <span title="@DateTimeFormatter.Format(item.LastWorkedAt!.Value)">
+                                        @DateTimeFormatter.FormatRelative(item.LastWorkedAt.Value)
+                                    </span>
+                                </li>
+                            }
+                        </ol>
+                    }
+                </article>
+
+                <article class="work-panel">
+                    <div class="work-panel-heading">
+                        <h3>Active backlog</h3>
+                        <span>Highest todo count</span>
+                    </div>
+
+                    @if (ActiveWorkItems.Count == 0)
+                    {
+                        <p class="work-empty">
+                            No active work items. Suspiciously responsible.
+                        </p>
+                    }
+                    else
+                    {
+                        <ol class="work-list">
+                            @foreach (WorkPlanningWorkItem item in ActiveWorkItemsByTodoCount)
+                            {
+                                <li>
+                                    <div>
+                                        <strong>@item.Name</strong>
+
+                                        @if (!string.IsNullOrWhiteSpace(item.Kind))
+                                        {
+                                            <span class="work-kind">
+                                                @item.Kind
+                                            </span>
+                                        }
+                                    </div>
+
+                                    <span>
+                                        @item.ActiveTodoCount open
+                                    </span>
+                                </li>
+                            }
+                        </ol>
+                    }
+                </article>
+
+                <article class="work-panel work-panel-muted">
+                    <div class="work-panel-heading">
+                        <h3>Random pick</h3>
+                        <span>Not wired yet</span>
+                    </div>
+
+                    <p>
+                        Mission Control can show the daily pick and work-item summary now,
+                        but the current Work Planning client does not expose a random-pick
+                        endpoint yet.
+                    </p>
+
+                    <p class="work-empty">
+                        Next slice: add a WSIWOT API endpoint for random pick, then wire
+                        this card to it.
+                    </p>
+                </article>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private IReadOnlyList<WorkPlanningWorkItem> _workItems = [];
+    private bool _isLoading;
+    private string? _error;
+
+    private IReadOnlyList<WorkPlanningWorkItem> ActiveWorkItems =>
+        _workItems
+            .Where(item =>
+                item.CompletedAt is null &&
+                item.ArchivedAt is null)
+            .OrderBy(item => item.Name)
+            .ToList();
+
+    private IReadOnlyList<WorkPlanningWorkItem> ActiveWorkItemsByTodoCount =>
+        ActiveWorkItems
+            .OrderByDescending(item => item.ActiveTodoCount)
+            .ThenBy(item => item.Name)
+            .Take(8)
+            .ToList();
+
+    private IReadOnlyList<WorkPlanningWorkItem> RecentlyWorked =>
+        _workItems
+            .Where(item => item.LastWorkedAt is not null)
+            .OrderByDescending(item => item.LastWorkedAt)
+            .Take(8)
+            .ToList();
+
+    private int OpenTodoCount =>
+        ActiveWorkItems.Sum(item => item.ActiveTodoCount);
+
+    private int CompletedWorkItemCount =>
+        _workItems.Count(item => item.CompletedAt is not null);
+
+    private int ArchivedWorkItemCount =>
+        _workItems.Count(item => item.ArchivedAt is not null);
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_isLoading)
+        {
+            return;
+        }
+
+        _isLoading = true;
+
+        try
+        {
+            _workItems = await WorkPlanningClient.GetWorkItemsAsync();
+            _error = null;
+        }
+        catch (HttpRequestException exception)
+        {
+            _error =
+                "Work Planning could not be reached: " +
+                exception.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            _error = "The Work Planning request timed out.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}
