@@ -1,0 +1,25 @@
+# NOTE WELL THIS IS JUST SO I CAN BUILD THIS WITHOUT
+# INSTALLING THE .NET SDK ON THE VPS
+# AGENT LIKELY WILL NOT WORK FROM A DOCKERCONTAINER
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+COPY . .
+
+RUN dotnet restore \
+    MissionControl.Agent/MissionControl.Agent.csproj
+
+RUN dotnet publish \
+    MissionControl.Agent/MissionControl.Agent.csproj \
+    --configuration Release \
+    --output /app/publish \
+    --no-restore \
+    /p:UseAppHost=true
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+
+WORKDIR /app
+COPY --from=build /app/publish .
+
+ENTRYPOINT ["./MissionControl.Agent"]
