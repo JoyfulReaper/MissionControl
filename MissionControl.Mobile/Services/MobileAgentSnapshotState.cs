@@ -50,9 +50,7 @@ public sealed class MobileAgentSnapshotState(
 
         try
         {
-            Snapshot =
-                await agentClient.GetSnapshotAsync(
-                    cancellationToken);
+            Snapshot = await agentClient.GetSnapshotAsync(cancellationToken);
 
             ErrorMessage = null;
         }
