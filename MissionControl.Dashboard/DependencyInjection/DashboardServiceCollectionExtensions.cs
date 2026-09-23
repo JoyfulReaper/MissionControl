@@ -9,6 +9,7 @@ using MissionControl.Client.Archive;
 using MissionControl.Client.GitActivity;
 using MissionControl.Client.Infrastructure;
 using MissionControl.Client.WorkPlanning;
+using MissionControl.Dashboard.Agents;
 using MissionControl.Dashboard.Authentication;
 using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Events;
@@ -38,6 +39,7 @@ public static class DashboardServiceCollectionExtensions
         AddDashboardAuthenticationStorage(services, configuration);
         AddArchiveClient(services, configuration);
         AddAgentClient(services, configuration);
+        AddAgentNodesClient(services, configuration);
         AddGitActivityClient(services, configuration);
         AddWorkPlanningClient(services, configuration);
         AddGreenCloudClient(services, configuration);
@@ -311,6 +313,30 @@ public static class DashboardServiceCollectionExtensions
                 httpClient.BaseAddress = new Uri(agentBaseUrl);
                 httpClient.Timeout = TimeSpan.FromSeconds(10);
             });
+    }
+
+    private static void AddAgentNodesClient(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services
+            .AddOptions<AgentNodesOptions>()
+            .Bind(configuration.GetSection(AgentNodesOptions.SectionName))
+            .ValidateOnStart();
+
+        services.AddSingleton<
+            IValidateOptions<AgentNodesOptions>,
+            AgentNodesOptionsValidator>();
+
+        services.AddHttpClient(
+            AgentNodeSnapshotClient.HttpClientName,
+            httpClient =>
+            {
+                httpClient.Timeout =
+                    TimeSpan.FromSeconds(10);
+            });
+
+        services.AddSingleton<IAgentFleetClient, AgentNodeSnapshotClient>();
     }
 
     private static void AddDashboardFormatting(IServiceCollection services)

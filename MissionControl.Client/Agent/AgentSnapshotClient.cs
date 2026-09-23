@@ -19,12 +19,10 @@ public sealed class AgentSnapshotClient(HttpClient client)
 
         response.EnsureSuccessStatusCode();
 
-        PublicNodeSnapshot? snapshot =
-            await response.Content
-                .ReadFromJsonAsync<PublicNodeSnapshot>(cancellationToken);
+        PublicNodeSnapshot? snapshot = await response.Content
+            .ReadFromJsonAsync<PublicNodeSnapshot>(cancellationToken);
 
         return snapshot
-            ?? throw new InvalidOperationException(
-                "The Agent snapshot response was empty.");
+            ?? throw new InvalidOperationException("The Agent snapshot response was empty.");
     }
 }
