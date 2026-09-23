@@ -4,7 +4,7 @@ using MissionControl.Contracts.Agent;
 
 namespace MissionControl.Dashboard.Agents;
 
-public sealed class AgentNodeSnapshotClient(
+public sealed class AgentFleetClient(
     IHttpClientFactory httpClientFactory,
     IOptions<AgentNodesOptions> options)
     : IAgentFleetClient

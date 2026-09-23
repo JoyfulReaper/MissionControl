@@ -329,14 +329,14 @@ public static class DashboardServiceCollectionExtensions
             AgentNodesOptionsValidator>();
 
         services.AddHttpClient(
-            AgentNodeSnapshotClient.HttpClientName,
+            AgentFleetClient.HttpClientName,
             httpClient =>
             {
                 httpClient.Timeout =
                     TimeSpan.FromSeconds(10);
             });
 
-        services.AddSingleton<IAgentFleetClient, AgentNodeSnapshotClient>();
+        services.AddSingleton<IAgentFleetClient, AgentFleetClient>();
     }
 
     private static void AddDashboardFormatting(IServiceCollection services)
