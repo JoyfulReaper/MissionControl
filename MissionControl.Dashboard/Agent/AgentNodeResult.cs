@@ -8,5 +8,7 @@ public sealed record AgentNodeResult(
     PublicNodeSnapshot? Snapshot,
     string? Error)
 {
-    public bool Succeeded => Snapshot is not null;
+    public bool Succeeded =>
+        Snapshot is not null &&
+        Error is null;
 }
