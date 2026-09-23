@@ -43,9 +43,13 @@ internal class SqliteNodeSnapshotStore(AgentDatabase database) : INodeSnapshotSt
 
         string capturedAt = snapshot.CapturedAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
 
+        string nodeKey = string.IsNullOrWhiteSpace(snapshot.NodeId)
+            ? snapshot.Node
+            : snapshot.NodeId.Trim();
+
         var parameters = new
         {
-            snapshot.Node,
+            Node = nodeKey,
             CapturedAt = capturedAt,
             Payload = JsonSerializer.Serialize(snapshot, JsonOptions),
             UpdatedAt = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture)
