@@ -27,6 +27,38 @@
     gap: 0.8rem;
 }
 
+.overview-hosts {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.overview-host {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.overview-host-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+    .overview-host-heading h3 {
+        margin: 0;
+        color: var(--mc-text);
+        font-size: 1rem;
+    }
+
+.overview-host-id {
+    margin-bottom: 0.15rem;
+    color: var(--mc-text-muted);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
 .section-heading {
     display: flex;
     align-items: end;
@@ -79,6 +111,11 @@
 @media (max-width: 650px) {
     .dashboard-home {
         padding-top: 0.5rem;
+
+        .overview-host-heading {
+            align-items: start;
+            flex-direction: column;
+        }
     }
 
     .section-heading {
