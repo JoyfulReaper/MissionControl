@@ -39,7 +39,7 @@ public static class DashboardServiceCollectionExtensions
         AddDashboardAuthenticationStorage(services, configuration);
         AddArchiveClient(services, configuration);
         AddAgentClient(services, configuration);
-        AddAgentNodesClient(services, configuration);
+        AddAgentFleetClient(services, configuration);
         AddGitActivityClient(services, configuration);
         AddWorkPlanningClient(services, configuration);
         AddGreenCloudClient(services, configuration);
@@ -315,7 +315,7 @@ public static class DashboardServiceCollectionExtensions
             });
     }
 
-    private static void AddAgentNodesClient(
+    private static void AddAgentFleetClient(
         IServiceCollection services,
         IConfiguration configuration)
     {

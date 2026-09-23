@@ -9,7 +9,7 @@ public sealed class AgentFleetClient(
     IOptions<AgentNodesOptions> options)
     : IAgentFleetClient
 {
-    internal const string HttpClientName = "MissionControl.AgentNodes";
+    internal const string HttpClientName = "MissionControl.AgentFleet";
 
     private readonly AgentNodesOptions _options = options.Value;
 
