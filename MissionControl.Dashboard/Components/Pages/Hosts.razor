@@ -1,0 +1,190 @@
+﻿@page "/hosts"
+
+@implements IAsyncDisposable
+
+@inject IAgentFleetClient AgentFleetClient
+@inject IDashboardDateTimeFormatter DateTimeFormatter
+@inject IOptions<DashboardRefreshOptions> RefreshOptions
+@inject TimeProvider TimeProvider
+@inject IDashboardPollingLoop PollingLoop
+
+<PageTitle>Hosts</PageTitle>
+
+<div class="hosts-page">
+    <header class="page-header">
+        <div>
+            <div class="page-eyebrow">
+                Infrastructure
+            </div>
+
+            <h1>Hosts</h1>
+
+            <p class="page-description">
+                Resource and Agent status for Mission Control nodes.
+            </p>
+        </div>
+
+        <button type="button"
+                class="btn btn-outline-primary"
+                disabled="@(_fleetRefresh.IsInitialLoading ||
+                                        _fleetRefresh.IsRefreshing)"
+                @onclick="RefreshAsync">
+            @(_fleetRefresh.IsRefreshing
+                ? "Refreshing..."
+                : "Refresh all")
+        </button>
+    </header>
+
+    @if (_fleetRefresh.IsInitialLoading)
+    {
+        <NodeResourceCards IsLoading="true" />
+    }
+    else if (_fleetRefresh.CurrentNodes.Count == 0)
+    {
+        <div class="alert alert-warning">
+            @(_fleetRefresh.RefreshWarning ??
+                "No Agent nodes are configured.")
+        </div>
+    }
+    else
+    {
+        @foreach (AgentNodeResult node in _fleetRefresh.CurrentNodes)
+        {
+            <section class="host-section">
+                <div class="host-heading">
+                    <div>
+                        <div class="page-eyebrow">
+                            @node.NodeId
+                        </div>
+
+                        <h2>@node.DisplayName</h2>
+                    </div>
+
+                    @if (node.Succeeded)
+                    {
+                        <span class="service-chip status-running">
+                            ONLINE
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="service-chip status-warning">
+                            DEGRADED
+                        </span>
+                    }
+                </div>
+
+                <AgentSnapshotPanel Snapshot="node.Snapshot"
+                                    IsLoading="false"
+                                    IsRefreshing="_fleetRefresh.IsRefreshing"
+                                    IsManualRefreshing="_isManualRefresh"
+                                    ErrorMessage="@node.Error"
+                                    TimestampFormatter="@(timestamp =>
+                                        DateTimeFormatter.Format(timestamp))"
+                                    OnRefresh="RefreshAsync" />
+
+                <NodeResourceCards Host="node.Snapshot?.Host"
+                                   IsLoading="false"
+                                   ErrorMessage="@GetResourceError(node)" />
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private AgentFleetRefreshController _fleetRefresh = null!;
+
+    private readonly CancellationTokenSource
+        _disposeSource = new();
+
+    private Task? _pollingTask;
+    private bool _isManualRefresh;
+    private bool _disposed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _fleetRefresh =
+            new AgentFleetRefreshController(
+                AgentFleetClient,
+                TimeProvider,
+                TimeSpan.FromSeconds(
+                    RefreshOptions.Value
+                        .SnapshotStaleAfterSeconds));
+
+        await _fleetRefresh.RefreshAsync(
+            _disposeSource.Token);
+
+        _pollingTask =
+            PollingLoop.RunAsync(
+                TimeSpan.FromSeconds(
+                    RefreshOptions.Value
+                        .AgentSnapshotRefreshSeconds),
+                RefreshFleetAsync,
+                _disposeSource.Token);
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_fleetRefresh.IsRefreshing)
+        {
+            return;
+        }
+
+        _isManualRefresh = true;
+
+        try
+        {
+            await _fleetRefresh.RefreshAsync(
+                _disposeSource.Token);
+        }
+        finally
+        {
+            _isManualRefresh = false;
+        }
+    }
+
+    private async Task RefreshFleetAsync(
+        CancellationToken cancellationToken)
+    {
+        await _fleetRefresh.RefreshAsync(
+            cancellationToken);
+
+        if (!_disposed &&
+            !cancellationToken.IsCancellationRequested)
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string? GetResourceError(
+        AgentNodeResult node)
+    {
+        if (node.Snapshot?.Host is not null)
+        {
+            return null;
+        }
+
+        return node.Error ??
+            NodeResourceCalculations.UnavailableMessage;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+
+        await _disposeSource.CancelAsync();
+
+        if (_pollingTask is not null)
+        {
+            try
+            {
+                await _pollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _disposeSource.Dispose();
+    }
+}
