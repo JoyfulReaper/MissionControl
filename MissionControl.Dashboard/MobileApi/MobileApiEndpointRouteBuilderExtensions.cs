@@ -1,4 +1,4 @@
-﻿using MissionControl.Client.Archive;
+using MissionControl.Client.Archive;
 using MissionControl.Client.GitActivity;
 using MissionControl.Contracts.Archive;
 using MissionControl.Contracts.GitActivity;
@@ -65,6 +65,7 @@ public static class MobileApiEndpointRouteBuilderExtensions
 
         endpoints.MapWorkPlanningMobileApiEndpoints();
         endpoints.MapBandwidthMobileApiEndpoint();
+        endpoints.MapHostsMobileApiEndpoint();
 
         return endpoints;
     }

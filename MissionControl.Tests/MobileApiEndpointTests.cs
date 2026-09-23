@@ -1,6 +1,14 @@
 extern alias DashboardApp;
 
 using DashboardApp::MissionControl.Dashboard.MobileApi;
+using AgentNodeResult =
+    DashboardApp::MissionControl.Dashboard.Agents.AgentNodeResult;
+using IAgentFleetClient =
+    DashboardApp::MissionControl.Dashboard.Agents.IAgentFleetClient;
+using GreenCloudBandwidthNodeResult =
+    DashboardApp::MissionControl.Dashboard.GreenCloud.GreenCloudBandwidthNodeResult;
+using IGreenCloudBandwidthFleetClient =
+    DashboardApp::MissionControl.Dashboard.GreenCloud.IGreenCloudBandwidthFleetClient;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -12,6 +20,7 @@ using MissionControl.Client.Archive;
 using MissionControl.Client.GitActivity;
 using MissionControl.Client.Infrastructure;
 using MissionControl.Client.WorkPlanning;
+using MissionControl.Contracts.Agent;
 using MissionControl.Contracts.Archive;
 using MissionControl.Contracts.GitActivity;
 using System.Net;
@@ -164,6 +173,170 @@ public sealed class MobileApiEndpointTests
     }
 
     [Fact]
+    public async Task HostsProxyReturnsFleetWithBandwidthAndDisablesCaching()
+    {
+        PublicNodeSnapshot agentSnapshot =
+            CreateAgentSnapshot("clanker");
+
+        BandwidthUsageSnapshot bandwidthSnapshot =
+            CreateBandwidthSnapshot();
+
+        var agentFleetClient =
+            new RecordingAgentFleetClient(
+                [
+                    new AgentNodeResult(
+                        "clanker",
+                        "Clanker",
+                        agentSnapshot,
+                        Error: null)
+                ]);
+
+        var bandwidthFleetClient =
+            new RecordingGreenCloudBandwidthFleetClient(
+                [
+                    new GreenCloudBandwidthNodeResult(
+                        "clanker",
+                        bandwidthSnapshot,
+                        Error: null)
+                ]);
+
+        await using WebApplication app =
+            CreateApplication(
+                new FailingArchiveEventClient(
+                    new HttpRequestException()),
+                agentFleetClient: agentFleetClient,
+                bandwidthFleetClient:
+                    bandwidthFleetClient);
+
+        await app.StartAsync();
+
+        using HttpClient client =
+            app.GetTestClient();
+
+        using var request =
+            CreateAuthorizedRequest(
+                "/api/mobile/hosts");
+
+        using HttpResponseMessage response =
+            await client.SendAsync(request);
+
+        HostNodeSnapshot[]? hosts =
+            await response.Content
+                .ReadFromJsonAsync<HostNodeSnapshot[]>();
+
+        HostNodeSnapshot host =
+            Assert.Single(hosts!);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.Equal(
+            "clanker",
+            host.NodeId);
+        Assert.Equal(
+            "Clanker",
+            host.DisplayName);
+        Assert.Equal(
+            agentSnapshot,
+            host.AgentSnapshot);
+        Assert.Null(host.AgentError);
+        Assert.True(host.BandwidthConfigured);
+        Assert.Equal(
+            bandwidthSnapshot,
+            host.Bandwidth);
+        Assert.Null(host.BandwidthError);
+        Assert.True(agentFleetClient.WasCalled);
+        Assert.True(
+            bandwidthFleetClient.WasCalled);
+        Assert.Contains(
+            "no-store",
+            response.Headers.CacheControl?.ToString());
+        Assert.Contains(
+            "no-cache",
+            response.Headers.Pragma.ToString());
+    }
+
+    [Fact]
+    public async Task HostsProxySanitizesPerNodeFailures()
+    {
+        const string secret =
+            "private-internal-detail";
+
+        var agentFleetClient =
+            new RecordingAgentFleetClient(
+                [
+                    new AgentNodeResult(
+                        "scopecreep",
+                        "ScopeCreep",
+                        Snapshot: null,
+                        Error:
+                            $"Connection refused at " +
+                            $"http://10.99.0.9:5194/{secret}")
+                ]);
+
+        var bandwidthFleetClient =
+            new RecordingGreenCloudBandwidthFleetClient(
+                [
+                    new GreenCloudBandwidthNodeResult(
+                        "scopecreep",
+                        Snapshot: null,
+                        Error:
+                            $"GreenCloud failure using " +
+                            secret)
+                ]);
+
+        await using WebApplication app =
+            CreateApplication(
+                new FailingArchiveEventClient(
+                    new HttpRequestException()),
+                agentFleetClient: agentFleetClient,
+                bandwidthFleetClient:
+                    bandwidthFleetClient);
+
+        await app.StartAsync();
+
+        using HttpClient client =
+            app.GetTestClient();
+
+        using var request =
+            CreateAuthorizedRequest(
+                "/api/mobile/hosts");
+
+        using HttpResponseMessage response =
+            await client.SendAsync(request);
+
+        string body =
+            await response.Content.ReadAsStringAsync();
+
+        HostNodeSnapshot[]? hosts =
+            System.Text.Json.JsonSerializer
+                .Deserialize<HostNodeSnapshot[]>(body);
+
+        HostNodeSnapshot host =
+            Assert.Single(hosts!);
+
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.Equal(
+            "Agent snapshot could not be retrieved.",
+            host.AgentError);
+        Assert.True(host.BandwidthConfigured);
+        Assert.Equal(
+            "GreenCloud bandwidth could not be retrieved.",
+            host.BandwidthError);
+        Assert.DoesNotContain(
+            secret,
+            body);
+        Assert.DoesNotContain(
+            "10.99.0.9",
+            body);
+        Assert.DoesNotContain(
+            "5194",
+            body);
+    }
+
+    [Fact]
     public async Task BandwidthProxyReturnsSnapshotAndDisablesCaching()
     {
         BandwidthUsageSnapshot snapshot = CreateBandwidthSnapshot();
@@ -226,7 +399,10 @@ public sealed class MobileApiEndpointTests
     private static WebApplication CreateApplication(
         IArchiveEventClient archiveClient,
         IGitActivityClient? gitActivityClient = null,
-        IBandwidthUsageClient? bandwidthClient = null)
+        IBandwidthUsageClient? bandwidthClient = null,
+        IAgentFleetClient? agentFleetClient = null,
+        IGreenCloudBandwidthFleetClient?
+            bandwidthFleetClient = null)
     {
         WebApplicationBuilder builder =
             WebApplication.CreateBuilder();
@@ -265,6 +441,17 @@ public sealed class MobileApiEndpointTests
             bandwidthClient ??
             new RecordingBandwidthUsageClient(
                 CreateBandwidthSnapshot()));
+
+        builder.Services.AddSingleton<IAgentFleetClient>(
+            agentFleetClient ??
+            new RecordingAgentFleetClient([]));
+
+        builder.Services
+            .AddSingleton<IGreenCloudBandwidthFleetClient>(
+                bandwidthFleetClient ??
+                new RecordingGreenCloudBandwidthFleetClient(
+                    []));
+
         builder.Services.AddSingleton<IWorkPlanningClient>(
             new StubWorkPlanningClient());
 
@@ -284,6 +471,36 @@ public sealed class MobileApiEndpointTests
         var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Authorization = new("Test", "accepted");
         return request;
+    }
+
+    private static PublicNodeSnapshot CreateAgentSnapshot(
+        string nodeId)
+    {
+        return new PublicNodeSnapshot(
+            nodeId,
+            DateTimeOffset.Parse(
+                "2026-09-23T20:00:00Z"),
+            5,
+            Stale: false,
+            Host: new PublicHostMetric(
+                2,
+                12.5,
+                4_000_000_000,
+                3_000_000_000),
+            MissionControlPublishSucceeded: true,
+            LastMissionControlPublishAttemptAt:
+                DateTimeOffset.Parse(
+                    "2026-09-23T20:00:00Z"),
+            Protocols: [],
+            Containers: [],
+            DockerAvailable: true,
+            DockerError: null)
+        {
+            NodeId = nodeId,
+            HostCapturedAt =
+                DateTimeOffset.Parse(
+                    "2026-09-23T20:00:00Z")
+        };
     }
 
     private static BandwidthUsageSnapshot CreateBandwidthSnapshot()
@@ -440,6 +657,38 @@ public sealed class MobileApiEndpointTests
                 ? Task.FromResult(snapshot!)
                 : Task.FromException<BandwidthUsageSnapshot>(
                     exception);
+        }
+    }
+
+    private sealed class RecordingAgentFleetClient(
+        IReadOnlyList<AgentNodeResult> nodes)
+        : IAgentFleetClient
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task<IReadOnlyList<AgentNodeResult>>
+            GetSnapshotsAsync(
+                CancellationToken cancellationToken = default)
+        {
+            WasCalled = true;
+
+            return Task.FromResult(nodes);
+        }
+    }
+
+    private sealed class RecordingGreenCloudBandwidthFleetClient(
+        IReadOnlyList<GreenCloudBandwidthNodeResult> nodes)
+        : IGreenCloudBandwidthFleetClient
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task<IReadOnlyList<GreenCloudBandwidthNodeResult>>
+            GetAllAsync(
+                CancellationToken cancellationToken = default)
+        {
+            WasCalled = true;
+
+            return Task.FromResult(nodes);
         }
     }
 
