@@ -4,30 +4,35 @@ public sealed class GreenCloudBandwidthRateState
 {
     private readonly object _sync = new();
 
-    private double? _previousRx;
-    private double? _previousTx;
-    private DateTimeOffset? _previousTime;
+    private readonly Dictionary<string, RateSample> _previousByServer = new(StringComparer.OrdinalIgnoreCase);
 
     public (
         double? RxBytesPerSecond,
         double? TxBytesPerSecond)
-        Update(double rx, double tx, DateTimeOffset now)
+        Update(
+            string serverKey,
+            double rx,
+            double tx,
+            DateTimeOffset now)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serverKey);
+
         lock (_sync)
         {
             double? rxRate = null;
             double? txRate = null;
 
-            if (_previousTime is DateTimeOffset previousTime &&
-                _previousRx is double previousRx &&
-                _previousTx is double previousTx)
+            if (_previousByServer.TryGetValue(
+                    serverKey,
+                    out RateSample? previous))
             {
-                double seconds = (now - previousTime).TotalSeconds;
+                double seconds =
+                    (now - previous.Time).TotalSeconds;
 
                 if (seconds > 0)
                 {
-                    double rxDifference = rx - previousRx;
-                    double txDifference = tx - previousTx;
+                    double rxDifference = rx - previous.Rx;
+                    double txDifference = tx - previous.Tx;
 
                     if (rxDifference >= 0)
                     {
@@ -41,11 +46,20 @@ public sealed class GreenCloudBandwidthRateState
                 }
             }
 
-            _previousRx = rx;
-            _previousTx = tx;
-            _previousTime = now;
+            _previousByServer[serverKey] =
+                new RateSample(
+                    rx,
+                    tx,
+                    now);
 
-            return (rxRate, txRate);
+            return (
+                rxRate,
+                txRate);
         }
     }
+
+    private sealed record RateSample(
+        double Rx,
+        double Tx,
+        DateTimeOffset Time);
 }
