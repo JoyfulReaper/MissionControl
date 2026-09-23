@@ -463,6 +463,199 @@
           "availability",
           "uptime"
         ]
+      },
+      {
+        "Id": "happy-gopher-ygg",
+        "Name": "HappyGopher Yggdrasil",
+        "NodeId": "clanker",
+        "Group": "Public Services",
+        "Summary": "Serves the HappyGopher site over the Yggdrasil overlay network.",
+        "Description": "A Yggdrasil-only HappyGopher instance bound to its overlay IPv6 address and serving Gopher on TCP port 70.",
+        "ContainerName": "joyful-stack-happygopher-ygg-1",
+        "Visibility": "Internal",
+        "Protocol": "Gopher / TCP :70 / Yggdrasil",
+        "Endpoint": "gopher.ygg.kgivler.com:70",
+        "Image": "joyful-stack-happygopher",
+        "SourceUrl": "https://github.com/JoyfulReaper/HappyGopher",
+        "SearchTerms": [
+          "gopher",
+          "yggdrasil",
+          "overlay",
+          "ipv6",
+          "port 70",
+          "small web",
+          "smolweb"
+        ]
+      },
+      {
+        "Id": "random-github",
+        "Name": "Random GitHub",
+        "NodeId": "clanker",
+        "Group": "Public Services",
+        "Summary": "Finds a random GitHub repository for serendipitous discovery.",
+        "Description": "A small web application that selects random GitHub repositories for browsing and discovery.",
+        "ContainerName": "joyful-stack-randomgithub-1",
+        "Visibility": "Public",
+        "Protocol": "HTTPS / Web application",
+        "Endpoint": "randomgit.kgivler.com",
+        "Image": "joyful/randomgithub",
+        "ApplicationUrl": "https://randomgit.kgivler.com/",
+        "SourceUrl": "https://github.com/JoyfulReaper/Random_Github",
+        "SearchTerms": [
+          "github",
+          "random",
+          "repository",
+          "discovery",
+          "public"
+        ]
+      },
+      {
+        "Id": "clanker-rest-server",
+        "Name": "Restic REST Server",
+        "NodeId": "clanker",
+        "Group": "Operations",
+        "Summary": "Provides a Restic-compatible repository endpoint for backups.",
+        "Description": "Runs restic/rest-server on Clanker to accept Restic repository traffic for backup workflows.",
+        "ContainerName": "rest-server",
+        "Visibility": "Internal",
+        "Protocol": "HTTP / Restic REST",
+        "Endpoint": "Internal",
+        "Image": "restic/rest-server:latest",
+        "SearchTerms": [
+          "restic",
+          "backup",
+          "rest server",
+          "repository",
+          "storage",
+          "clanker"
+        ]
+      },
+      {
+        "Id": "clanker-dozzle",
+        "Name": "Dozzle",
+        "NodeId": "clanker",
+        "Group": "Operations",
+        "Summary": "Provides a live web view of Docker container logs.",
+        "Description": "Runs the primary Dozzle interface on Clanker for viewing local and remote Docker container logs.",
+        "ContainerName": "dozzle",
+        "Visibility": "Private",
+        "Protocol": "HTTP",
+        "Endpoint": "10.99.0.1:8088",
+        "Image": "amir20/dozzle:latest",
+        "SearchTerms": [
+          "dozzle",
+          "docker",
+          "logs",
+          "containers",
+          "operations",
+          "clanker"
+        ]
+      },
+      {
+        "Id": "clanker-dockge",
+        "Name": "Dockge",
+        "NodeId": "clanker",
+        "Group": "Operations",
+        "Summary": "Provides a web interface for managing Docker Compose stacks.",
+        "Description": "Runs Dockge on Clanker for inspecting and managing Docker Compose application stacks.",
+        "ContainerName": "dockge",
+        "Visibility": "Private",
+        "Protocol": "HTTP",
+        "Endpoint": "10.99.0.1:5001",
+        "Image": "louislam/dockge:1",
+        "SearchTerms": [
+          "dockge",
+          "docker",
+          "compose",
+          "stacks",
+          "management",
+          "clanker"
+        ]
+      },
+      {
+        "Id": "scopecreep-rest-server",
+        "Name": "Restic REST Server",
+        "NodeId": "scopecreep",
+        "Group": "Operations",
+        "Summary": "Provides a Restic-compatible repository endpoint for backups.",
+        "Description": "Runs restic/rest-server on ScopeCreep and stores Restic repository data under /var/lib/restic.",
+        "ContainerName": "rest-server",
+        "Visibility": "Internal",
+        "Protocol": "HTTP / Restic REST",
+        "Endpoint": "10.99.0.9:8000",
+        "Image": "restic/rest-server:latest",
+        "SearchTerms": [
+          "restic",
+          "backup",
+          "rest server",
+          "repository",
+          "storage",
+          "scopecreep"
+        ]
+      },
+      {
+        "Id": "scopecreep-beszel-agent",
+        "Name": "Beszel Agent",
+        "NodeId": "scopecreep",
+        "Group": "Operations",
+        "Summary": "Collects ScopeCreep host and container metrics for Beszel.",
+        "Description": "Reads host and Docker statistics on ScopeCreep and reports them to the private Beszel monitoring dashboard.",
+        "ContainerName": "beszel-agent",
+        "Visibility": "Internal",
+        "Protocol": "Metrics agent",
+        "Endpoint": "Internal",
+        "Image": "henrygd/beszel-agent:latest",
+        "SearchTerms": [
+          "beszel",
+          "agent",
+          "metrics",
+          "collector",
+          "docker",
+          "host",
+          "scopecreep"
+        ]
+      },
+      {
+        "Id": "scopecreep-dozzle-agent",
+        "Name": "Dozzle Agent",
+        "NodeId": "scopecreep",
+        "Group": "Operations",
+        "Summary": "Exposes ScopeCreep Docker logs to the primary Dozzle instance.",
+        "Description": "Runs the Dozzle remote agent on ScopeCreep so the central Dozzle interface can inspect this host's containers and logs.",
+        "ContainerName": "dozzle-agent",
+        "Visibility": "Internal",
+        "Protocol": "Dozzle remote agent / TCP",
+        "Endpoint": "10.99.0.9:7007",
+        "Image": "amir20/dozzle:latest",
+        "SearchTerms": [
+          "dozzle",
+          "agent",
+          "docker",
+          "logs",
+          "containers",
+          "scopecreep"
+        ]
+      },
+      {
+        "Id": "scopecreep-dockge",
+        "Name": "Dockge",
+        "NodeId": "scopecreep",
+        "Group": "Operations",
+        "Summary": "Provides a web interface for managing ScopeCreep Docker Compose stacks.",
+        "Description": "Runs Dockge on ScopeCreep for inspecting and managing Docker Compose application stacks.",
+        "ContainerName": "dockge",
+        "Visibility": "Private",
+        "Protocol": "HTTP",
+        "Endpoint": "10.99.0.9:5001",
+        "Image": "louislam/dockge:1",
+        "SearchTerms": [
+          "dockge",
+          "docker",
+          "compose",
+          "stacks",
+          "management",
+          "scopecreep"
+        ]
       }
     ]
   }

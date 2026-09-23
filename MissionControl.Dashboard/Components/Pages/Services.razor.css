@@ -2,6 +2,25 @@
     margin-bottom: 1.5rem;
 }
 
+.service-node-selector {
+    display: flex;
+    margin-bottom: 1.25rem;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+    .service-node-selector > div:first-child {
+        width: min(100%, 24rem);
+    }
+
+    .service-node-selector > span {
+        max-width: 34rem;
+        color: var(--mc-text-muted);
+        font-size: 0.78rem;
+        text-align: right;
+    }
+
 .service-toolbar {
     display: flex;
     margin-bottom: 2rem;
@@ -50,4 +69,13 @@
         align-items: stretch;
         flex-direction: column;
     }
+
+    .service-node-selector {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+        .service-node-selector > span {
+            text-align: left;
+        }
 }

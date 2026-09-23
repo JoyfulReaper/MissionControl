@@ -1,7 +1,8 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Options;
-using MissionControl.Client.Agent;
+using MissionControl.Contracts.Agent;
 using MissionControl.Contracts.Services;
+using MissionControl.Dashboard.Agents;
 using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Refresh;
 using MissionControl.Dashboard.Services;
@@ -12,17 +13,30 @@ namespace MissionControl.Dashboard.Components.Pages;
 public partial class Services : IAsyncDisposable
 {
     private string? _filter;
-    private AgentSnapshotRefreshController _agentRefresh = null!;
+    private string _selectedNodeId = "clanker";
+    private AgentFleetRefreshController _agentRefresh = null!;
     private ServiceCatalogReloadController? _catalogReload;
     private readonly CancellationTokenSource _disposeSource = new();
     private Task? _pollingTask;
     private bool _isManualRefresh;
     private bool _disposed;
 
-    private AgentSnapshotItem? CurrentSnapshot =>
-        _agentRefresh?.CurrentSnapshot;
+    private AgentNodeResult? CurrentNode =>
+        AvailableNodes.FirstOrDefault(
+            node =>
+                string.Equals(
+                    node.NodeId,
+                    _selectedNodeId,
+                    StringComparison.OrdinalIgnoreCase));
 
-    internal AgentSnapshotItem? SnapshotForTesting => CurrentSnapshot;
+    private PublicNodeSnapshot? CurrentSnapshot =>
+        CurrentNode?.Snapshot;
+
+    internal IReadOnlyList<AgentNodeResult> AvailableNodes =>
+        _agentRefresh?.CurrentNodes ?? [];
+
+    internal PublicNodeSnapshot? SnapshotForTesting =>
+        CurrentSnapshot;
 
     internal string? FilterForTesting
     {
@@ -37,11 +51,10 @@ public partial class Services : IAsyncDisposable
         _catalogReload?.ReloadWarning;
 
     [Inject]
-    internal IAgentSnapshotClient AgentClient { get; set; } = null!;
+    internal IAgentFleetClient AgentFleetClient { get; set; } = null!;
 
     [Inject]
-    internal IOptions<DashboardRefreshOptions> RefreshOptions { get; set; } =
-        null!;
+    internal IOptions<DashboardRefreshOptions> RefreshOptions { get; set; } = null!;
 
     [Inject]
     internal TimeProvider TimeProvider { get; set; } = null!;
@@ -50,8 +63,7 @@ public partial class Services : IAsyncDisposable
     internal IDashboardPollingLoop PollingLoop { get; set; } = null!;
 
     [Inject]
-    internal IOptions<ServiceCatalogOptions> CatalogOptions { get; set; } =
-        null!;
+    internal IOptions<ServiceCatalogOptions> CatalogOptions { get; set; } = null!;
 
     [Inject]
     internal IServiceCatalogMonitor CatalogMonitor { get; set; } = null!;
@@ -80,18 +92,18 @@ public partial class Services : IAsyncDisposable
             DispatchCatalogUpdateAsync,
             NotifyCatalogStateChanged);
 
-        _agentRefresh = new AgentSnapshotRefreshController(
-            AgentClient,
+        _agentRefresh = new AgentFleetRefreshController(
+            AgentFleetClient,
             TimeProvider,
             TimeSpan.FromSeconds(
                 RefreshOptions.Value.SnapshotStaleAfterSeconds));
 
-        await _agentRefresh.RefreshAsync(
-            _disposeSource.Token);
+        await _agentRefresh.RefreshAsync(_disposeSource.Token);
+
+        EnsureSelectedNode();
 
         _pollingTask = PollingLoop.RunAsync(
-            TimeSpan.FromSeconds(
-                RefreshOptions.Value.AgentSnapshotRefreshSeconds),
+            TimeSpan.FromSeconds(RefreshOptions.Value.AgentSnapshotRefreshSeconds),
             RefreshSnapshotFromPollingAsync,
             _disposeSource.Token);
     }
@@ -107,8 +119,9 @@ public partial class Services : IAsyncDisposable
 
         try
         {
-            await _agentRefresh.RefreshAsync(
-                _disposeSource.Token);
+            await _agentRefresh.RefreshAsync(_disposeSource.Token);
+
+            EnsureSelectedNode();
         }
         finally
         {
@@ -121,6 +134,8 @@ public partial class Services : IAsyncDisposable
     {
         await _agentRefresh.RefreshAsync(cancellationToken);
 
+        EnsureSelectedNode();
+
         if (!_disposed && !cancellationToken.IsCancellationRequested)
         {
             await DispatchComponentStateChangeAsync();
@@ -129,10 +144,50 @@ public partial class Services : IAsyncDisposable
 
     private ServiceCatalogView CreateView()
     {
-        return ServiceCatalogViewBuilder.Build(
+        return ServiceCatalogViewBuilder.BuildForNode(
             CurrentCatalog,
+            _selectedNodeId,
             CurrentSnapshot,
             _filter);
+    }
+
+    private string? GetSnapshotError()
+    {
+        if (CurrentNode is not null)
+        {
+            return CurrentNode.Error ??
+                _agentRefresh.RefreshWarning;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_agentRefresh.RefreshWarning))
+        {
+            return _agentRefresh.RefreshWarning;
+        }
+
+        return _agentRefresh.IsInitialLoading
+            ? null
+            : $"{_selectedNodeId} is not available in host telemetry.";
+    }
+
+    private void EnsureSelectedNode()
+    {
+        if (AvailableNodes.Count == 0)
+        {
+            return;
+        }
+
+        bool selectedNodeExists =
+            AvailableNodes.Any(
+                node =>
+                    string.Equals(
+                        node.NodeId,
+                        _selectedNodeId,
+                        StringComparison.OrdinalIgnoreCase));
+
+        if (!selectedNodeExists)
+        {
+            _selectedNodeId = AvailableNodes[0].NodeId;
+        }
     }
 
     public async ValueTask DisposeAsync()
