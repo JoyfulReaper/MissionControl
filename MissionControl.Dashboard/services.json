@@ -445,26 +445,6 @@
         ]
       },
       {
-        "Id": "uptime-kuma",
-        "Name": "Uptime Kuma",
-        "Group": "Operations",
-        "Summary": "Checks whether exposed services are actually reachable.",
-        "Description": "Performs scheduled availability checks against websites, APIs, and network services and provides alerting when they fail.",
-        "ContainerName": "uptime-kuma",
-        "Visibility": "Private",
-        "Protocol": "HTTP",
-        "Endpoint": "127.0.0.1:3001",
-        "Image": "louislam/uptime-kuma:2",
-        "SearchTerms": [
-          "uptime kuma",
-          "monitoring",
-          "health checks",
-          "alerts",
-          "availability",
-          "uptime"
-        ]
-      },
-      {
         "Id": "happy-gopher-ygg",
         "Name": "HappyGopher Yggdrasil",
         "NodeId": "clanker",
