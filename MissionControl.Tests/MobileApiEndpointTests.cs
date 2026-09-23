@@ -1,14 +1,5 @@
 extern alias DashboardApp;
-
 using DashboardApp::MissionControl.Dashboard.MobileApi;
-using AgentNodeResult =
-    DashboardApp::MissionControl.Dashboard.Agents.AgentNodeResult;
-using IAgentFleetClient =
-    DashboardApp::MissionControl.Dashboard.Agents.IAgentFleetClient;
-using GreenCloudBandwidthNodeResult =
-    DashboardApp::MissionControl.Dashboard.GreenCloud.GreenCloudBandwidthNodeResult;
-using IGreenCloudBandwidthFleetClient =
-    DashboardApp::MissionControl.Dashboard.GreenCloud.IGreenCloudBandwidthFleetClient;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
@@ -28,6 +19,14 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Xunit;
+using AgentNodeResult =
+    DashboardApp::MissionControl.Dashboard.Agents.AgentNodeResult;
+using GreenCloudBandwidthNodeResult =
+    DashboardApp::MissionControl.Dashboard.GreenCloud.GreenCloudBandwidthNodeResult;
+using IAgentFleetClient =
+    DashboardApp::MissionControl.Dashboard.Agents.IAgentFleetClient;
+using IGreenCloudBandwidthFleetClient =
+    DashboardApp::MissionControl.Dashboard.GreenCloud.IGreenCloudBandwidthFleetClient;
 
 namespace MissionControl.Tests;
 
@@ -236,9 +235,54 @@ public sealed class MobileApiEndpointTests
         Assert.Equal(
             "Clanker",
             host.DisplayName);
+        Assert.NotNull(host.AgentSnapshot);
+
         Assert.Equal(
-            agentSnapshot,
-            host.AgentSnapshot);
+            agentSnapshot.Node,
+            host.AgentSnapshot.Node);
+
+        Assert.Equal(
+            agentSnapshot.NodeId,
+            host.AgentSnapshot.NodeId);
+
+        Assert.Equal(
+            agentSnapshot.CapturedAt,
+            host.AgentSnapshot.CapturedAt);
+
+        Assert.Equal(
+            agentSnapshot.AgeSeconds,
+            host.AgentSnapshot.AgeSeconds);
+
+        Assert.Equal(
+            agentSnapshot.Stale,
+            host.AgentSnapshot.Stale);
+
+        Assert.Equal(
+            agentSnapshot.Host,
+            host.AgentSnapshot.Host);
+
+        Assert.Equal(
+            agentSnapshot.MissionControlPublishSucceeded,
+            host.AgentSnapshot.MissionControlPublishSucceeded);
+
+        Assert.Equal(
+            agentSnapshot.LastMissionControlPublishAttemptAt,
+            host.AgentSnapshot.LastMissionControlPublishAttemptAt);
+
+        Assert.Empty(host.AgentSnapshot.Protocols);
+        Assert.Empty(host.AgentSnapshot.Containers);
+
+        Assert.Equal(
+            agentSnapshot.DockerAvailable,
+            host.AgentSnapshot.DockerAvailable);
+
+        Assert.Equal(
+            agentSnapshot.DockerError,
+            host.AgentSnapshot.DockerError);
+
+        Assert.Equal(
+            agentSnapshot.HostCapturedAt,
+            host.AgentSnapshot.HostCapturedAt);
         Assert.Null(host.AgentError);
         Assert.True(host.BandwidthConfigured);
         Assert.Equal(
@@ -309,8 +353,11 @@ public sealed class MobileApiEndpointTests
             await response.Content.ReadAsStringAsync();
 
         HostNodeSnapshot[]? hosts =
-            System.Text.Json.JsonSerializer
-                .Deserialize<HostNodeSnapshot[]>(body);
+        System.Text.Json.JsonSerializer
+            .Deserialize<HostNodeSnapshot[]>(
+                body,
+                new System.Text.Json.JsonSerializerOptions(
+                    System.Text.Json.JsonSerializerDefaults.Web));
 
         HostNodeSnapshot host =
             Assert.Single(hosts!);
