@@ -50,8 +50,13 @@ public static class MauiProgram
         builder.Services.AddHttpClient<IBandwidthUsageClient, BandwidthUsageClient>(ConfigureMobileApiClient)
             .AddHttpMessageHandler<MobileApiAuthorizationHandler>();
 
+        builder.Services.AddHttpClient<IHostFleetClient, HostFleetClient>(
+            ConfigureMobileApiClient)
+        .AddHttpMessageHandler<MobileApiAuthorizationHandler>();
+
         builder.Services.AddSingleton<MobileServiceCatalog>();
         builder.Services.AddSingleton<MobileAgentSnapshotState>();
+        builder.Services.AddSingleton<MobileHostFleetState>();
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

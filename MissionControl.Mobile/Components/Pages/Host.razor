@@ -1,0 +1,212 @@
+@page "/hosts"
+
+@implements IAsyncDisposable
+
+@inject MobileHostFleetState HostFleetState
+
+<PageTitle>Hosts</PageTitle>
+
+<div class="mobile-hosts-page">
+    <header class="hosts-header">
+        <div>
+            <div class="hosts-eyebrow">
+                Infrastructure
+            </div>
+
+            <h1>Hosts</h1>
+
+            <p>
+                Resource, Agent, and bandwidth status for
+                Mission Control nodes.
+            </p>
+        </div>
+
+        <button type="button"
+                class="btn btn-outline-primary"
+                disabled="@HostFleetState.IsRefreshing"
+                @onclick="RefreshAsync">
+            @(HostFleetState.IsManualRefreshing
+                ? "Refreshing..."
+                : "Refresh all")
+        </button>
+    </header>
+
+    @if (HostFleetState.IsInitialLoading)
+    {
+        <div class="alert alert-info">
+            Loading host telemetry...
+        </div>
+    }
+    else if (HostFleetState.Hosts.Count == 0)
+    {
+        <div class="alert alert-warning">
+            @(HostFleetState.ErrorMessage ??
+                "No Mission Control hosts are available.")
+        </div>
+    }
+    else
+    {
+        @if (!string.IsNullOrWhiteSpace(
+                HostFleetState.ErrorMessage))
+        {
+            <div class="alert alert-warning">
+                @HostFleetState.ErrorMessage
+            </div>
+        }
+
+        @foreach (HostNodeSnapshot host in HostFleetState.Hosts)
+        {
+            <section class="mobile-host-section">
+                <div class="mobile-host-heading">
+                    <div>
+                        <div class="hosts-eyebrow">
+                            @host.NodeId
+                        </div>
+
+                        <h2>@host.DisplayName</h2>
+                    </div>
+
+                    <span class="@GetStatusClass(host)">
+                        @GetStatus(host)
+                    </span>
+                </div>
+
+                <AgentSnapshotPanel Snapshot="host.AgentSnapshot"
+                                    IsLoading="false"
+                                    IsRefreshing="HostFleetState.IsRefreshing"
+                                    IsManualRefreshing="HostFleetState.IsManualRefreshing"
+                                    ErrorMessage="@host.AgentError"
+                                    TimestampFormatter="FormatTimestamp"
+                                    OnRefresh="RefreshAsync" />
+
+                <NodeResourceCards Host="host.AgentSnapshot?.Host"
+                                   IsLoading="false"
+                                   ErrorMessage="@GetResourceError(host)" />
+
+                @if (host.BandwidthConfigured)
+                {
+                    <section class="mobile-host-bandwidth">
+                        <div>
+                            <div class="hosts-eyebrow">
+                                GreenCloud VPS
+                            </div>
+
+                            <h3>Bandwidth usage</h3>
+                        </div>
+
+                        <BandwidthUsageCard Snapshot="host.Bandwidth"
+                                            IsLoading="false"
+                                            ErrorMessage="@host.BandwidthError" />
+                    </section>
+                }
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private static readonly TimeSpan PollingInterval =
+        TimeSpan.FromSeconds(30);
+
+    private readonly CancellationTokenSource _disposeSource =
+        new();
+
+    private Task? _pollingTask;
+
+    protected override async Task OnInitializedAsync()
+    {
+        HostFleetState.Changed += HandleStateChanged;
+
+        await HostFleetState.EnsureLoadedAsync(_disposeSource.Token);
+
+        _pollingTask = HostFleetState.RunPollingAsync(PollingInterval, _disposeSource.Token);
+    }
+
+    private Task RefreshAsync()
+    {
+        return HostFleetState.RefreshAsync(isManualRefresh: true, _disposeSource.Token);
+    }
+
+    private void HandleStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private static string GetStatus(
+        HostNodeSnapshot host)
+    {
+        if (!string.IsNullOrWhiteSpace(host.AgentError))
+        {
+            return "DEGRADED";
+        }
+
+        if (host.AgentSnapshot is null)
+        {
+            return "UNAVAILABLE";
+        }
+
+        if (host.AgentSnapshot.Stale)
+        {
+            return "STALE";
+        }
+
+        return "ONLINE";
+    }
+
+    private static string GetStatusClass(
+        HostNodeSnapshot host)
+    {
+        return GetStatus(host) switch
+        {
+            "ONLINE" =>
+                "badge text-bg-success",
+
+            "DEGRADED" or "STALE" =>
+                "badge text-bg-warning",
+
+            _ =>
+                "badge text-bg-secondary"
+        };
+    }
+
+    private static string? GetResourceError(
+        HostNodeSnapshot host)
+    {
+        if (host.AgentSnapshot?.Host is not null)
+        {
+            return null;
+        }
+
+        return host.AgentError ??
+            "Host resource telemetry is unavailable.";
+    }
+
+    private static string FormatTimestamp(
+        DateTimeOffset timestamp)
+    {
+        return timestamp
+            .ToLocalTime()
+            .ToString(
+                "yyyy-MM-dd HH:mm:ss zzz");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        HostFleetState.Changed -= HandleStateChanged;
+
+        await _disposeSource.CancelAsync();
+
+        if (_pollingTask is not null)
+        {
+            try
+            {
+                await _pollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _disposeSource.Dispose();
+    }
+}
