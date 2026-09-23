@@ -25,6 +25,24 @@
     text-transform: uppercase;
 }
 
+.service-node-selector {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+    .service-node-selector > div {
+        width: min(100%, 24rem);
+    }
+
+    .service-node-selector > span {
+        max-width: 32rem;
+        color: var(--mc-text-muted);
+        font-size: 0.78rem;
+        text-align: right;
+    }
+
 .service-toolbar {
     display: flex;
     align-items: end;
@@ -77,6 +95,16 @@
     .mobile-page-header p {
         margin-top: 0.4rem;
     }
+
+    .service-node-selector {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 0.45rem;
+    }
+
+        .service-node-selector > span {
+            text-align: left;
+        }
 
     .service-toolbar {
         align-items: stretch;

@@ -9,8 +9,9 @@
 
 @{
     ServiceCatalogView view =
-        ServiceCatalogViewBuilder.Build(
+        ServiceCatalogViewBuilder.BuildForNode(
             _services,
+            _selectedNodeId,
             CurrentSnapshot,
             _filter);
 }
@@ -28,6 +29,32 @@
             probe results.
         </p>
     </header>
+
+    <section class="service-node-selector">
+        <div>
+            <label for="mobile-service-node"
+                   class="form-label">
+                Host
+            </label>
+
+            <select id="mobile-service-node"
+                    class="form-select"
+                    disabled="@HostFleetState.IsInitialLoading"
+                    @bind="_selectedNodeId">
+                @foreach (HostNodeSnapshot host in HostFleetState.Hosts)
+                {
+                    <option value="@host.NodeId">
+                        @host.DisplayName
+                    </option>
+                }
+            </select>
+        </div>
+
+        <span>
+            Container and protocol observations are matched
+            against the selected host.
+        </span>
+    </section>
 
     <AgentSnapshotPanel Snapshot="CurrentSnapshot"
                         IsLoading="HostFleetState.IsInitialLoading"
@@ -131,24 +158,26 @@
     private string? _catalogError;
     private Task? _pollingTask;
 
-    private HostNodeSnapshot? Clanker =>
+    private string _selectedNodeId = "clanker"; // TODO
+
+    private HostNodeSnapshot? CurrentHost =>
         HostFleetState.Hosts
             .FirstOrDefault(
-                host =>
-                    string.Equals(host.NodeId,"clanker",StringComparison.OrdinalIgnoreCase));
+                host => string.Equals(
+                    host.NodeId,
+                    _selectedNodeId,
+                    StringComparison.OrdinalIgnoreCase));
 
     private PublicNodeSnapshot? CurrentSnapshot =>
-        Clanker?.AgentSnapshot;
+        CurrentHost?.AgentSnapshot;
 
     protected override async Task OnInitializedAsync()
     {
-        HostFleetState.Changed +=
-            HandleHostFleetStateChanged;
+        HostFleetState.Changed += HandleHostFleetStateChanged;
 
         try
         {
-            _services =
-                await Catalog.GetServicesAsync();
+            _services = await Catalog.GetServicesAsync();
         }
         catch (Exception exception)
             when (exception is
@@ -161,13 +190,10 @@
                 exception.Message;
         }
 
-        await HostFleetState.EnsureLoadedAsync(
-            _disposeSource.Token);
+        await HostFleetState.EnsureLoadedAsync(_disposeSource.Token);
+        EnsureSelectedNode();
 
-        _pollingTask =
-            HostFleetState.RunPollingAsync(
-                PollingInterval,
-                _disposeSource.Token);
+        _pollingTask = HostFleetState.RunPollingAsync(PollingInterval, _disposeSource.Token);
     }
 
     private Task RefreshSnapshotAsync()
@@ -179,25 +205,46 @@
 
     private string? GetSnapshotError()
     {
-        if (Clanker is not null)
+        if (CurrentHost is not null)
         {
-            return Clanker.AgentError;
+            return CurrentHost.AgentError;
         }
 
-        if (!string.IsNullOrWhiteSpace(
-                HostFleetState.ErrorMessage))
+        if (!string.IsNullOrWhiteSpace(HostFleetState.ErrorMessage))
         {
             return HostFleetState.ErrorMessage;
         }
 
         return HostFleetState.IsInitialLoading
             ? null
-            : "Clanker is not available in host telemetry.";
+            : $"{_selectedNodeId} is not available in host telemetry.";
     }
 
     private void HandleHostFleetStateChanged()
     {
+        EnsureSelectedNode();
+
         _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void EnsureSelectedNode()
+    {
+        if (HostFleetState.Hosts.Count == 0)
+        {
+            return;
+        }
+
+        bool selectedNodeExists = HostFleetState.Hosts.Any(
+            host =>
+                string.Equals(
+                    host.NodeId,
+                    _selectedNodeId,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (!selectedNodeExists)
+        {
+            _selectedNodeId = HostFleetState.Hosts[0].NodeId;
+        }
     }
 
     private static string FormatTimestamp(
