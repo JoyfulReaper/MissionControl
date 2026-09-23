@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using MissionControl.Client.Agent;
 using MissionControl.Client.Archive;
 using MissionControl.Client.GitActivity;
 using MissionControl.Client.Infrastructure;
@@ -22,13 +21,6 @@ public static class MauiProgram
             });
 
         builder.Services.AddMauiBlazorWebView();
-
-        builder.Services.AddHttpClient<IAgentSnapshotClient,
-            AgentSnapshotClient>(httpClient =>
-            {
-                httpClient.BaseAddress = new Uri("https://status-api.kgivler.com/");
-                httpClient.Timeout = TimeSpan.FromSeconds(10);
-            });
 
         builder.Services.AddSingleton<MobileApiCredentialStore>();
         builder.Services.AddTransient<MobileApiAuthorizationHandler>();
@@ -55,7 +47,6 @@ public static class MauiProgram
         .AddHttpMessageHandler<MobileApiAuthorizationHandler>();
 
         builder.Services.AddSingleton<MobileServiceCatalog>();
-        builder.Services.AddSingleton<MobileAgentSnapshotState>();
         builder.Services.AddSingleton<MobileHostFleetState>();
 
 #if DEBUG
