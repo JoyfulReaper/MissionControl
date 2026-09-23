@@ -29,15 +29,16 @@ internal sealed class ServiceCatalogOptionsValidator
             .ToArray();
 
         if (services.Any(service =>
-                string.IsNullOrWhiteSpace(service.Id) ||
-                string.IsNullOrWhiteSpace(service.Name) ||
-                string.IsNullOrWhiteSpace(service.Group) ||
-                string.IsNullOrWhiteSpace(service.Summary) ||
-                string.IsNullOrWhiteSpace(service.Description) ||
-                string.IsNullOrWhiteSpace(service.Visibility)))
+            string.IsNullOrWhiteSpace(service.Id) ||
+            string.IsNullOrWhiteSpace(service.Name) ||
+            string.IsNullOrWhiteSpace(service.NodeId) ||
+            string.IsNullOrWhiteSpace(service.Group) ||
+            string.IsNullOrWhiteSpace(service.Summary) ||
+            string.IsNullOrWhiteSpace(service.Description) ||
+            string.IsNullOrWhiteSpace(service.Visibility)))
         {
             failures.Add(
-                "Every dashboard service must have an ID, name, group, summary, description, and visibility.");
+            "Every dashboard service must have an ID, name, node ID, group, summary, description, and visibility.");
         }
 
         if (HasDuplicates(
@@ -47,24 +48,20 @@ internal sealed class ServiceCatalogOptionsValidator
                 "Dashboard service IDs must be unique.");
         }
 
-        if (HasDuplicates(
-                services
-                    .Select(service => service.ContainerName)
-                    .Where(value =>
-                        !string.IsNullOrWhiteSpace(value))!))
+        if (HasDuplicatesByNode(
+            services,
+            service => service.ContainerName))
         {
             failures.Add(
-                "Dashboard service container names must be unique when configured.");
+                "Dashboard service container names must be unique per node when configured.");
         }
 
-        if (HasDuplicates(
-                services
-                    .Select(service => service.ProtocolServiceKey)
-                    .Where(value =>
-                        !string.IsNullOrWhiteSpace(value))!))
+        if (HasDuplicatesByNode(
+            services,
+            service => service.ProtocolServiceKey))
         {
             failures.Add(
-                "Dashboard protocol service keys must be unique when configured.");
+                "Dashboard protocol service keys must be unique per node when configured.");
         }
 
         if (services.Any(service =>
@@ -96,6 +93,32 @@ internal sealed class ServiceCatalogOptionsValidator
             StringComparer.OrdinalIgnoreCase);
 
         return values.Any(value => !seen.Add(value));
+    }
+
+    private static bool HasDuplicatesByNode(
+        IEnumerable<ServiceDefinition> services,
+        Func<ServiceDefinition, string?> valueSelector)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (ServiceDefinition service in services)
+        {
+            string? value = valueSelector(service);
+
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            string key = $"{service.NodeId}\u001f{value}";
+
+            if (!seen.Add(key))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsValidHttpUrl(string? value)

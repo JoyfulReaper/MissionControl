@@ -185,10 +185,10 @@ public sealed class DashboardServiceCatalogReloadTests
             "Dashboard service IDs must be unique.",
             result.Failures);
         Assert.Contains(
-            "Dashboard service container names must be unique when configured.",
+            "Dashboard service container names must be unique per node when configured.",
             result.Failures);
         Assert.Contains(
-            "Dashboard protocol service keys must be unique when configured.",
+            "Dashboard protocol service keys must be unique per node when configured.",
             result.Failures);
         Assert.Contains(
             "Dashboard service search terms must not contain blank entries.",
@@ -196,6 +196,40 @@ public sealed class DashboardServiceCatalogReloadTests
         Assert.Contains(
             "Dashboard service URLs must be absolute HTTP or HTTPS URLs.",
             result.Failures);
+    }
+
+    [Fact]
+    public void ValidatorAllowsSameObservationKeysOnDifferentNodes()
+    {
+        var validator =
+            new ServiceCatalogOptionsValidator();
+
+        ServiceDefinition clanker =
+            CreateService(
+                "clanker-agent",
+                "Clanker Agent");
+
+        clanker.NodeId = "clanker";
+        clanker.ContainerName = "beszel-agent";
+        clanker.ProtocolServiceKey = "agent-health";
+
+        ServiceDefinition scopeCreep =
+            CreateService(
+                "scopecreep-agent",
+                "ScopeCreep Agent");
+
+        scopeCreep.NodeId = "scopecreep";
+        scopeCreep.ContainerName = "beszel-agent";
+        scopeCreep.ProtocolServiceKey = "agent-health";
+
+        ValidateOptionsResult result =
+            validator.Validate(
+                null,
+                CreateCatalog(
+                    clanker,
+                    scopeCreep));
+
+        Assert.False(result.Failed);
     }
 
     [Fact]

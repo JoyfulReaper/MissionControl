@@ -12,6 +12,8 @@ public sealed class ServiceDefinition
 
     public required string Description { get; set; }
 
+    public string NodeId { get; set; } = "clanker";
+
     public string? ContainerName { get; set; }
 
     public required string Visibility { get; set; }

@@ -3,8 +3,39 @@ using MissionControl.Contracts.Services;
 
 namespace MissionControl.UI.Services;
 
+
 public static class ServiceCatalogViewBuilder
 {
+    public static ServiceCatalogView BuildForNode(
+    IReadOnlyList<ServiceDefinition> services,
+    string nodeId,
+    PublicNodeSnapshot? snapshot,
+    string? filter)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        if (string.IsNullOrWhiteSpace(nodeId))
+        {
+            throw new ArgumentException(
+                "Node ID must not be blank.",
+                nameof(nodeId));
+        }
+
+        ServiceDefinition[] nodeServices =
+            services
+                .Where(service =>
+                    string.Equals(
+                        service.NodeId,
+                        nodeId,
+                        StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+
+        return Build(
+            nodeServices,
+            snapshot,
+            filter);
+    }
+
     public static ServiceCatalogView Build(
         IReadOnlyList<ServiceDefinition> services,
         PublicNodeSnapshot? snapshot,
@@ -12,11 +43,8 @@ public static class ServiceCatalogViewBuilder
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        IReadOnlyList<PublicContainerStatus> snapshotContainers =
-            snapshot?.Containers ?? [];
-
-        IReadOnlyList<PublicProtocolStatus> snapshotProtocols =
-            snapshot?.Protocols ?? [];
+        IReadOnlyList<PublicContainerStatus> snapshotContainers = snapshot?.Containers ?? [];
+        IReadOnlyList<PublicProtocolStatus> snapshotProtocols = snapshot?.Protocols ?? [];
 
         Dictionary<string, PublicContainerStatus> containersByName =
             snapshotContainers
@@ -95,10 +123,8 @@ public static class ServiceCatalogViewBuilder
                     "Public",
                     StringComparison.OrdinalIgnoreCase)),
             SnapshotContainers: snapshotContainers.Count,
-            SuccessfulProbes:
-                snapshotProtocols.Count(protocol => protocol.Succeeded),
-            FailedProbes:
-                snapshotProtocols.Count(protocol => !protocol.Succeeded),
+            SuccessfulProbes: snapshotProtocols.Count(protocol => protocol.Succeeded),
+            FailedProbes: snapshotProtocols.Count(protocol => !protocol.Succeeded),
             MatchingServices: filteredServices.Length,
             UncataloguedContainers: uncataloguedContainers,
             UncataloguedProtocols: uncataloguedProtocols,
@@ -117,6 +143,7 @@ public static class ServiceCatalogViewBuilder
         string normalizedFilter = filter.Trim();
 
         return Contains(service.Name, normalizedFilter) ||
+               Contains(service.NodeId, normalizedFilter) ||
                Contains(service.Group, normalizedFilter) ||
                Contains(service.Summary, normalizedFilter) ||
                Contains(service.Description, normalizedFilter) ||

@@ -8,6 +8,87 @@ namespace MissionControl.Tests;
 public sealed class ServiceCatalogViewBuilderTests
 {
     [Fact]
+    public void BuildForNodeOnlyUsesServicesOwnedByThatNode()
+    {
+        ServiceDefinition[] services =
+        [
+            new()
+        {
+            Id = "clanker-service",
+            Name = "Clanker Service",
+            NodeId = "clanker",
+            Group = "Applications",
+            Summary = "Clanker service",
+            Description = "Runs on Clanker.",
+            ContainerName = "shared-container",
+            Visibility = "Private"
+        },
+        new()
+        {
+            Id = "scopecreep-service",
+            Name = "ScopeCreep Service",
+            NodeId = "scopecreep",
+            Group = "Applications",
+            Summary = "ScopeCreep service",
+            Description = "Runs on ScopeCreep.",
+            ContainerName = "shared-container",
+            Visibility = "Private"
+        }
+        ];
+
+        var snapshot =
+            new PublicNodeSnapshot(
+                Node: "scopecreep",
+                CapturedAt: DateTimeOffset.UtcNow,
+                AgeSeconds: 0,
+                Stale: false,
+                Host: null,
+                MissionControlPublishSucceeded: true,
+                LastMissionControlPublishAttemptAt: null,
+                Protocols: [],
+                Containers:
+                [
+                    new PublicContainerStatus(
+                    "shared-container",
+                    "running",
+                    null,
+                    null,
+                    null,
+                    null,
+                    0)
+                ],
+                DockerAvailable: true)
+            {
+                NodeId = "scopecreep"
+            };
+
+        ServiceCatalogView view =
+            ServiceCatalogViewBuilder.BuildForNode(
+                services,
+                "scopecreep",
+                snapshot,
+                filter: null);
+
+        Assert.Equal(
+            1,
+            view.ConfiguredServices);
+
+        ServiceGroupView group =
+            Assert.Single(view.Groups);
+
+        ServiceItemView item =
+            Assert.Single(group.Services);
+
+        Assert.Equal(
+            "scopecreep-service",
+            item.Service.Id);
+
+        Assert.Equal(
+            "shared-container",
+            item.Container?.Name);
+    }
+
+    [Fact]
     public void BuildMatchesObservationsAndFindsUncataloguedItems()
     {
         ServiceDefinition[] services =
