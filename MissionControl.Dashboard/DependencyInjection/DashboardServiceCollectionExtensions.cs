@@ -473,6 +473,9 @@ public static class DashboardServiceCollectionExtensions
         services.AddTransient<IGreenCloudBandwidthFleetClient>(
             serviceProvider =>
                 serviceProvider.GetRequiredService<GreenCloudBandwidthClient>());
+
+        services.AddSingleton<GreenCloudBandwidthFleetRefreshController>();
+        services.AddHostedService<GreenCloudBandwidthPollingService>();
     }
 
     private static Uri CreateBaseUri(string value)

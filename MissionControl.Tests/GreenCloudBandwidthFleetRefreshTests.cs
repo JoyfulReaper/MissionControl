@@ -1,8 +1,11 @@
 ﻿extern alias DashboardApp;
 
 using DashboardApp::MissionControl.Dashboard.GreenCloud;
+using Microsoft.Extensions.Options;
 using MissionControl.Client.Infrastructure;
 using Xunit;
+using IDashboardPollingLoop =
+    DashboardApp::MissionControl.Dashboard.Refresh.IDashboardPollingLoop;
 
 namespace MissionControl.Tests;
 
@@ -55,7 +58,8 @@ public sealed class GreenCloudBandwidthFleetRefreshTests
 
         var controller =
             new GreenCloudBandwidthFleetRefreshController(
-                client);
+                client,
+                Options.Create(new GreenCloudOptions()));
 
         await controller.RefreshAsync(
             CancellationToken.None);
@@ -87,6 +91,107 @@ public sealed class GreenCloudBandwidthFleetRefreshTests
         Assert.Equal(
             "offline",
             scopeCreep.Error);
+    }
+
+    [Fact]
+    public async Task FleetFailureRetainsPreviousSnapshotAndExposesError()
+    {
+        BandwidthUsageSnapshot initial =
+            CreateSnapshot(
+                "Clanker",
+                usedBytes: 100);
+
+        var client =
+            new FailAfterSuccessGreenCloudFleetClient(
+                [
+                    new GreenCloudBandwidthNodeResult(
+                        "clanker",
+                        initial,
+                        Error: null)
+                ]);
+
+        var controller =
+            new GreenCloudBandwidthFleetRefreshController(
+                client,
+                Options.Create(new GreenCloudOptions()));
+
+        await controller.RefreshAsync(CancellationToken.None);
+        await controller.RefreshAsync(CancellationToken.None);
+
+        GreenCloudBandwidthNodeResult node =
+            Assert.Single(controller.CurrentNodes);
+
+        Assert.Same(initial, node.Snapshot);
+        Assert.Contains(
+            "Latest GreenCloud refresh failed",
+            node.Error);
+        Assert.NotNull(controller.RefreshWarning);
+    }
+
+    [Fact]
+    public async Task ConcurrentRefreshesOnlyCallProviderOnce()
+    {
+        var client = new BlockingGreenCloudFleetClient();
+
+        var controller =
+            new GreenCloudBandwidthFleetRefreshController(
+                client,
+                Options.Create(new GreenCloudOptions()));
+
+        Task<bool> first =
+            controller.RefreshAsync(CancellationToken.None);
+
+        await client.RequestStarted;
+
+        bool second =
+            await controller.RefreshAsync(CancellationToken.None);
+
+        Assert.False(second);
+        Assert.Equal(1, client.CallCount);
+
+        client.Release();
+
+        Assert.True(await first);
+    }
+
+    [Fact]
+    public async Task PollingServiceUsesConfiguredPollSeconds()
+    {
+        var client =
+            new QueueGreenCloudFleetClient(
+            [
+                []
+            ]);
+
+        var options =
+            Options.Create(
+                new GreenCloudOptions
+                {
+                    Enabled = true,
+                    PollSeconds = 417
+                });
+
+        var controller =
+            new GreenCloudBandwidthFleetRefreshController(
+                client,
+                options);
+
+        var pollingLoop = new CapturingPollingLoop();
+        var service =
+            new GreenCloudBandwidthPollingService(
+                controller,
+                options,
+                pollingLoop);
+
+        await service.StartAsync(CancellationToken.None);
+        await pollingLoop.Started.WaitAsync(
+            TimeSpan.FromSeconds(2));
+        await service.StopAsync(CancellationToken.None);
+
+        Assert.Equal(1, client.CallCount);
+        Assert.Equal(
+            TimeSpan.FromSeconds(417),
+            pollingLoop.Interval);
     }
 
     private static BandwidthUsageSnapshot CreateSnapshot(
@@ -138,14 +243,89 @@ public sealed class GreenCloudBandwidthFleetRefreshTests
                 GreenCloudBandwidthNodeResult>>
             responses = new(responses);
 
+        public int CallCount { get; private set; }
+
         public Task<
             IReadOnlyList<
                 GreenCloudBandwidthNodeResult>>
             GetAllAsync(
                 CancellationToken cancellationToken = default)
         {
+            CallCount++;
+
             return Task.FromResult(
                 responses.Dequeue());
+        }
+    }
+
+    private sealed class FailAfterSuccessGreenCloudFleetClient(
+        IReadOnlyList<GreenCloudBandwidthNodeResult> initial)
+        : IGreenCloudBandwidthFleetClient
+    {
+        private int callCount;
+
+        public Task<IReadOnlyList<GreenCloudBandwidthNodeResult>>
+            GetAllAsync(
+                CancellationToken cancellationToken = default)
+        {
+            callCount++;
+
+            return callCount == 1
+                ? Task.FromResult(initial)
+                : Task.FromException<
+                    IReadOnlyList<GreenCloudBandwidthNodeResult>>(
+                        new HttpRequestException("provider unavailable"));
+        }
+    }
+
+    private sealed class BlockingGreenCloudFleetClient
+        : IGreenCloudBandwidthFleetClient
+    {
+        private readonly TaskCompletionSource requestStarted =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private readonly TaskCompletionSource release =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task RequestStarted => requestStarted.Task;
+
+        public int CallCount { get; private set; }
+
+        public async Task<
+            IReadOnlyList<GreenCloudBandwidthNodeResult>>
+            GetAllAsync(
+                CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            requestStarted.TrySetResult();
+            await release.Task.WaitAsync(cancellationToken);
+
+            return [];
+        }
+
+        public void Release()
+        {
+            release.TrySetResult();
+        }
+    }
+
+    private sealed class CapturingPollingLoop : IDashboardPollingLoop
+    {
+        private readonly TaskCompletionSource started =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Started => started.Task;
+
+        public TimeSpan? Interval { get; private set; }
+
+        public Task RunAsync(
+            TimeSpan interval,
+            Func<CancellationToken, Task> onTick,
+            CancellationToken cancellationToken)
+        {
+            Interval = interval;
+            started.TrySetResult();
+            return Task.CompletedTask;
         }
     }
 }

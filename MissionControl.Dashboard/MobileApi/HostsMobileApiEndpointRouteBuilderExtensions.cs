@@ -30,7 +30,7 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
 
     private static async Task<IResult> HandleGetHostsAsync(
         IAgentFleetClient agentFleetClient,
-        IGreenCloudBandwidthFleetClient bandwidthFleetClient,
+        GreenCloudBandwidthFleetRefreshController bandwidthState,
         HttpResponse response,
         CancellationToken cancellationToken)
     {
@@ -38,25 +38,13 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
 
         try
         {
-            Task<IReadOnlyList<AgentNodeResult>> agentTask =
-                agentFleetClient.GetSnapshotsAsync(
-                    cancellationToken);
-
-            Task<IReadOnlyList<GreenCloudBandwidthNodeResult>>
-                bandwidthTask =
-                    bandwidthFleetClient.GetAllAsync(
-                        cancellationToken);
-
-            await Task.WhenAll(
-                agentTask,
-                bandwidthTask);
-
             IReadOnlyList<AgentNodeResult> agentNodes =
-                await agentTask;
+                await agentFleetClient.GetSnapshotsAsync(
+                    cancellationToken);
 
             IReadOnlyList<GreenCloudBandwidthNodeResult>
                 bandwidthNodes =
-                    await bandwidthTask;
+                    bandwidthState.CurrentNodes;
 
             Dictionary<string, GreenCloudBandwidthNodeResult>
                 bandwidthByNode =

@@ -3,13 +3,25 @@
 namespace MissionControl.Dashboard.GreenCloud;
 
 internal sealed class GreenCloudBandwidthFleetRefreshController(
-    IGreenCloudBandwidthFleetClient client)
+    IGreenCloudBandwidthFleetClient client,
+    Microsoft.Extensions.Options.IOptions<GreenCloudOptions> options)
 {
     private readonly RefreshGate refreshGate = new();
 
-    private IReadOnlyList<GreenCloudBandwidthNodeResult> nodes = [];
+    private IReadOnlyList<GreenCloudBandwidthNodeResult> nodes =
+        options.Value.Enabled
+            ? options.Value.Servers
+                .Select(
+                    server => new GreenCloudBandwidthNodeResult(
+                        server.NodeId,
+                        Snapshot: null,
+                        Error:
+                            "GreenCloud bandwidth has not been refreshed yet."))
+                .ToArray()
+            : [];
 
-    public IReadOnlyList<GreenCloudBandwidthNodeResult> CurrentNodes => nodes;
+    public IReadOnlyList<GreenCloudBandwidthNodeResult> CurrentNodes =>
+        Volatile.Read(ref nodes);
 
     public bool IsInitialLoading { get; private set; } = true;
 
@@ -27,7 +39,9 @@ internal sealed class GreenCloudBandwidthFleetRefreshController(
                 try
                 {
                     IReadOnlyList<GreenCloudBandwidthNodeResult> refreshed = await client.GetAllAsync(token);
-                    nodes = MergeWithPrevious(refreshed);
+                    Volatile.Write(
+                        ref nodes,
+                        MergeWithPrevious(refreshed));
 
                     RefreshWarning = null;
                 }
@@ -40,11 +54,22 @@ internal sealed class GreenCloudBandwidthFleetRefreshController(
                     when (exception is
                         HttpRequestException or
                         TaskCanceledException or
-                        InvalidOperationException)
+                        InvalidOperationException or
+                        System.Text.Json.JsonException)
                 {
                     RefreshWarning =
                         "Latest GreenCloud refresh failed: " +
                         exception.Message;
+
+                    Volatile.Write(
+                        ref nodes,
+                        CurrentNodes
+                            .Select(
+                                node => node with
+                                {
+                                    Error = RefreshWarning
+                                })
+                            .ToArray());
                 }
                 finally
                 {
@@ -59,7 +84,7 @@ internal sealed class GreenCloudBandwidthFleetRefreshController(
             IReadOnlyList<GreenCloudBandwidthNodeResult> refreshed)
     {
         Dictionary<string, GreenCloudBandwidthNodeResult>
-            previousByNode = nodes.ToDictionary(
+            previousByNode = CurrentNodes.ToDictionary(
                 node => node.NodeId,
                 StringComparer.OrdinalIgnoreCase);
 

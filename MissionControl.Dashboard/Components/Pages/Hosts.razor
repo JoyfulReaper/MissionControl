@@ -3,7 +3,7 @@
 @implements IAsyncDisposable
 
 @inject IAgentFleetClient AgentFleetClient
-@inject IGreenCloudBandwidthFleetClient BandwidthFleetClient
+@inject GreenCloudBandwidthFleetRefreshController BandwidthState
 @inject IDashboardDateTimeFormatter DateTimeFormatter
 @inject IOptions<DashboardRefreshOptions> RefreshOptions
 @inject IOptions<GreenCloudOptions> GreenCloudOptions
@@ -94,7 +94,7 @@
                         </div>
 
                         <BandwidthUsageCard Snapshot="bandwidth?.Snapshot"
-                                            IsLoading="@_bandwidthRefresh.IsInitialLoading"
+                                            IsLoading="@BandwidthState.IsInitialLoading"
                                             ErrorMessage="@GetBandwidthError(bandwidth)" />
                     </section>
                 }
@@ -106,19 +106,15 @@
 @code {
     private AgentFleetRefreshController _agentRefresh = null!;
 
-    private GreenCloudBandwidthFleetRefreshController _bandwidthRefresh = null!;
-
     private readonly CancellationTokenSource _disposeSource = new();
 
     private Task? _agentPollingTask;
-    private Task? _bandwidthPollingTask;
 
     private bool _isManualRefresh;
     private bool _disposed;
 
     private bool IsRefreshing =>
-        _agentRefresh?.IsRefreshing == true ||
-        _bandwidthRefresh?.IsRefreshing == true;
+        _agentRefresh?.IsRefreshing == true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -128,12 +124,7 @@
                 TimeProvider,
                 TimeSpan.FromSeconds(RefreshOptions.Value.SnapshotStaleAfterSeconds));
 
-        _bandwidthRefresh =
-            new GreenCloudBandwidthFleetRefreshController(BandwidthFleetClient);
-
-        await Task.WhenAll(
-            _agentRefresh.RefreshAsync(_disposeSource.Token),
-            _bandwidthRefresh.RefreshAsync(_disposeSource.Token));
+        await _agentRefresh.RefreshAsync(_disposeSource.Token);
 
         _agentPollingTask =
             PollingLoop.RunAsync(
@@ -142,13 +133,6 @@
                 RefreshAgentFleetAsync,
                 _disposeSource.Token);
 
-        if (GreenCloudOptions.Value.Enabled)
-        {
-            _bandwidthPollingTask =
-                PollingLoop.RunAsync(TimeSpan.FromSeconds(GreenCloudOptions.Value.PollSeconds),
-                    RefreshBandwidthFleetAsync,
-                    _disposeSource.Token);
-        }
     }
 
     private async Task RefreshAsync()
@@ -162,9 +146,7 @@
 
         try
         {
-            await Task.WhenAll(
-                _agentRefresh.RefreshAsync(_disposeSource.Token),
-                _bandwidthRefresh.RefreshAsync(_disposeSource.Token));
+            await _agentRefresh.RefreshAsync(_disposeSource.Token);
         }
         finally
         {
@@ -180,14 +162,6 @@
         await RefreshUiAsync(cancellationToken);
     }
 
-    private async Task RefreshBandwidthFleetAsync(
-        CancellationToken cancellationToken)
-    {
-        await _bandwidthRefresh.RefreshAsync(cancellationToken);
-
-        await RefreshUiAsync( cancellationToken);
-    }
-
     private async Task RefreshUiAsync(
         CancellationToken cancellationToken)
     {
@@ -201,7 +175,7 @@
     private GreenCloudBandwidthNodeResult? GetBandwidth(
         string nodeId)
     {
-        return _bandwidthRefresh.CurrentNodes
+        return BandwidthState.CurrentNodes
             .FirstOrDefault(
                 node =>
                     string.Equals(node.NodeId, nodeId, StringComparison.OrdinalIgnoreCase));
@@ -224,7 +198,7 @@
             return bandwidth.Error;
         }
 
-        return _bandwidthRefresh.RefreshWarning ??
+        return BandwidthState.RefreshWarning ??
             "GreenCloud bandwidth data is unavailable.";
     }
 
@@ -286,7 +260,6 @@
 
         await _disposeSource.CancelAsync();
         await AwaitPollingTaskAsync( _agentPollingTask);
-        await AwaitPollingTaskAsync(_bandwidthPollingTask);
 
         _disposeSource.Dispose();
     }
