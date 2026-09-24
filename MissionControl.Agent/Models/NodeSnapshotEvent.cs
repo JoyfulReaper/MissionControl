@@ -7,4 +7,7 @@ public sealed record NodeSnapshotEvent(
     IReadOnlyList<ProtocolProbeResult> Protocols,
     IReadOnlyList<ContainerMetric> Containers,
     bool? DockerAvailable = null,
-    string? DockerError = null);
+    string? DockerError = null)
+{
+    public string? NodeId { get; init; }
+}

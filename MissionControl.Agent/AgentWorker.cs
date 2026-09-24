@@ -103,7 +103,10 @@ internal sealed class AgentWorker(
             Protocols: await protocolTask,
             Containers: docker.Containers,
             DockerAvailable: docker.Succeeded,
-            DockerError: docker.Error);
+            DockerError: docker.Error)
+        {
+            NodeId = agentOptions.EffectiveNodeId
+        };
 
         await snapshotStore.SaveAsync(
             snapshot,
@@ -129,7 +132,7 @@ internal sealed class AgentWorker(
                 cancellationToken);
 
         await snapshotStore.RecordPublishResultAsync(
-            node: snapshot.Node,
+            node: snapshot.NodeId ?? snapshot.Node,
             succeeded: published,
             attemptedAt: publicationTime,
             cancellationToken: cancellationToken);

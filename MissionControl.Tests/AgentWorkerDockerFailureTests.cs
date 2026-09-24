@@ -115,12 +115,13 @@ public sealed class AgentWorkerDockerFailureTests
         StoredNodeSnapshot stored =
             await GetRequiredSnapshotAsync(
                 fixture.SnapshotStore,
-                "node-1");
+                "node-1-id");
         NodeSnapshotEvent snapshot = stored.Snapshot;
         Assert.Equal(1, hostCollector.CollectionCount);
         Assert.Equal(1, dockerCollector.CollectionCount);
         Assert.Equal(1, protocolProbe.ExecutionCount);
         Assert.Equal("node-1", snapshot.Node);
+        Assert.Equal("node-1-id", snapshot.NodeId);
         Assert.InRange(
             snapshot.CapturedAt,
             beforeCollection,
@@ -184,6 +185,9 @@ public sealed class AgentWorkerDockerFailureTests
             NodeResourceCalculations.FormatBytes(
                 NodeResourceCalculations.GetMemoryUsedBytes(
                     dashboardSnapshot.Host)));
+
+        Assert.Equal("node-1-id", dashboardSnapshot.NodeId);
+        Assert.Equal("node-1", dashboardSnapshot.Node);
     }
 
     [Fact]
@@ -270,7 +274,7 @@ public sealed class AgentWorkerDockerFailureTests
         StoredNodeSnapshot firstStored =
             await GetRequiredSnapshotAsync(
                 fixture.SnapshotStore,
-                "node-1");
+                "node-1-id");
 
         await worker.ExecuteIterationAsync(
             CreateOptions(),
@@ -278,7 +282,7 @@ public sealed class AgentWorkerDockerFailureTests
         StoredNodeSnapshot secondStored =
             await GetRequiredSnapshotAsync(
                 fixture.SnapshotStore,
-                "node-1");
+                "node-1-id");
 
         Assert.Equal(2, hostCollector.CollectionCount);
         Assert.Equal(2, dockerCollector.CollectionCount);
@@ -369,17 +373,18 @@ public sealed class AgentWorkerDockerFailureTests
     {
         return new AgentOptions
         {
+            NodeId = "node-1-id",
             NodeName = "node-1",
             DockerEnabled = true,
             Probes =
             [
                 new ProbeOptions
-                {
-                    Name = "health",
-                    Host = "localhost",
-                    Protocol = "test",
-                    Port = 7
-                }
+            {
+                Name = "health",
+                Host = "localhost",
+                Protocol = "test",
+                Port = 7
+            }
             ]
         };
     }

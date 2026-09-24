@@ -13,5 +13,7 @@ public sealed record PublicNodeSnapshot(
     bool? DockerAvailable = null,
     string? DockerError = null)
 {
+    public string? NodeId { get; init; }
+
     public DateTimeOffset? HostCapturedAt { get; init; }
 }

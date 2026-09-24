@@ -48,7 +48,7 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
 
         StoredNodeSnapshot? storedSnapshot =
             await snapshotStore.GetAsync(
-                agentOptions.NodeName,
+                agentOptions.EffectiveNodeId,
                 cancellationToken);
 
         if (storedSnapshot is null)
@@ -164,47 +164,35 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
             host ?? storedSnapshot.Snapshot.Host;
 
         return new PublicNodeSnapshot(
-            Node:
-                storedSnapshot.Snapshot.Node,
-            CapturedAt:
-                storedSnapshot.Snapshot.CapturedAt,
-            AgeSeconds:
-                (long)Math.Floor(age.TotalSeconds),
-            Stale:
-                age > staleAfter,
+            Node: storedSnapshot.Snapshot.Node,
+            CapturedAt: storedSnapshot.Snapshot.CapturedAt,
+            AgeSeconds: (long)Math.Floor(age.TotalSeconds),
+            Stale: age > staleAfter,
             Host:
                 publicHost is null
                     ? null
                     : new PublicHostMetric(
-                        LogicalProcessorCount:
-                            publicHost.LogicalProcessorCount,
-                        CpuPercent:
-                            publicHost.CpuPercent,
-                        MemoryTotalBytes:
-                            publicHost.MemoryTotalBytes,
-                        MemoryAvailableBytes:
-                            publicHost.MemoryAvailableBytes)
+                        LogicalProcessorCount: publicHost.LogicalProcessorCount,
+                        CpuPercent: publicHost.CpuPercent,
+                        MemoryTotalBytes: publicHost.MemoryTotalBytes,
+                        MemoryAvailableBytes: publicHost.MemoryAvailableBytes)
                     {
-                        LoadAverage1Minute =
-                            publicHost.LoadAverage1Minute,
-                        LoadAverage5Minutes =
-                            publicHost.LoadAverage5Minutes,
-                        LoadAverage15Minutes =
-                            publicHost.LoadAverage15Minutes
+                        LoadAverage1Minute = publicHost.LoadAverage1Minute,
+                        LoadAverage5Minutes = publicHost.LoadAverage5Minutes,
+                        LoadAverage15Minutes = publicHost.LoadAverage15Minutes
                     },
-            MissionControlPublishSucceeded:
-                storedSnapshot.PublishSucceeded,
-            LastMissionControlPublishAttemptAt:
-                storedSnapshot.LastPublishAttemptAt,
-            Protocols:
-                protocols,
-            Containers:
-                containers,
-            DockerAvailable:
-                storedSnapshot.Snapshot.DockerAvailable,
-            DockerError:
-                storedSnapshot.Snapshot.DockerError)
+            MissionControlPublishSucceeded: storedSnapshot.PublishSucceeded,
+            LastMissionControlPublishAttemptAt: storedSnapshot.LastPublishAttemptAt,
+            Protocols: protocols,
+            Containers: containers,
+            DockerAvailable: storedSnapshot.Snapshot.DockerAvailable,
+            DockerError: storedSnapshot.Snapshot.DockerError)
         {
+            NodeId = string.IsNullOrWhiteSpace(
+                storedSnapshot.Snapshot.NodeId)
+                ? storedSnapshot.Snapshot.Node
+                : storedSnapshot.Snapshot.NodeId.Trim(),
+
             HostCapturedAt = hostCapturedAt
         };
     }

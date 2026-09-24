@@ -1,0 +1,283 @@
+﻿@page "/hosts"
+
+@implements IAsyncDisposable
+
+@inject IAgentFleetClient AgentFleetClient
+@inject GreenCloudBandwidthFleetRefreshController BandwidthState
+@inject IDashboardDateTimeFormatter DateTimeFormatter
+@inject IOptions<DashboardRefreshOptions> RefreshOptions
+@inject IOptions<GreenCloudOptions> GreenCloudOptions
+@inject TimeProvider TimeProvider
+@inject IDashboardPollingLoop PollingLoop
+
+<PageTitle>Hosts</PageTitle>
+
+<div class="hosts-page">
+    <header class="page-header">
+        <div>
+            <div class="page-eyebrow">
+                Infrastructure
+            </div>
+
+            <h1>Hosts</h1>
+
+            <p class="page-description">
+                Resource, Agent, and bandwidth status for Mission Control nodes.
+            </p>
+        </div>
+
+        <button type="button"
+                class="btn btn-outline-primary"
+                disabled="@IsRefreshing"
+                @onclick="RefreshAsync">
+            @(IsRefreshing
+                ? "Refreshing..."
+                : "Refresh all")
+        </button>
+    </header>
+
+    @if (_agentRefresh.IsInitialLoading)
+    {
+        <NodeResourceCards IsLoading="true" />
+    }
+    else if (_agentRefresh.CurrentNodes.Count == 0)
+    {
+        <div class="alert alert-warning">
+            @(_agentRefresh.RefreshWarning ??
+                "No Agent nodes are configured.")
+        </div>
+    }
+    else
+    {
+        @foreach (AgentNodeResult node in _agentRefresh.CurrentNodes)
+        {
+            <section class="host-section">
+                <div class="host-heading">
+                    <div>
+                        <div class="page-eyebrow">
+                            @node.NodeId
+                        </div>
+
+                        <h2>@node.DisplayName</h2>
+                    </div>
+
+                    <span class="service-chip @GetNodeStatusClass(node)">
+                        @GetNodeStatus(node)
+                    </span>
+                </div>
+
+                <AgentSnapshotPanel Snapshot="node.Snapshot"
+                                    IsLoading="false"
+                                    IsRefreshing="_agentRefresh.IsRefreshing"
+                                    IsManualRefreshing="_isManualRefresh"
+                                    ErrorMessage="@node.Error"
+                                    TimestampFormatter="@(timestamp =>
+                                        DateTimeFormatter.Format(timestamp))"
+                                    OnRefresh="RefreshAsync" />
+
+                <NodeResourceCards Host="node.Snapshot?.Host"
+                                   IsLoading="false"
+                                   ErrorMessage="@GetResourceError(node)" />
+
+                @if (IsGreenCloudNode(node.NodeId))
+                {
+                    GreenCloudBandwidthNodeResult? bandwidth =
+                        GetBandwidth(node.NodeId);
+
+                    <section class="host-bandwidth">
+                        <div>
+                            <div class="page-eyebrow">
+                                GreenCloud VPS
+                            </div>
+
+                            <h3>Bandwidth usage</h3>
+                        </div>
+
+                        <BandwidthUsageCard Snapshot="bandwidth?.Snapshot"
+                                            IsLoading="@BandwidthState.IsInitialLoading"
+                                            ErrorMessage="@GetBandwidthError(bandwidth)" />
+                    </section>
+                }
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private AgentFleetRefreshController _agentRefresh = null!;
+
+    private readonly CancellationTokenSource _disposeSource = new();
+
+    private Task? _agentPollingTask;
+
+    private bool _isManualRefresh;
+    private bool _disposed;
+
+    private bool IsRefreshing =>
+        _agentRefresh?.IsRefreshing == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _agentRefresh =
+            new AgentFleetRefreshController(
+                AgentFleetClient,
+                TimeProvider,
+                TimeSpan.FromSeconds(RefreshOptions.Value.SnapshotStaleAfterSeconds));
+
+        await _agentRefresh.RefreshAsync(_disposeSource.Token);
+
+        _agentPollingTask =
+            PollingLoop.RunAsync(
+                TimeSpan.FromSeconds(
+                    RefreshOptions.Value.AgentSnapshotRefreshSeconds),
+                RefreshAgentFleetAsync,
+                _disposeSource.Token);
+
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (IsRefreshing)
+        {
+            return;
+        }
+
+        _isManualRefresh = true;
+
+        try
+        {
+            await _agentRefresh.RefreshAsync(_disposeSource.Token);
+        }
+        finally
+        {
+            _isManualRefresh = false;
+        }
+    }
+
+    private async Task RefreshAgentFleetAsync(
+        CancellationToken cancellationToken)
+    {
+        await _agentRefresh.RefreshAsync(cancellationToken);
+
+        await RefreshUiAsync(cancellationToken);
+    }
+
+    private async Task RefreshUiAsync(
+        CancellationToken cancellationToken)
+    {
+        if (!_disposed &&
+            !cancellationToken.IsCancellationRequested)
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private GreenCloudBandwidthNodeResult? GetBandwidth(
+        string nodeId)
+    {
+        return BandwidthState.CurrentNodes
+            .FirstOrDefault(
+                node =>
+                    string.Equals(node.NodeId, nodeId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool IsGreenCloudNode(
+        string nodeId)
+    {
+        return GreenCloudOptions.Value.Enabled &&
+            GreenCloudOptions.Value.Servers.Any(
+                server =>
+                    string.Equals(server.NodeId, nodeId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string? GetBandwidthError(
+        GreenCloudBandwidthNodeResult? bandwidth)
+    {
+        if (bandwidth is not null)
+        {
+            return bandwidth.Error;
+        }
+
+        return BandwidthState.RefreshWarning ??
+            "GreenCloud bandwidth data is unavailable.";
+    }
+
+    private static string GetNodeStatus(
+        AgentNodeResult node)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                node.Error))
+        {
+            return "DEGRADED";
+        }
+
+        if (node.Snapshot is null)
+        {
+            return "UNAVAILABLE";
+        }
+
+        if (node.Snapshot.Stale)
+        {
+            return "STALE";
+        }
+
+        return "ONLINE";
+    }
+
+    private static string GetNodeStatusClass(
+        AgentNodeResult node)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                node.Error))
+        {
+            return "status-warning";
+        }
+
+        if (node.Snapshot is null ||
+            node.Snapshot.Stale)
+        {
+            return "status-missing";
+        }
+
+        return "status-running";
+    }
+
+    private static string? GetResourceError(
+        AgentNodeResult node)
+    {
+        if (node.Snapshot?.Host is not null)
+        {
+            return null;
+        }
+
+        return node.Error ??
+            NodeResourceCalculations.UnavailableMessage;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+
+        await _disposeSource.CancelAsync();
+        await AwaitPollingTaskAsync( _agentPollingTask);
+
+        _disposeSource.Dispose();
+    }
+
+    private static async Task AwaitPollingTaskAsync(
+        Task? task)
+    {
+        if (task is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await task;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+}

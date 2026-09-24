@@ -21,13 +21,39 @@
     </p>
 </header>
 
+<section class="service-node-selector">
+    <div>
+        <label for="service-node"
+               class="form-label">
+            Host
+        </label>
+
+        <select id="service-node"
+                class="form-select"
+                disabled="@_agentRefresh.IsInitialLoading"
+                @bind="_selectedNodeId">
+            @foreach (var node in AvailableNodes)
+            {
+                <option value="@node.NodeId">
+                    @node.DisplayName
+                </option>
+            }
+        </select>
+    </div>
+
+    <span>
+        Container and protocol observations are matched
+        against the selected host.
+    </span>
+</section>
+
 <AgentSnapshotPanel Snapshot="CurrentSnapshot"
                     IsLoading="_agentRefresh.IsInitialLoading"
                     IsRefreshing="_agentRefresh.IsRefreshing"
                     IsManualRefreshing="_isManualRefresh"
-                    ErrorMessage="@_agentRefresh.RefreshWarning"
+                    ErrorMessage="@GetSnapshotError()"
                     TimestampFormatter="@(timestamp =>
-                    DateTimeFormatter.Format(timestamp))"
+                        DateTimeFormatter.Format(timestamp))"
                     OnRefresh="RefreshSnapshotAsync" />
 
 @if (CatalogReloadWarning is not null)

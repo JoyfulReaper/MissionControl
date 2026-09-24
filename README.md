@@ -1,6 +1,8 @@
 # Mission Control
 
-Mission Control is a .NET operations system for collecting integration events and current host/service status. It accepts authenticated events, publishes them through NATS JetStream, archives complete event envelopes in SQLite, projects selected GitHub activity, collects host and Docker diagnostics, and presents the results in an authenticated Blazor dashboard.
+Mission Control is a .NET 10 operations system for integration-event history and live infrastructure visibility. It accepts authenticated events, publishes them through NATS JetStream, archives complete envelopes in SQLite, projects selected GitHub activity, collects current host/container/protocol state from a fleet of Agents, and presents that state through an authenticated Blazor Dashboard and MAUI Blazor Hybrid Mobile app.
+
+Mission Control deliberately uses a hybrid Agent architecture: Dashboard queries Agents directly for live state, while Agents also publish selected operational events through Gateway for durable processing. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for component boundaries, detailed data flows, and current limitations. Coding agents should also read [AGENTS.md](AGENTS.md).
 
 ## Solution projects
 
@@ -9,12 +11,12 @@ Mission Control is a .NET operations system for collecting integration events an
 | `MissionControl.Gateway` | ASP.NET Core ingress for generic integration events and signed GitHub webhooks. Publishes normalized envelopes to NATS JetStream. |
 | `MissionControl.Archive` | NATS JetStream consumer and HTTP query API backed by a SQLite event archive. |
 | `MissionControl.Agent` | Collects host, Docker, and protocol status; persists the latest node snapshot; optionally publishes operational snapshot events; exposes a sanitized snapshot API. |
-| `MissionControl.Dashboard` | Authenticated Blazor Server UI for archive statistics, events, node resources, containers, probes, and a configured service catalog. Also exposes the bearer-authenticated Mobile API proxy for installed clients. |
+| `MissionControl.Dashboard` | Authenticated Blazor Server UI and integration host for the Agent fleet, service catalog, GreenCloud bandwidth, Archive, GitActivity, Work Planning, and the bearer-authenticated Mobile API. |
 | `MissionControl.GitActivity` | Consumes selected GitHub push events, stores an allowed repository/branch projection in SQLite, and exposes an API-key-protected activity feed. |
 | `MissionControl.Contracts` | Shared Agent, Archive, GitActivity, service-catalog, integration-event, and GitHub transport contracts. |
-| `MissionControl.Client` | Shared Agent, Archive, and GitActivity HTTP clients plus client-side feed state. |
-| `MissionControl.UI` | Razor Class Library with shared Git Activity, event details, overview, and service UI plus the shared Mission Control theme. |
-| `MissionControl.Mobile` | .NET MAUI Blazor Hybrid application sharing the Client, Contracts, and UI projects across Windows and Android builds. |
+| `MissionControl.Client` | Shared typed HTTP clients and client-side state for Agent, Archive, GitActivity, host fleet, bandwidth, and Work Planning APIs. |
+| `MissionControl.UI` | Razor Class Library with shared infrastructure, service, event, Git Activity, Work Planning, and overview components plus the shared theme. |
+| `MissionControl.Mobile` | .NET MAUI Blazor Hybrid application that shares Client, Contracts, and UI and reaches server-side data through Dashboard's authenticated Mobile API. |
 | `MissionControl.Messaging` | Broker-independent event publisher and integration-event processor contracts. |
 | `MissionControl.Messaging.Nats` | NATS.Net 3.1.0 publisher, JetStream initialization, durable consumer, and messaging configuration. |
 | `MissionControl.Observability` | Shared liveness/readiness endpoint mapping plus NATS JetStream and consumer health checks. |
@@ -95,31 +97,31 @@ retries its initial connection and uses its reconnect behavior for connection
 interruptions; the consumer service also restarts its consume loop after a
 failure.
 
-The Agent path is separate:
+The live Agent path is separate from durable event history:
 
 ```text
-host, Docker, and protocol collectors
+host, Docker, and protocol collectors on each node
 -> AgentWorker
--> latest snapshot in Agent SQLite
--> GET /api/snapshot
--> Dashboard Overview and Services pages
+-> latest snapshot in that Agent's SQLite database
+-> GET /api/snapshot on that Agent
+-> Dashboard fleet client
+-> Dashboard Home / Hosts / Services
 ```
 
-Installed Windows and Android clients share the same Razor UI and service clients.
-Archive data is reached through Dashboard, not by exposing Archive publicly:
+Dashboard's `Agents:Nodes` configuration defines the fleet by stable `NodeId`, display name, and Agent base URL. It queries configured nodes concurrently and preserves healthy or last-known node data when another node is unavailable. The current configuration uses Clanker and ScopeCreep as example fleet nodes.
+
+Agents also publish `missioncontrol.agent.node.snapshot` events through Gateway. Every Agent collection is saved locally, but an event is published only for the first successful attempt, an operational-state change, or the configured heartbeat. CPU, memory, container resource usage, probe duration, and diagnostic wording alone do not trigger publication. A failed publication remains eligible for the next collection.
+
+Installed Mobile clients do not contact Agents or private services directly:
 
 ```text
-Windows / Android MAUI client
+MAUI client
 -> HTTPS Dashboard Mobile API with bearer token
--> internal Dashboard Archive client
--> private Archive HTTP service
+-> Dashboard fleet and integration clients
+-> configured Agents, Archive, GitActivity, and Work Planning services
 ```
 
-The current mobile app also polls the configured Agent snapshot API for live
-host, container, and protocol status. Keep Archive private; do not publish the
-Archive HTTP service solely to support installed clients.
-
-Every Agent collection is saved locally. A snapshot is published as an integration event only for the first successful attempt, an operational-state change, or the configured heartbeat. CPU, memory, container resource usage, probe duration, and diagnostic wording alone do not trigger publication. A failed publication remains eligible for the next collection, and successful publication metadata is recorded without preventing later snapshot persistence.
+Mobile polls the authenticated `GET /api/mobile/hosts` endpoint for fleet telemetry. Dashboard refreshes Agent state for that request and combines it with the latest server-side cached GreenCloud bandwidth state. Keep Agent, Archive, GitActivity, Work Planning, and provider credentials behind Dashboard rather than exposing them for Mobile.
 
 ## Agent monitoring
 
@@ -138,46 +140,46 @@ The Agent stores one latest snapshot per node rather than a metrics history. `GE
 
 The Dashboard requires an authenticated user and provides:
 
-- **Overview**: archive totals and categories plus the current node CPU/memory snapshot;
-- **Services**: service-catalog entries correlated with Agent containers and protocol probes, including uncatalogued observations;
-- **Events**: filtering, cursor-based older-event loading, modal/full-page details, and periodic checks for new events.
-- **Git Activity**: a bounded recent-commit feed with repository and branch filters and manual refresh.
+- **Home**: Archive totals/categories and a compact live summary for every configured Agent node;
+- **Hosts**: per-node health, CPU/memory, container/protocol counts, publication status, and GreenCloud bandwidth where configured;
+- **Services**: a host selector and node-owned catalog entries correlated with that node's containers and protocol probes, including uncatalogued observations;
+- **Events**: filtering, cursor-based older-event loading, modal/full-page details, and periodic checks for new events;
+- **Git Activity**: a bounded recent-commit feed with repository and branch filters;
+- **Work**: daily/random picks, work-item summaries, and quick todo creation through the Work Planning integration.
 
-Agent data on Overview and Services refreshes automatically. Event data also polls automatically. Freshness is recalculated locally between requests. When a later refresh fails, the last successful Agent or event data remains visible with a warning. If older events are loaded, polling preserves the current list and shows a “new events available” action instead of replacing the user’s position.
+Home, Hosts, and Services refresh Agent fleet state around `Dashboard:Refresh:AgentSnapshotRefreshSeconds` (30 seconds by default). Node failures are isolated, and the UI keeps last-known snapshots where possible while marking errors and stale data. Event polling similarly preserves the user's position when older events are loaded.
 
-The service catalog is loaded from the required `MissionControl.Dashboard/services.json` file and reloads automatically. An invalid reload keeps the last valid catalog visible and displays a warning until a later valid update succeeds. Dashboard authentication uses a local SQLite user database and persisted ASP.NET Core Data Protection keys.
+The service catalog is loaded from `MissionControl.Dashboard/services.json` and reloads automatically. Each definition's `NodeId` owns that service. `ContainerName` and `ProtocolServiceKey` are matched only against the selected node's snapshot, so the same container or probe name may exist on different nodes. An invalid catalog reload keeps the last valid catalog visible and displays a warning.
 
-## Windows and Android client behavior
+GreenCloud bandwidth uses a process-wide Dashboard cache. A hosted service refreshes configured servers on startup and then according to `GreenCloud:PollSeconds` (300 seconds by default). Hosts and Mobile fleet responses read that cache; they do not initiate a fleet provider refresh. Provider failures preserve last-known bandwidth when available and do not block otherwise healthy Agent telemetry.
+
+Dashboard authentication uses a local SQLite user database and persisted ASP.NET Core Data Protection keys.
+
+## Mobile client behavior
 
 `MissionControl.Mobile` is one .NET MAUI Blazor Hybrid application. The current
 project builds Android on all supported build hosts, adds iOS and Mac Catalyst
 targets on non-Linux hosts, and adds the Windows target on Windows. The installed
-Windows and Android applications share the same Razor UI, shared theme,
-contracts, and HTTP clients.
+applications share Razor UI, the Mission Control theme, contracts, and typed
+HTTP clients.
 
 The mobile app currently provides:
 
-- **Overview**: Archive statistics through the Dashboard Mobile API, Agent
-  snapshot status, node resources, container counts, and protocol counts;
-- **Services**: bundled service-catalog entries correlated with Agent
-  containers and protocol probes;
+- **Home**: Archive statistics and a compact summary of all configured hosts;
+- **Hosts**: per-node resources, status, container/protocol counts, and cached bandwidth;
+- **Services**: a host selector and bundled node-aware service catalog correlated with fleet telemetry;
 - **Events**: source and event-type filters, cursor-based older-event loading,
   manual refresh, new-event detection, event cards, modal details, and a
   full-page details route;
 - **Git Activity**: the same shared bounded commit feed, loaded through the
   authenticated Dashboard Mobile API rather than the private service;
+- **Work**: Work Planning picks, work-item summaries, and todo creation;
 - **Settings**: entry, testing, storage, and removal of the raw Mobile API
   bearer token.
 
-Event cards open an in-place details modal. The modal supports the Close button,
-backdrop dismissal, Escape dismissal on desktop, and a View full page action.
-The app reads the shared service catalog from its bundled `services.json` asset,
-which is included from `MissionControl.Dashboard/services.json` at build time.
+All server data flows through the bearer-authenticated Dashboard Mobile API. The app stores only the raw Dashboard token in MAUI `SecureStorage`; it does not receive private Agent, Archive, GitActivity, GreenCloud, or Work Planning credentials or URLs. Host-related pages poll `GET /api/mobile/hosts` around every 30 seconds and support manual refresh. Those requests refresh Agent fleet state but consume the latest cached GreenCloud state.
 
-Agent polling runs every 30 seconds from the mobile layout, and Overview and
-Services also expose manual refresh for Agent data. Archive event and statistics
-requests keep last-known data visible when a later refresh fails and surface the
-failure as a warning or actionable Settings message.
+The app reads the shared service catalog from its bundled `services.json` asset, included from `MissionControl.Dashboard/services.json` at build time. Dashboard catalog changes require a Mobile rebuild before they appear in the installed app.
 
 ## Requirements
 
@@ -193,7 +195,7 @@ For a complete local event flow:
 - NATS with JetStream enabled, reachable by Gateway, Archive, and GitActivity;
 - writable storage for Archive, Agent, Dashboard authentication, and GitActivity SQLite databases;
 - valid API keys and, when enabled, a GitHub webhook secret;
-- Archive and Agent HTTP endpoints reachable by Dashboard.
+- Archive and every configured Agent HTTP endpoint reachable by Dashboard.
 
 For full Agent metrics, run on Linux with permission to read `/proc` and access the configured Docker Unix socket. Protocol probes additionally require network access to their configured targets.
 
@@ -268,6 +270,7 @@ Agent configuration is split across `Agent`, `AgentApi`, `AgentStorage`, and `Mi
 ```json
 {
   "Agent": {
+    "NodeId": "example-node",
     "NodeName": "local-node",
     "IntervalSeconds": 60,
     "PublicationHeartbeatMinutes": 15,
@@ -303,11 +306,11 @@ Agent configuration is split across `Agent`, `AgentApi`, `AgentStorage`, and `Mi
 }
 ```
 
-Collection interval, publication heartbeat, Docker timeout, and probe timeouts must be positive. Probe ports must be between 1 and 65535. `MissionControl.Enabled` controls publication to the configured Mission Control destination; local snapshot persistence and the Agent API continue independently of publication suppression.
+`Agent:NodeId` is the stable fleet identity; `NodeName` is the display name and is used as a compatibility fallback when `NodeId` is absent. Keep the Agent ID aligned with Dashboard `Agents:Nodes[].NodeId` and service-catalog ownership. Collection interval, publication heartbeat, Docker timeout, and probe timeouts must be positive. Probe ports must be between 1 and 65535. `MissionControl.Enabled` controls publication to the configured Mission Control destination; local snapshot persistence and the Agent API continue independently of publication suppression.
 
 ### Dashboard
 
-Dashboard uses upstream URLs plus `Dashboard`, `MissionControl`, and `ServiceCatalog` configuration.
+Dashboard is the server-side integration host. Its main sections are `Archive`, `Agents`, `Dashboard`, `GitActivityApi`, `GreenCloud`, `MissionControl`, `WorkPlanningApi`, and the `ServiceCatalog` supplied by `services.json`.
 
 ```json
 {
@@ -317,10 +320,40 @@ Dashboard uses upstream URLs plus `Dashboard`, `MissionControl`, and `ServiceCat
   "Agent": {
     "BaseUrl": "http://localhost:5194/"
   },
+  "Agents": {
+    "Nodes": [
+      {
+        "NodeId": "clanker",
+        "DisplayName": "Clanker",
+        "BaseUrl": "http://localhost:5194/"
+      },
+      {
+        "NodeId": "scopecreep",
+        "DisplayName": "ScopeCreep",
+        "BaseUrl": "http://localhost:5195/"
+      }
+    ]
+  },
   "GitActivityApi": {
     "Enabled": true,
     "BaseUrl": "http://gitactivity:8080/",
     "ApiKey": "replace-with-the-private-service-key"
+  },
+  "WorkPlanningApi": {
+    "BaseUrl": "http://localhost:5095/",
+    "ApiKey": "replace-with-the-private-work-planning-key"
+  },
+  "GreenCloud": {
+    "Enabled": true,
+    "BaseUrl": "https://cp.green.cloud/",
+    "ApiToken": "replace-with-the-provider-token",
+    "Servers": [
+      {
+        "NodeId": "clanker",
+        "ServerId": "provider-server-id"
+      }
+    ],
+    "PollSeconds": 300
   },
   "Dashboard": {
     "Refresh": {
@@ -354,7 +387,13 @@ Dashboard uses upstream URLs plus `Dashboard`, `MissionControl`, and `ServiceCat
 }
 ```
 
-Refresh intervals must be between 5 and 3600 seconds; the stale threshold must be between 5 and 86400 seconds. `ServiceCatalog:Services` is supplied by `services.json` and must contain at least one service. Each service may identify its corresponding `ContainerName` and `ProtocolServiceKey` so live Agent data can be correlated with catalog metadata.
+`Agents:Nodes` defines the active fleet. Node IDs must be unique case-insensitively, and each node needs an absolute HTTP(S) Agent URL. The retained `Agent:BaseUrl` setting supports the older single-Agent client registration; Home, Hosts, Services, and Mobile fleet telemetry use `Agents:Nodes`.
+
+Refresh intervals must be between 5 and 3600 seconds; the stale threshold must be between 5 and 86400 seconds. `ServiceCatalog:Services` is supplied by `services.json` and must contain at least one service. Each service's `NodeId` selects its owner node before `ContainerName` and `ProtocolServiceKey` are matched against that node's snapshot. Service IDs are globally unique; container names and protocol keys are unique per node.
+
+When GreenCloud is enabled, `Servers[]` maps provider server IDs to Agent `NodeId` values. Dashboard refreshes the fleet cache at `GreenCloud:PollSeconds`, which must be between 60 and 3600 seconds. Dashboard and Mobile host views read the cache; they do not trigger a provider fleet request. `GreenCloud:ApiToken` is required when enabled and belongs in secrets, not checked-in JSON. `GreenCloud:ServerId` and `GET /api/mobile/bandwidth` remain a single-server compatibility path; current multi-node host presentation uses `Servers[]` and `GET /api/mobile/hosts`.
+
+`WorkPlanningApi` configures Dashboard's server-side Work Planning client. Its bearer key stays in Dashboard and Mobile uses the authenticated Dashboard proxy.
 
 `Dashboard:MobileApi:Enabled` controls the bearer-authenticated Mobile API used
 by installed Windows and Android clients. `Dashboard:MobileApi:TokenHash` is the
@@ -443,20 +482,23 @@ The API key must contain at least 32 characters. Both allowlists must be non-emp
 | Dashboard Mobile API | `GET /api/events/statistics` | Requires the Mobile API bearer token. Proxies Archive statistics through Dashboard. |
 | Dashboard Mobile API | `GET /api/events/{eventId}` | Requires the Mobile API bearer token. Proxies complete Archive event details through Dashboard. |
 | Dashboard Mobile API | `GET /api/mobile/git-activity` | Requires the Mobile API bearer token. Returns a bounded recent feed through Dashboard's private GitActivity client with no-store headers. |
+| Dashboard Mobile API | `GET /api/mobile/hosts` | Requires the Mobile API bearer token. Refreshes configured Agents and combines them with the latest cached GreenCloud fleet state. |
+| Dashboard Mobile API | `GET /api/mobile/work-planning/*` | Requires the Mobile API bearer token. Proxies Work Planning reads and todo creation with Dashboard's server credential. |
+| Dashboard Mobile API | `GET /api/mobile/bandwidth` | Retained authenticated single-server compatibility endpoint; unlike the host-fleet path, it calls GreenCloud directly. |
 | Agent | `GET /api/snapshot` | Latest sanitized node snapshot; returns 503 until one is stored. |
 | GitActivity | `GET /api/github/activity` | Recent allowed activity; requires `X-Mission-Control-Key`. |
 
 Gateway, Archive, and GitActivity expose `GET /health/live` and `GET /health/ready`. Gateway readiness verifies that the configured JetStream stream is available. Archive and GitActivity readiness additionally verifies that their durable NATS consumer is running and their SQLite database is healthy. Agent exposes `GET /health/live`. Dashboard pages are cookie-authenticated and redirect anonymous users to `/login`.
 
-Dashboard pages (`/`, `/events`, `/events/{eventId}`, `/services`,
-`/gitactivity`, `/login`, and `/logout`) use normal cookie authentication. The Dashboard Mobile API uses
+Dashboard pages (`/`, `/hosts`, `/services`, `/events`, `/events/{eventId}`,
+`/gitactivity`, `/work`, `/login`, and `/logout`) use normal cookie authentication. The Dashboard Mobile API uses
 bearer authentication and does not use the Dashboard cookie.
 
 Archive query endpoints and Agent liveness do not add application-level
 authentication. Place internal services behind appropriate network controls or
 an authenticated proxy when they are not intended to be public. The Mobile API
-exists so Archive can remain private while installed clients read Archive data
-through Dashboard.
+exists so installed clients can reach fleet and integration data through
+Dashboard without exposing those internal services or credentials.
 
 ## Local development
 
@@ -632,43 +674,33 @@ Android updates must be signed with the same signing key.
 
 ## Containers
 
-The repository contains Dockerfiles for Gateway, Archive, Dashboard, and GitActivity:
+The repository contains build/deployment Dockerfiles for Gateway, Archive,
+Dashboard, GitActivity, and Agent:
 
 ```bash
 docker build -f Dockerfile.gateway -t mission-control-gateway .
 docker build -f Dockerfile.archive -t mission-control-archive .
 docker build -f Dockerfile.dashboard -t mission-control-dashboard .
 docker build -f Dockerfile.gitactivity -t mission-control-gitactivity .
+docker build -f Dockerfile.agent -t mission-control-agent .
 ```
 
-There is no Compose file checked into this repository and no Agent Dockerfile.
-Production Compose orchestration is maintained externally in
-[`UsefulScripts/VPS/docker-compose.yaml`](https://github.com/JoyfulReaper/UsefulScripts/blob/main/VPS/docker-compose.yaml)
-and currently runs `nats:2.14.3-alpine` with JetStream enabled:
+There is no production Compose file in this repository. Production orchestration
+and deployment configuration are maintained externally in
+[JoyfulReaper/UsefulScripts](https://github.com/JoyfulReaper/UsefulScripts),
+which is authoritative for the current production topology, images, networks,
+mounts, and environment settings.
 
-```yaml
-nats:
-  image: nats:2.14.3-alpine
-  command: ["-js", "-sd", "/data/jetstream"]
-  volumes:
-    - nats-data:/data/jetstream
-```
+`Dockerfile.agent` makes an Agent image available as a build/deployment option;
+it does not mean the current production Agents are necessarily containerized.
+A containerized Agent that inspects the host Docker daemon needs access to the
+configured Docker socket, which is effectively privileged host access.
 
-Gateway, Archive, and GitActivity join the Compose `backend` network and use
-`Nats__Url=nats://nats:4222`, distinct production `Nats__ClientName` values,
-and `Nats__StreamName=MISSION_CONTROL_EVENTS`. Archive and GitActivity also set
-their `NatsConsumer__DurableName`, `NatsConsumer__FilterSubject`, and
-`NatsConsumer__MaxDeliveries=5` values. The `nats-data` volume is production
-state and must be retained across container replacement.
-
-- The Archive image defaults `EventArchive__BasePath` to `/app/data` and declares that path as a volume. Production Compose overrides it to `/data` and mounts `archive-data` there.
-- Dashboard declares `/app/data` for its authentication database and Data Protection keys.
-- Dashboard requires the private `GitActivityApi__BaseUrl` and matching
-  `GitActivityApi__ApiKey`; GitActivity requires the same value through
-  `GitActivity__ApiKey`. Supply that value through deployment secrets.
-- Gateway requires NATS, event-source, and optional webhook configuration through external settings and secrets.
-- GitActivity requires NATS consumer, API-key, allowlist, and SQLite path configuration. Its Dockerfile does not declare a data volume; production Compose mounts `gitactivity-data` at `/data`.
-- An externally containerized Agent would require access to the configured Docker Unix socket, but this repository does not provide or endorse a Compose mounting recipe. Docker socket access is highly privileged.
+Persist Archive, Agent, Dashboard authentication/Data Protection, GitActivity,
+and JetStream state according to the external deployment. Supply NATS URLs,
+API keys, webhook secrets, GreenCloud tokens, Work Planning keys, Mobile token
+hashes, and other environment-specific values through deployment configuration
+or secrets rather than baking them into images.
 
 ## Testing
 
@@ -682,9 +714,12 @@ The xUnit suite covers:
 - Agent host collection, Docker state/resource parsing, and collector-failure isolation;
 - protocol probe execution, timeout, and public diagnostic sanitization;
 - snapshot persistence, API/Dashboard contract compatibility, publication gating, retries, and metadata;
-- Dashboard refresh, freshness, last-known-data, polling cancellation, paging, and new-event handling;
+- multi-node fleet identity, service-catalog ownership, host aggregation, refresh, freshness, and last-known-data behavior;
+- GreenCloud polling cadence, concurrency suppression, cached Mobile responses, and bandwidth-specific failure handling;
+- Dashboard polling cancellation, event paging, and new-event handling;
 - GitActivity contracts, private-client authentication, Mobile proxy security,
-  shared feed behavior, filtering, navigation, and storage projection behavior.
+  shared feed behavior, filtering, navigation, and storage projection behavior;
+- Work Planning clients and authenticated Mobile proxy behavior.
 
 Run the repository formatting check with:
 
@@ -694,14 +729,11 @@ dotnet format MissionControl.slnx --verify-no-changes
 
 ## Security and operations
 
-- Keep event-source keys, GitActivity keys, NATS credentials if configured, GitHub webhook secrets, and Dashboard user credentials out of source control.
+- Keep event-source keys, GitActivity and Work Planning keys, GreenCloud tokens, NATS credentials if configured, GitHub webhook secrets, and Dashboard user credentials out of source control.
 - Webhook signatures and API keys are validated before event publication; GitActivity compares its API key in fixed time.
 - Keep Mobile API raw tokens, token hashes, Android keystores, signing passwords, and production host secrets out of source control.
 - The Dashboard stores only the configured Mobile API token hash. Installed clients store the raw token independently in MAUI `SecureStorage`.
-- Mobile Archive traffic should follow the Dashboard Mobile API proxy path; do not expose Archive publicly merely to support Windows or Android clients.
-- Mobile GitActivity traffic must follow the Dashboard Mobile API proxy. MAUI
-  must never receive `X-Mission-Control-Key`, the private GitActivity URL, or
-  the GitActivity API key.
+- Mobile traffic for Archive, GitActivity, Agent fleet, GreenCloud, and Work Planning data must use the authenticated Dashboard Mobile API. MAUI must never receive upstream API keys, provider tokens, or private service URLs.
 - Dashboard authentication state depends on persistent SQLite and Data Protection key storage. Back up and permission those paths appropriately.
 - Access to the Docker socket is effectively privileged host access. Grant it only to a trusted Agent process.
 - Agent protocol endpoints and errors are sanitized before public serialization; local collector logs can contain more operational context and should be protected accordingly.
@@ -713,7 +745,11 @@ dotnet format MissionControl.slnx --verify-no-changes
 ## Current limitations
 
 - Agent storage retains only the latest snapshot per node; it is not a historical metrics database.
+- Dashboard depends on direct network access to each configured Agent for live state; archived Agent events are not the live-state source.
+- Agent refresh state is page/request driven rather than a single process-wide fleet cache, so multiple Mobile clients can create additional Agent reads.
+- The GreenCloud fleet cache is process-local and starts empty after a Dashboard restart. The retained single-server `/api/mobile/bandwidth` compatibility route still calls the provider directly.
+- Dashboard reloads `services.json` at runtime, while Mobile receives its catalog at build time.
 - Linux `/proc` supplies the implemented host CPU, load-average, and memory metrics, and Docker collection currently targets a Unix socket.
 - Host uptime is not collected by the Agent.
-- The repository does not include its externally maintained Compose orchestration or an Agent container image.
+- The repository does not include its externally maintained production Compose orchestration. `Dockerfile.agent` is available, but production Agents are not necessarily containerized.
 - Automated tests avoid external infrastructure; a real Gateway → NATS JetStream → Archive/GitActivity smoke test is still recommended for deployment validation.

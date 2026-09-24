@@ -1,0 +1,189 @@
+﻿@if (IsLoading)
+{
+    <div class="bandwidth-card">
+        Loading GreenCloud bandwidth...
+    </div>
+}
+else if (Snapshot is null)
+{
+    <div class="alert alert-danger">
+        @(ErrorMessage ??
+            "Bandwidth data is unavailable.")
+    </div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-warning">
+            @ErrorMessage
+        </div>
+    }
+
+    <div class="bandwidth-card">
+        <div class="bandwidth-summary">
+            <div>
+                <span>Used</span>
+                <strong>
+                    @FormatBytes(Snapshot.UsedBytes)
+                </strong>
+                <small>
+                    @Snapshot.UsedPercent.ToString("N2")%
+                </small>
+            </div>
+
+            <div>
+                <span>Remaining</span>
+                <strong>
+                    @FormatBytes(Snapshot.RemainingBytes)
+                </strong>
+                <small>
+                    @Snapshot.RemainingPercent.ToString("N2")%
+                </small>
+            </div>
+
+            <div>
+                <span>Monthly limit</span>
+                <strong>
+                    @FormatBytes(Snapshot.MonthlyLimitBytes)
+                </strong>
+            </div>
+
+            <div>
+                <span>Projected</span>
+                <strong>
+                    @FormatBytes(Snapshot.ProjectedBytes)
+                </strong>
+                <small>
+                    @Snapshot.ProjectedPercent.ToString("N1")%
+                </small>
+            </div>
+        </div>
+
+        <div class="bandwidth-progress"
+             role="progressbar"
+             aria-valuenow="@ProgressValue"
+             aria-valuemin="0"
+             aria-valuemax="100">
+            <div style="@ProgressStyle"></div>
+        </div>
+
+        <div class="bandwidth-details">
+            <div>
+                <span>RX total</span>
+                <strong>@FormatBytes(Snapshot.RxBytes)</strong>
+            </div>
+
+            <div>
+                <span>TX total</span>
+                <strong>@FormatBytes(Snapshot.TxBytes)</strong>
+            </div>
+
+            <div>
+                <span>RX rate</span>
+                <strong>
+                    @FormatRate(
+                        Snapshot.RxBytesPerSecond)
+                </strong>
+            </div>
+
+            <div>
+                <span>TX rate</span>
+                <strong>
+                    @FormatRate(
+                        Snapshot.TxBytesPerSecond)
+                </strong>
+            </div>
+
+            <div>
+                <span>Average/day</span>
+                <strong>
+                    @FormatBytes(
+                        Snapshot.AverageBytesPerDay)
+                </strong>
+            </div>
+
+            <div>
+                <span>Available/day</span>
+                <strong>
+                    @FormatBytes(
+                        Snapshot.AvailableBytesPerDay)
+                </strong>
+            </div>
+
+            <div>
+                <span>Days remaining</span>
+                <strong>
+                    @Snapshot.DaysRemaining.ToString("N1")
+                </strong>
+            </div>
+
+            <div>
+                <span>Status</span>
+                <strong>@Snapshot.Status</strong>
+            </div>
+        </div>
+
+        <div class="bandwidth-footer">
+            @Snapshot.ServerName
+            · Period
+            @Snapshot.PeriodStart.ToString("yyyy-MM-dd")
+            –
+            @Snapshot.PeriodEnd.ToString("yyyy-MM-dd")
+            · Updated
+            @(Snapshot.UpdatedAt
+                .ToLocalTime()
+                .ToString("HH:mm:ss"))
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public BandwidthUsageSnapshot? Snapshot { get; set; }
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public string? ErrorMessage { get; set; }
+
+    private int ProgressValue =>
+        Snapshot is null
+            ? 0
+            : (int)Math.Clamp(Snapshot.UsedPercent, 0, 100);
+
+    private string ProgressStyle =>
+        $"width: {ProgressValue}%";
+
+    private static string FormatBytes(
+        double bytes)
+    {
+        const double gb = 1024d * 1024 * 1024;
+        const double tb = gb * 1024;
+
+        return bytes >= tb
+            ? $"{bytes / tb:N2} TB"
+            : $"{bytes / gb:N2} GB";
+    }
+
+    private static string FormatRate(
+        double? bytesPerSecond)
+    {
+        if (bytesPerSecond is null)
+        {
+            return "Calculating...";
+        }
+
+        double mbps =  bytesPerSecond.Value *  8 /   1_000_000d;
+
+        if (mbps >= 1)
+        {
+            return $"{mbps:N2} Mbps";
+        }
+
+        double kbps = bytesPerSecond.Value * 8 /  1_000d;
+
+        return $"{kbps:N2} Kbps";
+    }
+}

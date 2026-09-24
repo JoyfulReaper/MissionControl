@@ -1,7 +1,8 @@
 ﻿@page "/"
 
-@implements IDisposable
-@inject MobileAgentSnapshotState SnapshotState
+@implements IAsyncDisposable
+
+@inject MobileHostFleetState HostFleetState
 @inject IArchiveEventClient ArchiveClient
 @inject MobileApiCredentialStore CredentialStore
 
@@ -16,23 +17,23 @@
         <h1>Mission Control</h1>
 
         <p>
-            Work planning, bandwidth, Archive activity,
-            host resources, containers, and protocol status.
+            Live Archive activity, host resources,
+            containers, and protocol status.
         </p>
     </header>
 
-    @if (!_archiveConfigurationChecked)
+    @if (!_configurationChecked)
     {
         <div class="alert alert-info">
             Checking Mobile API configuration...
         </div>
     }
-    else if (!_hasArchiveToken)
+    else if (!_hasMobileApiToken)
     {
         <div class="alert alert-warning">
             <div>
                 Configure the Mobile API token to view
-                Archive activity, bandwidth, and Work Planning.
+                Archive activity, hosts, and Work Planning.
             </div>
 
             <NavLink class="alert-link"
@@ -51,67 +52,127 @@
                                 OnRefresh="RefreshArchiveStatisticsAsync" />
     }
 
-    <AgentSnapshotPanel Snapshot="SnapshotState.Snapshot"
-                        IsLoading="SnapshotState.IsInitialLoading"
-                        IsRefreshing="SnapshotState.IsRefreshing"
-                        IsManualRefreshing="SnapshotState.IsManualRefreshing"
-                        ErrorMessage="@SnapshotState.ErrorMessage"
-                        TimestampFormatter="FormatTimestamp"
-                        OnRefresh="RefreshSnapshotAsync" />
-
     <section class="mobile-section"
-             aria-labelledby="node-resources-title">
+             aria-labelledby="hosts-title">
         <div class="mobile-section-heading">
             <div>
                 <div class="mobile-eyebrow">
                     Current telemetry
                 </div>
 
-                <h2 id="node-resources-title">
-                    Node resources
+                <h2 id="hosts-title">
+                    Hosts
                 </h2>
             </div>
+
+            <NavLink class="btn btn-sm btn-outline-primary"
+                     href="hosts">
+                View hosts
+            </NavLink>
         </div>
 
-        <NodeResourceCards Host="SnapshotState.Snapshot?.Host"
-                           IsLoading="SnapshotState.IsInitialLoading"
-                           ErrorMessage="@SnapshotState.ErrorMessage" />
+        @if (!_hasMobileApiToken)
+        {
+            <div class="alert alert-secondary">
+                Host telemetry requires the Mobile API token.
+            </div>
+        }
+        else if (HostFleetState.IsInitialLoading)
+        {
+            <NodeResourceCards IsLoading="true" />
+        }
+        else if (HostFleetState.Hosts.Count == 0)
+        {
+            <div class="alert alert-warning">
+                @(HostFleetState.ErrorMessage ??
+                    "No Mission Control hosts are available.")
+            </div>
+        }
+        else
+        {
+            @if (!string.IsNullOrWhiteSpace(
+                    HostFleetState.ErrorMessage))
+            {
+                <div class="alert alert-warning">
+                    @HostFleetState.ErrorMessage
+                </div>
+            }
+
+            <div class="mobile-host-overview">
+                @foreach (HostNodeSnapshot host
+                    in HostFleetState.Hosts)
+                {
+                    <section class="mobile-host-summary">
+                        <div class="mobile-host-summary-heading">
+                            <div>
+                                <div class="mobile-host-id">
+                                    @host.NodeId
+                                </div>
+
+                                <h3>
+                                    @host.DisplayName
+                                </h3>
+                            </div>
+
+                            <span class="@GetStatusClass(host)">
+                                @GetStatus(host)
+                            </span>
+                        </div>
+
+                        <NodeResourceCards Host="host.AgentSnapshot?.Host"
+                                           IsLoading="false"
+                                           ErrorMessage="@GetResourceError(host)" />
+                    </section>
+                }
+            </div>
+        }
     </section>
 
-    @if (SnapshotState.Snapshot is not null)
+    @if (CurrentSnapshots.Count > 0)
     {
-        <section class="mobile-observation-grid">
+        <section class="mobile-observation-grid"
+                 aria-label="Operational observations">
             <article class="mobile-observation-card">
                 <span>Containers observed</span>
+
                 <strong>
-                    @(SnapshotState.Snapshot.Containers.Count.ToString("N0"))
+                    @(CurrentSnapshots
+                        .Sum(snapshot =>
+                            snapshot.Containers.Count)
+                        .ToString("N0"))
                 </strong>
             </article>
 
             <article class="mobile-observation-card">
                 <span>Successful probes</span>
+
                 <strong>
-                    @(SnapshotState.Snapshot.Protocols
-                        .Count(protocol => protocol.Succeeded)
+                    @(CurrentSnapshots
+                        .Sum(snapshot =>
+                            snapshot.Protocols.Count(
+                                protocol =>
+                                    protocol.Succeeded))
                         .ToString("N0"))
                 </strong>
             </article>
 
             <article class="mobile-observation-card">
                 <span>Failed probes</span>
+
                 <strong>
-                    @(SnapshotState.Snapshot.Protocols
-                        .Count(protocol => !protocol.Succeeded)
+                    @(CurrentSnapshots
+                        .Sum(snapshot =>
+                            snapshot.Protocols.Count(
+                                protocol =>
+                                    !protocol.Succeeded))
                         .ToString("N0"))
                 </strong>
             </article>
         </section>
     }
 
-    @if (_hasArchiveToken)
+    @if (_hasMobileApiToken)
     {
-        <BandwidthUsagePanel />
-
         <DailyWorkPickPanel TimestampFormatter="FormatTimestamp" />
 
         <QuickAddTodoPanel />
@@ -119,49 +180,65 @@
 </div>
 
 @code {
-    private readonly CancellationTokenSource _disposeSource =
-        new();
+    private static readonly TimeSpan PollingInterval = TimeSpan.FromSeconds(30);
+    private readonly CancellationTokenSource _disposeSource = new();
 
     private ArchiveStatisticsItem? _archiveStatistics;
     private string? _archiveError;
-    private bool _archiveConfigurationChecked;
+    private bool _configurationChecked;
     private bool _archiveIsLoading;
     private bool _archiveIsRefreshing;
-    private bool _hasArchiveToken;
+    private bool _hasMobileApiToken;
+
+    private Task? _fleetPollingTask;
+
+    private IReadOnlyList<PublicNodeSnapshot> CurrentSnapshots =>
+        HostFleetState.Hosts
+            .Where(host =>
+                host.AgentSnapshot is not null)
+            .Select(host =>
+                host.AgentSnapshot!)
+            .ToArray();
 
     protected override async Task OnInitializedAsync()
     {
-        SnapshotState.Changed += HandleSnapshotStateChanged;
-
-        Task snapshotTask = SnapshotState.EnsureLoadedAsync(_disposeSource.Token);
+        HostFleetState.Changed += HandleHostFleetStateChanged;
 
         try
         {
             string? token = await CredentialStore.GetTokenAsync();
 
-            _hasArchiveToken =!string.IsNullOrWhiteSpace(token);
-            _archiveConfigurationChecked = true;
+            _hasMobileApiToken = !string.IsNullOrWhiteSpace(token);
+            _configurationChecked = true;
 
-            if (_hasArchiveToken)
+            if (_hasMobileApiToken)
             {
-                await LoadArchiveStatisticsAsync(isManualRefresh: false);
+                await Task.WhenAll(
+                    LoadArchiveStatisticsAsync(
+                        isManualRefresh: false),
+                    HostFleetState.EnsureLoadedAsync(
+                        _disposeSource.Token));
+
+                _fleetPollingTask =
+                    HostFleetState.RunPollingAsync(
+                        PollingInterval,
+                        _disposeSource.Token);
             }
         }
         catch (Exception exception)
         {
-            _archiveConfigurationChecked = true;
+            _configurationChecked = true;
 
             _archiveError =
                 "Could not read the Mobile API configuration: " +
                 exception.Message;
         }
-
-        await snapshotTask;
     }
 
     private Task RefreshArchiveStatisticsAsync()
     {
-        return LoadArchiveStatisticsAsync(isManualRefresh: true);
+        return LoadArchiveStatisticsAsync(
+            isManualRefresh: true);
     }
 
     private async Task LoadArchiveStatisticsAsync(
@@ -178,7 +255,9 @@
 
         try
         {
-            _archiveStatistics = await ArchiveClient.GetStatisticsAsync(_disposeSource.Token);
+            _archiveStatistics =
+                await ArchiveClient.GetStatisticsAsync(
+                    _disposeSource.Token);
 
             _archiveError = null;
         }
@@ -192,7 +271,9 @@
                 TaskCanceledException or
                 InvalidOperationException)
         {
-            _archiveError = CreateArchiveErrorMessage(exception);
+            _archiveError =
+                CreateArchiveErrorMessage(
+                    exception);
         }
         finally
         {
@@ -208,16 +289,19 @@
         {
             HttpRequestException
             {
-                StatusCode: System.Net.HttpStatusCode.Unauthorized
+                StatusCode:
+                    System.Net.HttpStatusCode.Unauthorized
             } =>
                 "The Dashboard rejected the Mobile API token. " +
                 "Update it in Settings.",
 
             HttpRequestException
             {
-                StatusCode: System.Net.HttpStatusCode.BadGateway
+                StatusCode:
+                    System.Net.HttpStatusCode.BadGateway
             } =>
-                "The Dashboard could not reach the Mission Control Archive.",
+                "The Dashboard could not reach the " +
+                "Mission Control Archive.",
 
             HttpRequestException =>
                 "Archive statistics could not be retrieved: " +
@@ -226,26 +310,64 @@
             TaskCanceledException =>
                 "The Archive statistics request timed out.",
 
-            _ => exception.Message
+            _ =>
+                exception.Message
         };
     }
 
-    private Task RefreshSnapshotAsync()
-    {
-        return SnapshotState.RefreshAsync(isManualRefresh: true);
-    }
-
-    private void HandleSnapshotStateChanged()
+    private void HandleHostFleetStateChanged()
     {
         _ = InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose()
+    private static string GetStatus(
+        HostNodeSnapshot host)
     {
-        SnapshotState.Changed -= HandleSnapshotStateChanged;
+        if (!string.IsNullOrWhiteSpace(
+                host.AgentError))
+        {
+            return "DEGRADED";
+        }
 
-        _disposeSource.Cancel();
-        _disposeSource.Dispose();
+        if (host.AgentSnapshot is null)
+        {
+            return "UNAVAILABLE";
+        }
+
+        if (host.AgentSnapshot.Stale)
+        {
+            return "STALE";
+        }
+
+        return "ONLINE";
+    }
+
+    private static string GetStatusClass(
+        HostNodeSnapshot host)
+    {
+        return GetStatus(host) switch
+        {
+            "ONLINE" =>
+                "badge text-bg-success",
+
+            "DEGRADED" or "STALE" =>
+                "badge text-bg-warning",
+
+            _ =>
+                "badge text-bg-secondary"
+        };
+    }
+
+    private static string? GetResourceError(
+        HostNodeSnapshot host)
+    {
+        if (host.AgentSnapshot?.Host is not null)
+        {
+            return null;
+        }
+
+        return host.AgentError ??
+            "Host resource telemetry is unavailable.";
     }
 
     private static string FormatTimestamp(
@@ -254,5 +376,25 @@
         return timestamp
             .ToLocalTime()
             .ToString("yyyy-MM-dd HH:mm:ss zzz");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        HostFleetState.Changed -= HandleHostFleetStateChanged;
+
+        await _disposeSource.CancelAsync();
+
+        if (_fleetPollingTask is not null)
+        {
+            try
+            {
+                await _fleetPollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _disposeSource.Dispose();
     }
 }

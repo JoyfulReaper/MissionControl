@@ -4,8 +4,15 @@ public sealed class AgentOptions
 {
     public const string SectionName = "Agent";
 
+    public string? NodeId { get; init; }
+
     public string NodeName { get; init; } =
         Environment.MachineName;
+
+    public string EffectiveNodeId =>
+        string.IsNullOrWhiteSpace(NodeId)
+            ? NodeName
+            : NodeId.Trim();
 
     public int IntervalSeconds { get; init; } = 60;
 

@@ -1,17 +1,16 @@
-﻿using MissionControl.Client.Agent;
-using MissionControl.Contracts.Agent;
+﻿using MissionControl.Client.Infrastructure;
 
 namespace MissionControl.Mobile.Services;
 
-public sealed class MobileAgentSnapshotState(
-    IAgentSnapshotClient agentClient) : IDisposable
+public sealed class MobileHostFleetState(
+    IHostFleetClient hostFleetClient) : IDisposable
 {
     private readonly SemaphoreSlim _refreshGate =
         new(initialCount: 1, maxCount: 1);
 
     public event Action? Changed;
 
-    public PublicNodeSnapshot? Snapshot { get; private set; }
+    public IReadOnlyList<HostNodeSnapshot> Hosts { get; private set; } = [];
 
     public bool IsInitialLoading { get; private set; } = true;
 
@@ -24,7 +23,7 @@ public sealed class MobileAgentSnapshotState(
     public Task EnsureLoadedAsync(
         CancellationToken cancellationToken = default)
     {
-        return Snapshot is null
+        return IsInitialLoading
             ? RefreshAsync(
                 isManualRefresh: false,
                 cancellationToken)
@@ -35,9 +34,7 @@ public sealed class MobileAgentSnapshotState(
         bool isManualRefresh,
         CancellationToken cancellationToken = default)
     {
-        bool entered = await _refreshGate.WaitAsync(
-            millisecondsTimeout: 0,
-            cancellationToken);
+        bool entered = await _refreshGate.WaitAsync(millisecondsTimeout: 0, cancellationToken);
 
         if (!entered)
         {
@@ -46,13 +43,12 @@ public sealed class MobileAgentSnapshotState(
 
         IsRefreshing = true;
         IsManualRefreshing = isManualRefresh;
+
         NotifyChanged();
 
         try
         {
-            Snapshot =
-                await agentClient.GetSnapshotAsync(
-                    cancellationToken);
+            Hosts = await hostFleetClient.GetAsync(cancellationToken);
 
             ErrorMessage = null;
         }
@@ -61,14 +57,21 @@ public sealed class MobileAgentSnapshotState(
         {
             throw;
         }
-        catch (Exception exception)
-            when (exception is
-                HttpRequestException or
-                TaskCanceledException or
-                InvalidOperationException)
+        catch (HttpRequestException exception)
         {
             ErrorMessage =
-                $"Latest Agent refresh failed: {exception.Message}";
+                exception.StatusCode ==
+                System.Net.HttpStatusCode.Unauthorized
+                    ? "Configure the Mobile API token in Settings to view hosts."
+                    : "Host telemetry could not be retrieved.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorMessage = "The host telemetry request timed out.";
+        }
+        catch (InvalidOperationException exception)
+        {
+            ErrorMessage = exception.Message;
         }
         finally
         {
@@ -77,6 +80,7 @@ public sealed class MobileAgentSnapshotState(
             IsManualRefreshing = false;
 
             _refreshGate.Release();
+
             NotifyChanged();
         }
     }
@@ -92,22 +96,19 @@ public sealed class MobileAgentSnapshotState(
                 "The polling interval must be greater than zero.");
         }
 
-        using var timer = new PeriodicTimer(interval);
+        using var timer =
+            new PeriodicTimer(interval);
 
         try
         {
-            while (await timer.WaitForNextTickAsync(
-                       cancellationToken))
+            while (await timer.WaitForNextTickAsync(cancellationToken))
             {
-                await RefreshAsync(
-                    isManualRefresh: false,
-                    cancellationToken);
+                await RefreshAsync(isManualRefresh: false, cancellationToken);
             }
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
         {
-            // Normal application or layout shutdown.
         }
     }
 

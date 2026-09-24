@@ -1,6 +1,4 @@
 ﻿@inherits LayoutComponentBase
-@implements IAsyncDisposable
-@inject MobileAgentSnapshotState SnapshotState
 
 <div class="page">
     <div class="sidebar">
@@ -19,33 +17,3 @@
         </article>
     </main>
 </div>
-
-@code {
-    private static readonly TimeSpan PollingInterval =
-        TimeSpan.FromSeconds(30);
-
-    private readonly CancellationTokenSource _disposeSource =
-        new();
-
-    private Task? _pollingTask;
-
-    protected override void OnInitialized()
-    {
-        _pollingTask =
-            SnapshotState.RunPollingAsync(
-                PollingInterval,
-                _disposeSource.Token);
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        _disposeSource.Cancel();
-
-        if (_pollingTask is not null)
-        {
-            await _pollingTask;
-        }
-
-        _disposeSource.Dispose();
-    }
-}

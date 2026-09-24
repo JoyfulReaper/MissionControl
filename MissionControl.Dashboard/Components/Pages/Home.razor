@@ -3,12 +3,11 @@
 @implements IAsyncDisposable
 
 @inject IArchiveEventClient ArchiveClient
-@inject IAgentSnapshotClient AgentClient
+@inject IAgentFleetClient AgentFleetClient
 @inject IDashboardDateTimeFormatter DateTimeFormatter
 @inject IOptions<DashboardRefreshOptions> RefreshOptions
 @inject TimeProvider TimeProvider
 @inject IDashboardPollingLoop PollingLoop
-@inject IOptions<GreenCloudOptions> GreenCloudOptions
 
 <PageTitle>Mission Control</PageTitle>
 
@@ -32,15 +31,6 @@
                             TimestampFormatter="DateTimeFormatter.Format"
                             OnRefresh="RefreshArchiveStatisticsAsync" />
 
-    <AgentSnapshotPanel Snapshot="CurrentSnapshot"
-                        IsLoading="_agentRefresh.IsInitialLoading"
-                        IsRefreshing="_agentRefresh.IsRefreshing"
-                        IsManualRefreshing="_isManualAgentRefresh"
-                        ErrorMessage="@_agentRefresh.RefreshWarning"
-                        TimestampFormatter="@(timestamp =>
-                            DateTimeFormatter.Format(timestamp))"
-                        OnRefresh="RefreshSnapshotAsync" />
-
     <section class="overview-section"
              aria-labelledby="node-resources-title">
         <div class="section-heading">
@@ -50,97 +40,145 @@
                 </div>
 
                 <h2 id="node-resources-title">
-                    Node resources
+                    Hosts
                 </h2>
             </div>
+
+            <a href="hosts"
+               class="btn btn-sm btn-outline-primary">
+                View hosts
+            </a>
         </div>
 
-        <NodeResourceCards Host="CurrentSnapshot?.Host"
-                           IsLoading="_agentRefresh.IsInitialLoading"
-                           ErrorMessage="@ResourceError" />
+        @if (_fleetRefresh.IsInitialLoading)
+        {
+            <NodeResourceCards IsLoading="true" />
+        }
+        else if (_fleetRefresh.CurrentNodes.Count == 0)
+        {
+            <div class="alert alert-warning">
+                @(_fleetRefresh.RefreshWarning ??
+                    "No Agent nodes are available.")
+            </div>
+        }
+        else
+        {
+            <div class="overview-hosts">
+                @foreach (AgentNodeResult node in _fleetRefresh.CurrentNodes)
+                {
+                    <section class="overview-host">
+                        <div class="overview-host-heading">
+                            <div>
+                                <div class="overview-host-id">
+                                    @node.NodeId
+                                </div>
 
+                                <h3>@node.DisplayName</h3>
+                            </div>
+
+                            <span class="service-chip @GetNodeStatusClass(node)">
+                                @GetNodeStatus(node)
+                            </span>
+                        </div>
+
+                        <NodeResourceCards Host="node.Snapshot?.Host"
+                                           IsLoading="false"
+                                           ErrorMessage="@GetResourceError(node)" />
+                    </section>
+                }
+            </div>
+        }
     </section>
 
-    @if (CurrentSnapshot is not null)
+    @if (CurrentSnapshots.Count > 0)
     {
         <section class="observation-grid"
                  aria-label="Operational observations">
             <article class="observation-card">
                 <span>Containers observed</span>
+
                 <strong>
-                    @(CurrentSnapshot.Containers.Count.ToString("N0"))
+                    @(CurrentSnapshots
+                        .Sum(snapshot => snapshot.Containers.Count)
+                        .ToString("N0"))
                 </strong>
             </article>
 
             <article class="observation-card">
                 <span>Successful probes</span>
+
                 <strong>
-                    @(CurrentSnapshot.Protocols
-                        .Count(protocol => protocol.Succeeded)
+                    @(CurrentSnapshots
+                        .Sum(snapshot =>
+                            snapshot.Protocols.Count(
+                                protocol => protocol.Succeeded))
                         .ToString("N0"))
                 </strong>
             </article>
 
             <article class="observation-card">
                 <span>Failed probes</span>
+
                 <strong>
-                    @(CurrentSnapshot.Protocols
-                        .Count(protocol => !protocol.Succeeded)
+                    @(CurrentSnapshots
+                        .Sum(snapshot =>
+                            snapshot.Protocols.Count(
+                                protocol => !protocol.Succeeded))
                         .ToString("N0"))
                 </strong>
             </article>
         </section>
     }
 
-    @if (GreenCloudOptions.Value.Enabled)
-    {
-        <BandwidthUsagePanel RefreshSeconds="@GreenCloudOptions.Value.PollSeconds" />
-    }
-
     <DailyWorkPickPanel TimestampFormatter="DateTimeFormatter.Format" />
     <QuickAddTodoPanel />
 </div>
 
-@code 
+@code
 {
     private ArchiveStatisticsItem? _statistics;
     private bool _archiveIsLoading;
     private bool _archiveIsRefreshing;
     private string? _archiveError;
-    private AgentSnapshotRefreshController _agentRefresh = null!;
-    private readonly CancellationTokenSource _disposeSource = new();
+
+    private AgentFleetRefreshController _fleetRefresh = null!;
+
+    private readonly CancellationTokenSource
+        _disposeSource = new();
+
     private Task? _pollingTask;
-    private bool _isManualAgentRefresh;
     private bool _disposed;
 
-    private AgentSnapshotItem? CurrentSnapshot =>
-        _agentRefresh?.CurrentSnapshot;
-
-    private string? ResourceError =>
-        CurrentSnapshot?.Host is null
-            ? _agentRefresh.RefreshWarning ??
-              NodeResourceCalculations.UnavailableMessage
-            : null;
+    private IReadOnlyList<PublicNodeSnapshot> CurrentSnapshots =>
+        _fleetRefresh?.CurrentNodes
+            .Where(node => node.Snapshot is not null)
+            .Select(node => node.Snapshot!)
+            .ToArray()
+        ?? [];
 
     protected override async Task OnInitializedAsync()
     {
-        _agentRefresh = new AgentSnapshotRefreshController(
-            AgentClient,
-            TimeProvider,
-            TimeSpan.FromSeconds(
-                RefreshOptions.Value.SnapshotStaleAfterSeconds));
+        _fleetRefresh =
+            new AgentFleetRefreshController(
+                AgentFleetClient,
+                TimeProvider,
+                TimeSpan.FromSeconds(
+                    RefreshOptions.Value
+                        .SnapshotStaleAfterSeconds));
 
         await Task.WhenAll(
             LoadArchiveStatisticsAsync(
                 isManualRefresh: false),
-            _agentRefresh.RefreshAsync(
+            _fleetRefresh.RefreshAsync(
                 _disposeSource.Token));
 
-        _pollingTask = PollingLoop.RunAsync(
-            TimeSpan.FromSeconds(
-                RefreshOptions.Value.AgentSnapshotRefreshSeconds),
-            RefreshAgentSnapshotAsync,
-            _disposeSource.Token);
+        _pollingTask =
+            PollingLoop.RunAsync(
+                TimeSpan.FromSeconds(
+                    RefreshOptions.Value
+                        .AgentSnapshotRefreshSeconds),
+                RefreshFleetAsync,
+                _disposeSource.Token);
     }
 
     private Task RefreshArchiveStatisticsAsync()
@@ -178,7 +216,7 @@
         catch (HttpRequestException exception)
         {
             _archiveError =
-                $"Mission Control Archive could not be reached: " +
+                "Mission Control Archive could not be reached: " +
                 exception.Message;
         }
         catch (TaskCanceledException)
@@ -193,40 +231,73 @@
         }
     }
 
-    private async Task RefreshSnapshotAsync()
-    {
-        if (_agentRefresh.IsRefreshing)
-        {
-            return;
-        }
-
-        _isManualAgentRefresh = true;
-
-        try
-        {
-            await _agentRefresh.RefreshAsync(
-                _disposeSource.Token);
-        }
-        finally
-        {
-            _isManualAgentRefresh = false;
-        }
-    }
-
-    private async Task RefreshAgentSnapshotAsync(
+    private async Task RefreshFleetAsync(
         CancellationToken cancellationToken)
     {
-        await _agentRefresh.RefreshAsync(cancellationToken);
+        await _fleetRefresh.RefreshAsync(
+            cancellationToken);
 
-        if (!_disposed && !cancellationToken.IsCancellationRequested)
+        if (!_disposed &&
+            !cancellationToken.IsCancellationRequested)
         {
             await InvokeAsync(StateHasChanged);
         }
     }
 
+    private static string GetNodeStatus(
+        AgentNodeResult node)
+    {
+        if (!string.IsNullOrWhiteSpace(node.Error))
+        {
+            return "DEGRADED";
+        }
+
+        if (node.Snapshot is null)
+        {
+            return "UNAVAILABLE";
+        }
+
+        if (node.Snapshot.Stale)
+        {
+            return "STALE";
+        }
+
+        return "ONLINE";
+    }
+
+    private static string GetNodeStatusClass(
+        AgentNodeResult node)
+    {
+        if (!string.IsNullOrWhiteSpace(node.Error))
+        {
+            return "status-warning";
+        }
+
+        if (node.Snapshot is null ||
+            node.Snapshot.Stale)
+        {
+            return "status-missing";
+        }
+
+        return "status-running";
+    }
+
+    private static string? GetResourceError(
+        AgentNodeResult node)
+    {
+        if (node.Snapshot?.Host is not null)
+        {
+            return null;
+        }
+
+        return node.Error ??
+            NodeResourceCalculations.UnavailableMessage;
+    }
+
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+
         await _disposeSource.CancelAsync();
 
         if (_pollingTask is not null)

@@ -1,4 +1,5 @@
 extern alias DashboardApp;
+using DashboardApp::MissionControl.Dashboard.Agents;
 using DashboardApp::MissionControl.Dashboard.Configuration;
 using DashboardApp::MissionControl.Dashboard.Refresh;
 using MissionControl.Client.Agent;
@@ -11,6 +12,107 @@ namespace MissionControl.Tests;
 
 public sealed class DashboardRefreshTests
 {
+    [Fact]
+    public async Task FleetRefreshRetainsFailedNodeSnapshotWhileUpdatingHealthyNode()
+    {
+        DateTimeOffset now =
+            new(2026, 9, 23, 12, 0, 0, TimeSpan.Zero);
+
+        var timeProvider =
+            new ManualTimeProvider(now);
+
+        PublicNodeSnapshot clankerInitial =
+            CreateSnapshot(now, 20) with
+            {
+                NodeId = "clanker"
+            };
+
+        PublicNodeSnapshot scopeCreepInitial =
+            CreateSnapshot(now, 30) with
+            {
+                NodeId = "scopecreep"
+            };
+
+        PublicNodeSnapshot clankerUpdated =
+            CreateSnapshot(
+                now.AddSeconds(30),
+                45) with
+            {
+                NodeId = "clanker"
+            };
+
+        var client = new QueueAgentFleetClient(
+        [
+            [
+            new AgentNodeResult(
+                "clanker",
+                "Clanker",
+                clankerInitial,
+                null),
+
+            new AgentNodeResult(
+                "scopecreep",
+                "ScopeCreep",
+                scopeCreepInitial,
+                null)
+        ],
+        [
+            new AgentNodeResult(
+                "clanker",
+                "Clanker",
+                clankerUpdated,
+                null),
+
+            new AgentNodeResult(
+                "scopecreep",
+                "ScopeCreep",
+                null,
+                "offline")
+        ]
+        ]);
+
+        var controller =
+            new AgentFleetRefreshController(
+                client,
+                timeProvider,
+                TimeSpan.FromSeconds(120));
+
+        await controller.RefreshAsync(
+            CancellationToken.None);
+
+        timeProvider.Advance(
+            TimeSpan.FromSeconds(30));
+
+        await controller.RefreshAsync(
+            CancellationToken.None);
+
+        AgentNodeResult clanker =
+            Assert.Single(
+                controller.CurrentNodes,
+                node => node.NodeId == "clanker");
+
+        AgentNodeResult scopeCreep =
+            Assert.Single(
+                controller.CurrentNodes,
+                node => node.NodeId == "scopecreep");
+
+        Assert.Equal(
+            45,
+            clanker.Snapshot?.Host?.CpuPercent);
+
+        Assert.True(clanker.Succeeded);
+        Assert.Null(clanker.Error);
+
+        Assert.Equal(
+            30,
+            scopeCreep.Snapshot?.Host?.CpuPercent);
+
+        Assert.False(scopeCreep.Succeeded);
+        Assert.Equal(
+            "offline",
+            scopeCreep.Error);
+    }
+
     [Fact]
     public void RefreshOptionsProvideOperationalDefaults()
     {
@@ -500,6 +602,22 @@ public sealed class DashboardRefreshTests
             DockerError: dockerAvailable == false
                 ? "Docker unavailable."
                 : null);
+    }
+
+    private sealed class QueueAgentFleetClient(
+        IEnumerable<IReadOnlyList<AgentNodeResult>> responses)
+        : IAgentFleetClient
+    {
+        private readonly Queue<IReadOnlyList<AgentNodeResult>>
+            responses = new(responses);
+
+        public Task<IReadOnlyList<AgentNodeResult>>
+            GetSnapshotsAsync(
+                CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                responses.Dequeue());
+        }
     }
 
     private static ArchiveEventSummaryItem CreateEvent(

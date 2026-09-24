@@ -1,16 +1,18 @@
 ﻿@page "/services"
 
-@implements IDisposable
-@inject MobileAgentSnapshotState SnapshotState
+@implements IAsyncDisposable
+
+@inject MobileHostFleetState HostFleetState
 @inject MobileServiceCatalog Catalog
 
 <PageTitle>Services</PageTitle>
 
 @{
     ServiceCatalogView view =
-        ServiceCatalogViewBuilder.Build(
+        ServiceCatalogViewBuilder.BuildForNode(
             _services,
-            SnapshotState.Snapshot,
+            _selectedNodeId,
+            CurrentSnapshot,
             _filter);
 }
 
@@ -28,11 +30,37 @@
         </p>
     </header>
 
-    <AgentSnapshotPanel Snapshot="SnapshotState.Snapshot"
-                        IsLoading="SnapshotState.IsInitialLoading"
-                        IsRefreshing="SnapshotState.IsRefreshing"
-                        IsManualRefreshing="SnapshotState.IsManualRefreshing"
-                        ErrorMessage="@SnapshotState.ErrorMessage"
+    <section class="service-node-selector">
+        <div>
+            <label for="mobile-service-node"
+                   class="form-label">
+                Host
+            </label>
+
+            <select id="mobile-service-node"
+                    class="form-select"
+                    disabled="@HostFleetState.IsInitialLoading"
+                    @bind="_selectedNodeId">
+                @foreach (HostNodeSnapshot host in HostFleetState.Hosts)
+                {
+                    <option value="@host.NodeId">
+                        @host.DisplayName
+                    </option>
+                }
+            </select>
+        </div>
+
+        <span>
+            Container and protocol observations are matched
+            against the selected host.
+        </span>
+    </section>
+
+    <AgentSnapshotPanel Snapshot="CurrentSnapshot"
+                        IsLoading="HostFleetState.IsInitialLoading"
+                        IsRefreshing="HostFleetState.IsRefreshing"
+                        IsManualRefreshing="HostFleetState.IsManualRefreshing"
+                        ErrorMessage="@GetSnapshotError()"
                         TimestampFormatter="FormatTimestamp"
                         OnRefresh="RefreshSnapshotAsync" />
 
@@ -76,7 +104,7 @@
 
     <UncataloguedProtocolsPanel Protocols="view.UncataloguedProtocols" />
 
-    @if (!SnapshotState.IsInitialLoading &&
+    @if (!HostFleetState.IsInitialLoading &&
          view.Groups.Count == 0)
     {
         <div class="alert alert-info">
@@ -109,10 +137,8 @@
                         <ServiceEntry Service="item.Service"
                                       Container="item.Container"
                                       Protocol="item.Protocol"
-                                      IsSnapshotAvailable="@(
-                                      SnapshotState.Snapshot is not null)"
-                                      DockerAvailable="@(
-                                      SnapshotState.Snapshot?.DockerAvailable)" />
+                                      IsSnapshotAvailable="@(CurrentSnapshot is not null)"
+                                      DockerAvailable="@CurrentSnapshot?.DockerAvailable" />
                     }
                 </div>
             </section>
@@ -121,19 +147,37 @@
 </div>
 
 @code {
+    private static readonly TimeSpan PollingInterval =
+        TimeSpan.FromSeconds(30);
+
+    private readonly CancellationTokenSource _disposeSource =
+        new();
+
     private IReadOnlyList<ServiceDefinition> _services = [];
     private string? _filter;
     private string? _catalogError;
+    private Task? _pollingTask;
+
+    private string _selectedNodeId = "clanker"; // TODO
+
+    private HostNodeSnapshot? CurrentHost =>
+        HostFleetState.Hosts
+            .FirstOrDefault(
+                host => string.Equals(
+                    host.NodeId,
+                    _selectedNodeId,
+                    StringComparison.OrdinalIgnoreCase));
+
+    private PublicNodeSnapshot? CurrentSnapshot =>
+        CurrentHost?.AgentSnapshot;
 
     protected override async Task OnInitializedAsync()
     {
-        SnapshotState.Changed +=
-            HandleSnapshotStateChanged;
+        HostFleetState.Changed += HandleHostFleetStateChanged;
 
         try
         {
-            _services =
-                await Catalog.GetServicesAsync();
+            _services = await Catalog.GetServicesAsync();
         }
         catch (Exception exception)
             when (exception is
@@ -142,28 +186,65 @@
                 InvalidOperationException)
         {
             _catalogError =
-                $"Could not load the service catalog: " +
+                "Could not load the service catalog: " +
                 exception.Message;
         }
 
-        await SnapshotState.EnsureLoadedAsync();
+        await HostFleetState.EnsureLoadedAsync(_disposeSource.Token);
+        EnsureSelectedNode();
+
+        _pollingTask = HostFleetState.RunPollingAsync(PollingInterval, _disposeSource.Token);
     }
 
     private Task RefreshSnapshotAsync()
     {
-        return SnapshotState.RefreshAsync(
-            isManualRefresh: true);
+        return HostFleetState.RefreshAsync(
+            isManualRefresh: true,
+            _disposeSource.Token);
     }
 
-    private void HandleSnapshotStateChanged()
+    private string? GetSnapshotError()
     {
+        if (CurrentHost is not null)
+        {
+            return CurrentHost.AgentError;
+        }
+
+        if (!string.IsNullOrWhiteSpace(HostFleetState.ErrorMessage))
+        {
+            return HostFleetState.ErrorMessage;
+        }
+
+        return HostFleetState.IsInitialLoading
+            ? null
+            : $"{_selectedNodeId} is not available in host telemetry.";
+    }
+
+    private void HandleHostFleetStateChanged()
+    {
+        EnsureSelectedNode();
+
         _ = InvokeAsync(StateHasChanged);
     }
 
-    public void Dispose()
+    private void EnsureSelectedNode()
     {
-        SnapshotState.Changed -=
-            HandleSnapshotStateChanged;
+        if (HostFleetState.Hosts.Count == 0)
+        {
+            return;
+        }
+
+        bool selectedNodeExists = HostFleetState.Hosts.Any(
+            host =>
+                string.Equals(
+                    host.NodeId,
+                    _selectedNodeId,
+                    StringComparison.OrdinalIgnoreCase));
+
+        if (!selectedNodeExists)
+        {
+            _selectedNodeId = HostFleetState.Hosts[0].NodeId;
+        }
     }
 
     private static string FormatTimestamp(
@@ -171,6 +252,28 @@
     {
         return timestamp
             .ToLocalTime()
-            .ToString("yyyy-MM-dd HH:mm:ss zzz");
+            .ToString(
+                "yyyy-MM-dd HH:mm:ss zzz");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        HostFleetState.Changed -=
+            HandleHostFleetStateChanged;
+
+        await _disposeSource.CancelAsync();
+
+        if (_pollingTask is not null)
+        {
+            try
+            {
+                await _pollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _disposeSource.Dispose();
     }
 }

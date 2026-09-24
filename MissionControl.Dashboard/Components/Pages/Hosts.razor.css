@@ -1,0 +1,57 @@
+.hosts-page {
+    display: grid;
+    width: min(100%, 76rem);
+    margin: 0 auto;
+    padding: 1rem 0 2rem;
+    gap: 1.5rem;
+}
+
+.page-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+    .page-header h1,
+    .host-heading h2 {
+        margin: 0;
+        color: var(--mc-text);
+    }
+
+.page-description {
+    margin: 0.65rem 0 0;
+    color: var(--mc-text-muted);
+}
+
+.host-section {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.host-heading {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.host-bandwidth {
+    display: grid;
+    margin-top: 0.35rem;
+    gap: 0.8rem;
+}
+
+    .host-bandwidth h3 {
+        margin: 0;
+        color: var(--mc-text);
+        font-size: 1.25rem;
+    }
+
+@media (max-width: 650px) {
+    .page-header,
+    .host-heading {
+        align-items: start;
+        flex-direction: column;
+    }
+}

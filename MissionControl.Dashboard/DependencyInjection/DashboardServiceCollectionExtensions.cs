@@ -9,6 +9,7 @@ using MissionControl.Client.Archive;
 using MissionControl.Client.GitActivity;
 using MissionControl.Client.Infrastructure;
 using MissionControl.Client.WorkPlanning;
+using MissionControl.Dashboard.Agents;
 using MissionControl.Dashboard.Authentication;
 using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Events;
@@ -38,6 +39,7 @@ public static class DashboardServiceCollectionExtensions
         AddDashboardAuthenticationStorage(services, configuration);
         AddArchiveClient(services, configuration);
         AddAgentClient(services, configuration);
+        AddAgentFleetClient(services, configuration);
         AddGitActivityClient(services, configuration);
         AddWorkPlanningClient(services, configuration);
         AddGreenCloudClient(services, configuration);
@@ -313,6 +315,30 @@ public static class DashboardServiceCollectionExtensions
             });
     }
 
+    private static void AddAgentFleetClient(
+        IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services
+            .AddOptions<AgentNodesOptions>()
+            .Bind(configuration.GetSection(AgentNodesOptions.SectionName))
+            .ValidateOnStart();
+
+        services.AddSingleton<
+            IValidateOptions<AgentNodesOptions>,
+            AgentNodesOptionsValidator>();
+
+        services.AddHttpClient(
+            AgentFleetClient.HttpClientName,
+            httpClient =>
+            {
+                httpClient.Timeout =
+                    TimeSpan.FromSeconds(10);
+            });
+
+        services.AddSingleton<IAgentFleetClient, AgentFleetClient>();
+    }
+
     private static void AddDashboardFormatting(IServiceCollection services)
     {
         services.AddSingleton<
@@ -381,8 +407,37 @@ public static class DashboardServiceCollectionExtensions
             .Validate(
                 options =>
                     !options.Enabled ||
-                    !string.IsNullOrWhiteSpace(options.ServerId),
-                "GreenCloud ServerId is required when enabled.")
+                    !string.IsNullOrWhiteSpace(
+                        options.ServerId) ||
+                    options.Servers.Count > 0,
+                "At least one GreenCloud server is required when enabled.")
+            .Validate(
+                options =>
+                    options.Servers.All(
+                        server =>
+                            !string.IsNullOrWhiteSpace(
+                                server.NodeId) &&
+                            !string.IsNullOrWhiteSpace(
+                                server.ServerId)),
+                "Every GreenCloud server must have a NodeId and ServerId.")
+            .Validate(
+                options =>
+                    options.Servers
+                        .Select(server => server.NodeId)
+                        .Distinct(
+                            StringComparer.OrdinalIgnoreCase)
+                        .Count() ==
+                    options.Servers.Count,
+                "GreenCloud NodeIds must be unique.")
+            .Validate(
+                options =>
+                    options.Servers
+                        .Select(server => server.ServerId)
+                        .Distinct(
+                            StringComparer.OrdinalIgnoreCase)
+                        .Count() ==
+                    options.Servers.Count,
+                "GreenCloud ServerIds must be unique.")
             .Validate(
                 options =>
                     !options.Enabled ||
@@ -393,7 +448,7 @@ public static class DashboardServiceCollectionExtensions
         services.AddSingleton<GreenCloudBandwidthRateState>();
 
         services
-            .AddHttpClient<IBandwidthUsageClient, GreenCloudBandwidthClient>(
+            .AddHttpClient<GreenCloudBandwidthClient>(
                 (serviceProvider, httpClient) =>
                 {
                     GreenCloudOptions options =
@@ -410,6 +465,17 @@ public static class DashboardServiceCollectionExtensions
                     {
                         AllowAutoRedirect = false
                     });
+
+        services.AddTransient<IBandwidthUsageClient>(
+            serviceProvider =>
+                serviceProvider.GetRequiredService<GreenCloudBandwidthClient>());
+
+        services.AddTransient<IGreenCloudBandwidthFleetClient>(
+            serviceProvider =>
+                serviceProvider.GetRequiredService<GreenCloudBandwidthClient>());
+
+        services.AddSingleton<GreenCloudBandwidthFleetRefreshController>();
+        services.AddHostedService<GreenCloudBandwidthPollingService>();
     }
 
     private static Uri CreateBaseUri(string value)

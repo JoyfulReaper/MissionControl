@@ -7,9 +7,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using MissionControl.Client.Agent;
 using MissionControl.Contracts.Services;
 using Xunit;
+using AgentNodeResult =
+    DashboardApp::MissionControl.Dashboard.Agents.AgentNodeResult;
+using IAgentFleetClient =
+    DashboardApp::MissionControl.Dashboard.Agents.IAgentFleetClient;
 
 namespace MissionControl.Tests;
 
@@ -185,10 +188,10 @@ public sealed class DashboardServiceCatalogReloadTests
             "Dashboard service IDs must be unique.",
             result.Failures);
         Assert.Contains(
-            "Dashboard service container names must be unique when configured.",
+            "Dashboard service container names must be unique per node when configured.",
             result.Failures);
         Assert.Contains(
-            "Dashboard protocol service keys must be unique when configured.",
+            "Dashboard protocol service keys must be unique per node when configured.",
             result.Failures);
         Assert.Contains(
             "Dashboard service search terms must not contain blank entries.",
@@ -196,6 +199,40 @@ public sealed class DashboardServiceCatalogReloadTests
         Assert.Contains(
             "Dashboard service URLs must be absolute HTTP or HTTPS URLs.",
             result.Failures);
+    }
+
+    [Fact]
+    public void ValidatorAllowsSameObservationKeysOnDifferentNodes()
+    {
+        var validator =
+            new ServiceCatalogOptionsValidator();
+
+        ServiceDefinition clanker =
+            CreateService(
+                "clanker-agent",
+                "Clanker Agent");
+
+        clanker.NodeId = "clanker";
+        clanker.ContainerName = "beszel-agent";
+        clanker.ProtocolServiceKey = "agent-health";
+
+        ServiceDefinition scopeCreep =
+            CreateService(
+                "scopecreep-agent",
+                "ScopeCreep Agent");
+
+        scopeCreep.NodeId = "scopecreep";
+        scopeCreep.ContainerName = "beszel-agent";
+        scopeCreep.ProtocolServiceKey = "agent-health";
+
+        ValidateOptionsResult result =
+            validator.Validate(
+                null,
+                CreateCatalog(
+                    clanker,
+                    scopeCreep));
+
+        Assert.False(result.Failed);
     }
 
     [Fact]
@@ -227,7 +264,7 @@ public sealed class DashboardServiceCatalogReloadTests
         var monitor = new FakeServiceCatalogMonitor();
         var page = new TestServicesPage
         {
-            AgentClient = agentClient,
+            AgentFleetClient = agentClient,
             RefreshOptions = Options.Create(
                 new DashboardRefreshOptions()),
             TimeProvider = TimeProvider.System,
@@ -454,7 +491,7 @@ public sealed class DashboardServiceCatalogReloadTests
     }
 
     private sealed class ReloadTestAgentClient(
-        AgentSnapshotItem snapshot) : IAgentSnapshotClient
+        AgentSnapshotItem snapshot) : IAgentFleetClient
     {
         private readonly TaskCompletionSource _secondRequestStarted =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -467,14 +504,21 @@ public sealed class DashboardServiceCatalogReloadTests
 
         public bool SecondRequestCancelled { get; private set; }
 
-        public async Task<AgentSnapshotItem> GetSnapshotAsync(
+        public async Task<IReadOnlyList<AgentNodeResult>> GetSnapshotsAsync(
             CancellationToken cancellationToken = default)
         {
             CallCount++;
 
             if (CallCount == 1)
             {
-                return snapshot;
+                return
+                [
+                    new AgentNodeResult(
+                        "node-1",
+                        "Node 1",
+                        snapshot,
+                        Error: null)
+                ];
             }
 
             _secondRequestStarted.TrySetResult();
@@ -490,10 +534,17 @@ public sealed class DashboardServiceCatalogReloadTests
                 throw;
             }
 
-            return snapshot with
-            {
-                CapturedAt = snapshot.CapturedAt.AddMinutes(1)
-            };
+            return
+            [
+                new AgentNodeResult(
+                    "node-1",
+                    "Node 1",
+                    snapshot with
+                    {
+                        CapturedAt = snapshot.CapturedAt.AddMinutes(1)
+                    },
+                    Error: null)
+            ];
         }
 
         public void ReleaseSecondRequest()
