@@ -171,7 +171,7 @@ The mobile app currently provides:
 - **Events**: source and event-type filters, cursor-based older-event loading,
   manual refresh, new-event detection, event cards, modal details, and a
   full-page details route;
-- **Git Activity**: the same shared bounded commit feed, loaded through the
+- **Git Activity**: the same shared bounded recent-commit feed, loaded through the
   authenticated Dashboard Mobile API rather than the private service;
 - **Work**: Work Planning picks, work-item summaries, and todo creation;
 - **Settings**: entry, testing, storage, and removal of the raw Mobile API
@@ -671,6 +671,136 @@ is not the current release path documented here.
 For releases, `ApplicationDisplayVersion` is the user-facing version,
 `ApplicationVersion` must increase, and `ApplicationId` must remain stable.
 Android updates must be signed with the same signing key.
+
+## Installing a Linux Agent on a host
+
+Current production-style Linux Agent deployments run the published
+`MissionControl.Agent` directly under systemd so host metrics come from the
+host and Docker can be inspected through the local Unix socket. The Agent can
+be built with the .NET SDK container when the target host does not have the SDK
+installed.
+
+Build a publish directory from the repository:
+
+```bash
+rm -rf /tmp/missioncontrol-build /tmp/missioncontrol-agent-publish
+mkdir -p /tmp/missioncontrol-build /tmp/missioncontrol-agent-publish
+cp -a . /tmp/missioncontrol-build/src
+
+docker run --rm \
+  -v /tmp/missioncontrol-build/src:/src \
+  -v /tmp/missioncontrol-agent-publish:/out \
+  -w /src \
+  mcr.microsoft.com/dotnet/sdk:10.0 \
+  dotnet publish MissionControl.Agent/MissionControl.Agent.csproj \
+    -c Release \
+    -o /out \
+    /p:UseAppHost=true
+```
+
+Copy the publish output to the target host, then create a dedicated service
+account and persistent state directory:
+
+```bash
+sudo useradd --system \
+  --home /opt/missioncontrol-agent \
+  --shell /usr/sbin/nologin \
+  missioncontrol-agent 2>/dev/null || true
+
+sudo mkdir -p /opt/missioncontrol-agent
+sudo mkdir -p /var/lib/missioncontrol-agent
+sudo cp -a /tmp/missioncontrol-agent-publish/. /opt/missioncontrol-agent/
+sudo chown -R missioncontrol-agent:missioncontrol-agent \
+  /opt/missioncontrol-agent \
+  /var/lib/missioncontrol-agent
+```
+
+Store deployment-specific configuration in
+`/etc/missioncontrol-agent.env`. At minimum, give every fleet member an
+explicit stable `Agent__NodeId`; `Agent__NodeName` is only its display name.
+The NodeId must match the corresponding Dashboard `Agents:Nodes[].NodeId`.
+A typical Linux fleet node looks like:
+
+```ini
+DOTNET_ENVIRONMENT=Production
+DOTNET_EnableDiagnostics=0
+
+ASPNETCORE_URLS=http://10.99.0.10:5194
+
+Agent__NodeId=molasses
+Agent__NodeName=Molasses
+Agent__DockerEnabled=true
+Agent__DockerSocketPath=/var/run/docker.sock
+Agent__DockerTimeoutSeconds=5
+Agent__IntervalSeconds=60
+Agent__PublicationHeartbeatMinutes=15
+
+AgentStorage__DatabaseFileName=mission-control-agent.db
+AgentStorage__BasePath=/var/lib/missioncontrol-agent
+
+AgentApi__StaleAfterSeconds=180
+
+MissionControl__Enabled=true
+MissionControl__BaseUrl=http://10.99.0.1:5190
+MissionControl__ApiKey=<secret>
+MissionControl__TimeoutMilliseconds=2000
+```
+
+Bind the Agent API only to an address that the Dashboard should reach. The
+example above uses WireGuard rather than exposing the Agent publicly. Configure
+CORS origins only when a browser client needs direct Agent access.
+
+Install a systemd unit such as:
+
+```ini
+[Unit]
+Description=Mission Control Agent
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+User=missioncontrol-agent
+Group=missioncontrol-agent
+WorkingDirectory=/opt/missioncontrol-agent
+ExecStart=/opt/missioncontrol-agent/MissionControl.Agent
+EnvironmentFile=/etc/missioncontrol-agent.env
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+SyslogIdentifier=missioncontrol-agent
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0027
+
+StateDirectory=missioncontrol-agent
+StateDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then enable and verify the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now missioncontrol-agent
+sudo systemctl status missioncontrol-agent --no-pager
+sudo journalctl -u missioncontrol-agent -n 50 --no-pager
+```
+
+A healthy Agent should expose `GET /health/live`, produce a snapshot at
+`GET /api/snapshot`, report the configured NodeId, and publish successfully
+when `MissionControl__Enabled=true`. The Agent SQLite database intentionally
+stores only the latest snapshot for each node; historical snapshot events are
+kept by the Mission Control event pipeline according to its retention policy.
 
 ## Containers
 
