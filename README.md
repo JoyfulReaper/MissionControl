@@ -134,6 +134,16 @@ The Agent currently collects:
 
 Docker collection uses a Unix domain socket, normally `/var/run/docker.sock`. Docker is disabled by default on Windows. On non-Linux hosts the Agent reports logical processor count, but CPU and memory values are unavailable. A Docker outage or an individual container-statistics failure does not discard host and protocol results.
 
+For a host-installed Linux Agent, the service account must be able to open the
+Docker socket. On systems where `/var/run/docker.sock` is owned by
+`root:docker`, add the Agent account to that group:
+
+```bash
+sudo usermod -aG docker missioncontrol-agent
+```
+
+Treat Docker-socket membership as privileged host access.
+
 The Agent stores one latest snapshot per node rather than a metrics history. `GET /api/snapshot` returns that snapshot with age, staleness, Docker availability, publication status, and sanitized protocol diagnostics. The endpoint applies configured CORS origins and a fixed request rate limit. Raw exception details and local Docker socket paths are not exposed through protocol diagnostics.
 
 ## Web Dashboard behavior
@@ -676,11 +686,15 @@ Android updates must be signed with the same signing key.
 
 Current production-style Linux Agent deployments run the published
 `MissionControl.Agent` directly under systemd so host metrics come from the
-host and Docker can be inspected through the local Unix socket. The Agent can
-be built with the .NET SDK container when the target host does not have the SDK
-installed.
+host and Docker can be inspected through the local Unix socket.
 
-Build a publish directory from the repository:
+The recommended Linux deployment is a **self-contained `linux-x64` publish**.
+The build itself can run inside the .NET SDK container, so the target host does
+not need the .NET runtime or SDK installed. Do not use the framework-dependent
+publish command for hosts without .NET; the apphost will start and immediately
+fail with `You must install .NET to run this application`.
+
+Build a writable source copy and publish the Agent:
 
 ```bash
 rm -rf /tmp/missioncontrol-build /tmp/missioncontrol-agent-publish
@@ -694,9 +708,29 @@ docker run --rm \
   mcr.microsoft.com/dotnet/sdk:10.0 \
   dotnet publish MissionControl.Agent/MissionControl.Agent.csproj \
     -c Release \
-    -o /out \
-    /p:UseAppHost=true
+    -r linux-x64 \
+    --self-contained true \
+    -o /out
 ```
+
+The source copy is intentionally writable because `dotnet publish` writes
+restore/build intermediates under the source tree. A read-only `/src` bind
+causes the container build to fail while writing `obj` files.
+
+A self-contained publish is much larger than a framework-dependent publish
+(roughly 100+ MiB for the current Agent) because it carries the .NET runtime.
+It can still depend on native libraries supplied by the operating system. On
+Debian 13, install ICU before starting the Agent:
+
+```bash
+sudo apt update
+sudo apt install -y libicu76
+```
+
+If startup logs report `Couldn't find a valid ICU package installed on the
+system`, install the distribution's `libicu` package rather than enabling
+globalization-invariant mode unless invariant globalization is specifically
+desired.
 
 Copy the publish output to the target host, then create a dedicated service
 account and persistent state directory:
