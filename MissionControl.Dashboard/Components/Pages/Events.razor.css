@@ -69,6 +69,70 @@
     min-width: 5.5rem;
 }
 
+.exclusion-grid {
+    display: grid;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    border-top: 1px solid var(--mc-border);
+}
+
+.exclusion-control {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.exclusion-control .form-control {
+    min-width: 0;
+}
+
+.exclusion-summary {
+    display: grid;
+    margin-top: 1rem;
+    gap: 0.65rem;
+}
+
+.exclusion-group {
+    display: grid;
+    grid-template-columns: 8rem minmax(0, 1fr);
+    align-items: start;
+    gap: 0.75rem;
+}
+
+.exclusion-label {
+    padding-top: 0.3rem;
+    color: var(--mc-text-muted);
+    font-size: 0.68rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.exclusion-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.exclusion-chip {
+    padding: 0.28rem 0.5rem;
+    color: var(--mc-text-muted);
+    background: var(--mc-background-elevated);
+    border: 1px solid var(--mc-border);
+    border-radius: 999px;
+    font-size: 0.72rem;
+}
+
+.exclusion-chip:hover {
+    color: var(--mc-text);
+    border-color: var(--mc-accent);
+}
+
+.exclusion-chip span {
+    margin-left: 0.3rem;
+}
+
 .event-results-heading {
     margin-bottom: 0.75rem;
     justify-content: space-between;
@@ -88,7 +152,7 @@
         minmax(8rem, 0.85fr)
         minmax(13rem, 1.6fr)
         minmax(10rem, 1.15fr)
-        5.5rem;
+        10rem;
     align-items: center;
     gap: 1rem;
 }
@@ -168,14 +232,36 @@
 }
 
 .event-action {
-    text-align: right;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.6rem;
 }
 
-.event-action a {
+.event-action a,
+.event-hide-action {
     font-size: 0.75rem;
     font-weight: 650;
     text-decoration: none;
     white-space: nowrap;
+}
+
+.event-hide-action {
+    padding: 0;
+    color: var(--mc-text-muted);
+    background: transparent;
+    border: 0;
+}
+
+.event-hide-action:hover,
+.event-hide-action:focus-visible {
+    color: var(--mc-accent);
+}
+
+.event-hide-action:focus-visible {
+    outline: 2px solid var(--mc-accent);
+    outline-offset: 2px;
+    border-radius: 0.15rem;
 }
 
 .event-action a span {
@@ -287,6 +373,7 @@
     }
 
     .event-action {
+        justify-content: flex-end;
         margin-top: auto;
         padding-top: 0.75rem;
         border-top: 1px solid var(--mc-border);
@@ -303,8 +390,14 @@
 
 @media (max-width: 850px) {
     .filter-grid,
+    .exclusion-grid,
     .event-list {
         grid-template-columns: 1fr;
+    }
+
+    .exclusion-group {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
     }
 
     .filter-actions {
