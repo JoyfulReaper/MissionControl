@@ -72,7 +72,7 @@
                     : "Show filters")
             </span>
 
-            @if (_feed.HasActiveFilters)
+            @if (HasActiveFilters)
             {
                 <span class="badge text-bg-primary">
                     Filters active
@@ -90,11 +90,11 @@
                     <h2>Filter events</h2>
 
                     <p>
-                        Filter by source, event type, or both.
+                        Match events above; hide noisy sources or types below.
                     </p>
                 </div>
 
-                @if (_feed.HasActiveFilters)
+                @if (HasActiveFilters)
                 {
                     <span class="badge text-bg-primary">
                         Filters active
@@ -154,6 +154,113 @@
                 </div>
             </div>
 
+            <div class="event-exclusion-grid">
+                <div>
+                    <label for="mobile-source-exclusion"
+                           class="form-label">
+                        Exclude source
+                    </label>
+
+                    <div class="event-exclusion-control">
+                        <input id="mobile-source-exclusion"
+                               class="form-control"
+                               list="mobile-event-source-options"
+                               placeholder="Hide a source"
+                               autocomplete="off"
+                               @bind="_sourceExclusion"
+                               @bind:event="oninput"
+                               @onkeydown="HandleSourceExclusionKeyDown" />
+
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                disabled="@(IsBusy || string.IsNullOrWhiteSpace(_sourceExclusion))"
+                                @onclick="ExcludeSource">
+                            Hide
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="mobile-event-type-exclusion"
+                           class="form-label">
+                        Exclude event type
+                    </label>
+
+                    <div class="event-exclusion-control">
+                        <input id="mobile-event-type-exclusion"
+                               class="form-control"
+                               list="mobile-event-type-options"
+                               placeholder="Hide an event type"
+                               autocomplete="off"
+                               @bind="_eventTypeExclusion"
+                               @bind:event="oninput"
+                               @onkeydown="HandleEventTypeExclusionKeyDown" />
+
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                disabled="@(IsBusy || string.IsNullOrWhiteSpace(_eventTypeExclusion))"
+                                @onclick="ExcludeEventTypeFromInput">
+                            Hide
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            @if (HasExclusions)
+            {
+                <div class="event-exclusion-summary">
+                    @if (_excludedSources.Count > 0)
+                    {
+                        <div class="event-exclusion-group">
+                            <span class="event-exclusion-label">
+                                Hidden sources
+                            </span>
+
+                            <div class="event-exclusion-chips">
+                                @foreach (string source in
+                                    _excludedSources.OrderBy(
+                                        value => value,
+                                        StringComparer.OrdinalIgnoreCase))
+                                {
+                                    <button type="button"
+                                            class="event-exclusion-chip"
+                                            title="Show @source again"
+                                            @onclick="() => IncludeSource(source)">
+                                        @source
+                                        <span aria-hidden="true">×</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (_excludedEventTypes.Count > 0)
+                    {
+                        <div class="event-exclusion-group">
+                            <span class="event-exclusion-label">
+                                Hidden event types
+                            </span>
+
+                            <div class="event-exclusion-chips">
+                                @foreach (string eventType in
+                                    _excludedEventTypes.OrderBy(
+                                        value => value,
+                                        StringComparer.OrdinalIgnoreCase))
+                                {
+                                    <button type="button"
+                                            class="event-exclusion-chip"
+                                            title="Show @eventType again"
+                                            @onclick="() => IncludeEventType(eventType)">
+                                        @eventType
+                                        <span aria-hidden="true">×</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
             <div class="event-filter-actions">
                 <button type="button"
                         class="btn btn-primary"
@@ -166,7 +273,7 @@
                         class="btn btn-outline-secondary"
                         disabled="@(
                         IsBusy ||
-                        !_feed.HasActiveFilters)"
+                        !HasActiveFilters)"
                         @onclick="ClearFiltersAsync">
                     Clear
                 </button>
@@ -223,10 +330,42 @@
                 }
             </div>
         }
-        else if (_feed.Events.Count == 0)
+        else if (_visibleEvents.Count == 0)
         {
-            <div class="alert alert-info">
-                No archived events matched the current filters.
+            <div class="alert alert-info event-empty-state">
+                @if (_feed.Events.Count == 0)
+                {
+                    <span>
+                        No archived events matched the current filters.
+                    </span>
+                }
+                else
+                {
+                    <span>
+                        All loaded events are hidden by the current exclusions.
+                    </span>
+                }
+
+                @if (HasActiveFilters)
+                {
+                    <button type="button"
+                            class="btn btn-sm btn-outline-primary"
+                            @onclick="ClearFiltersAsync">
+                        Clear filters
+                    </button>
+                }
+
+                @if (_feed.Events.Count > 0 && _feed.HasMore)
+                {
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            disabled="@IsBusy"
+                            @onclick="LoadOlderAsync">
+                        @(_feed.IsLoadingMore
+                            ? "Loading..."
+                            : "Load older")
+                    </button>
+                }
             </div>
         }
         else
@@ -236,8 +375,7 @@
                     <h2>Recent events</h2>
 
                     <span>
-                        @_feed.Events.Count.ToString("N0")
-                        loaded
+                        @LoadedEventCountLabel
                     </span>
                 </div>
 
@@ -248,8 +386,8 @@
 
             <div class="event-list">
                 @foreach (
-    ArchiveEventSummaryItem item in
-    _feed.Events)
+                    ArchiveEventSummaryItem item in
+                    _visibleEvents)
                 {
                     <article class="event-card event-card-interactive"
                              role="button"
@@ -300,6 +438,18 @@
                                 </dd>
                             </div>
                         </dl>
+
+                        <div class="event-card-actions">
+                            <button type="button"
+                                    class="event-hide-action"
+                                    title="Hide all @item.EventType events"
+                                    aria-label="Hide all @item.EventType events"
+                                    @onclick="() => ExcludeEventType(item.EventType)"
+                                    @onclick:stopPropagation="true"
+                                    @onkeydown:stopPropagation="true">
+                                Hide type
+                            </button>
+                        </div>
                     </article>
                 }
             </div>
@@ -342,6 +492,12 @@
     private EventFeedController? _feed;
     private string? _sourceFilter;
     private string? _eventTypeFilter;
+    private string? _sourceExclusion;
+    private string? _eventTypeExclusion;
+    private readonly HashSet<string> _excludedSources =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _excludedEventTypes =
+        new(StringComparer.OrdinalIgnoreCase);
     private string? _configurationError;
     private bool _configurationChecked;
     private bool _hasToken;
@@ -351,6 +507,30 @@
 
     private bool IsBusy =>
         _feed?.IsRefreshing == true;
+
+    private IReadOnlyList<ArchiveEventSummaryItem> _visibleEvents =>
+        _feed is null
+            ? []
+            : _feed.Events
+                .Where(item =>
+                    !_excludedSources.Contains(item.Source) &&
+                    !_excludedEventTypes.Contains(item.EventType))
+                .ToArray();
+
+    private bool HasExclusions =>
+        _excludedSources.Count > 0 ||
+        _excludedEventTypes.Count > 0;
+
+    private bool HasActiveFilters =>
+        _feed?.HasActiveFilters == true ||
+        HasExclusions;
+
+    private string LoadedEventCountLabel =>
+        _feed is null
+            ? "0 loaded"
+            : HasExclusions
+                ? $"{_visibleEvents.Count:N0} visible · {_feed.Events.Count:N0} loaded"
+                : $"{_feed.Events.Count:N0} loaded";
 
     protected override async Task OnInitializedAsync()
     {
@@ -425,9 +605,59 @@
 
         _sourceFilter = null;
         _eventTypeFilter = null;
+        _sourceExclusion = null;
+        _eventTypeExclusion = null;
+        _excludedSources.Clear();
+        _excludedEventTypes.Clear();
 
         await _feed.ClearFiltersAsync(
             _disposeSource.Token);
+    }
+
+    private void ExcludeSource()
+    {
+        string? source = NormalizeExclusion(_sourceExclusion);
+
+        if (source is null)
+        {
+            return;
+        }
+
+        _excludedSources.Add(source);
+        _sourceExclusion = null;
+    }
+
+    private void ExcludeEventTypeFromInput()
+    {
+        string? eventType = NormalizeExclusion(_eventTypeExclusion);
+
+        if (eventType is null)
+        {
+            return;
+        }
+
+        ExcludeEventType(eventType);
+        _eventTypeExclusion = null;
+    }
+
+    private void ExcludeEventType(string eventType)
+    {
+        string? normalized = NormalizeExclusion(eventType);
+
+        if (normalized is not null)
+        {
+            _excludedEventTypes.Add(normalized);
+        }
+    }
+
+    private void IncludeSource(string source)
+    {
+        _excludedSources.Remove(source);
+    }
+
+    private void IncludeEventType(string eventType)
+    {
+        _excludedEventTypes.Remove(eventType);
     }
 
     private Task LoadOlderAsync()
@@ -453,6 +683,31 @@
                !IsBusy
             ? ApplyFiltersAsync()
             : Task.CompletedTask;
+    }
+
+    private void HandleSourceExclusionKeyDown(
+        KeyboardEventArgs eventArgs)
+    {
+        if (eventArgs.Key == "Enter" && !IsBusy)
+        {
+            ExcludeSource();
+        }
+    }
+
+    private void HandleEventTypeExclusionKeyDown(
+        KeyboardEventArgs eventArgs)
+    {
+        if (eventArgs.Key == "Enter" && !IsBusy)
+        {
+            ExcludeEventTypeFromInput();
+        }
+    }
+
+    private static string? NormalizeExclusion(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
     }
 
     private static string FormatTimestamp(
