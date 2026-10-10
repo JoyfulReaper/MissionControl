@@ -119,6 +119,72 @@ public sealed class DashboardAgentConfigurationTests
             () => app.Services.GetRequiredService<IStartupValidator>().Validate());
     }
 
+    [Theory]
+    [InlineData("first", true)]
+    [InlineData("FIRST", true)]
+    [InlineData("unknown-node", false)]
+    public async Task CatalogNodeReferencesValidateAgainstFleetAtStartup(string nodeId, bool valid)
+    {
+        using var directory = new TestDirectory();
+        WebApplicationBuilder builder = CreateBuilder(directory.Path);
+        builder.Configuration["ServiceCatalog:Services:0:NodeId"] = nodeId;
+        builder.Services.AddMissionControlDashboard(builder.Configuration);
+        await using WebApplication app = builder.Build();
+        var validator = app.Services.GetRequiredService<IStartupValidator>();
+        if (valid)
+        {
+            // The second configured node has neither services nor bandwidth mappings.
+            validator.Validate();
+        }
+        else
+        {
+            var exception = Assert.Throws<OptionsValidationException>(validator.Validate);
+            Assert.Contains("ServiceCatalog:Services service 'service'", exception.Message);
+            Assert.Contains(nodeId, exception.Message);
+            Assert.Contains("Agents:Nodes", exception.Message);
+        }
+    }
+
+    [Theory]
+    [InlineData("GreenCloud", true, "first", true)]
+    [InlineData("GreenCloud", true, "FIRST", true)]
+    [InlineData("GreenCloud", true, "unknown-node", false)]
+    [InlineData("GreenCloud", false, "unknown-node", true)]
+    [InlineData("GreenCloud", false, null, true)]
+    [InlineData("Servitro", true, "first", true)]
+    [InlineData("Servitro", true, "FIRST", true)]
+    [InlineData("Servitro", true, "unknown-node", false)]
+    [InlineData("Servitro", false, "unknown-node", true)]
+    [InlineData("Servitro", false, null, true)]
+    public async Task ProviderNodeReferencesValidateOnlyWhenEnabled(
+        string provider, bool enabled, string? nodeId, bool valid)
+    {
+        using var directory = new TestDirectory();
+        WebApplicationBuilder builder = CreateBuilder(directory.Path);
+        builder.Configuration[$"{provider}:Enabled"] = enabled.ToString();
+        builder.Configuration[$"{provider}:" + (provider == "GreenCloud" ? "ApiToken" : "Token")] = "test-only-token";
+        if (nodeId is not null)
+        {
+            builder.Configuration[$"{provider}:Servers:0:NodeId"] = nodeId;
+            builder.Configuration[$"{provider}:Servers:0:ServerId"] = "provider-server";
+        }
+
+        builder.Services.AddMissionControlDashboard(builder.Configuration);
+        await using WebApplication app = builder.Build();
+        var validator = app.Services.GetRequiredService<IStartupValidator>();
+        if (valid)
+        {
+            validator.Validate();
+        }
+        else
+        {
+            var exception = Assert.Throws<OptionsValidationException>(validator.Validate);
+            Assert.Contains($"{provider}:Servers[0]", exception.Message);
+            Assert.Contains(nodeId!, exception.Message);
+            Assert.Contains("Agents:Nodes", exception.Message);
+        }
+    }
+
     private static void ConfigureGreenCloudMappings(IConfiguration configuration)
     {
         configuration["GreenCloud:Enabled"] = "true";

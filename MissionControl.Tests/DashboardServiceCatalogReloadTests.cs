@@ -28,7 +28,7 @@ public sealed class DashboardServiceCatalogReloadTests
                 CreateService("one", "Original"),
                 CreateService("removed", "Removed")),
             monitor,
-            new ServiceCatalogOptionsValidator(),
+            CreateValidator(),
             NullLogger<ServiceCatalogReloadController>.Instance,
             update => update(),
             () => changes.Release());
@@ -65,7 +65,7 @@ public sealed class DashboardServiceCatalogReloadTests
         await using var controller = new ServiceCatalogReloadController(
             CreateCatalog(CreateService("one", "Original")),
             monitor,
-            new ServiceCatalogOptionsValidator(),
+            CreateValidator(),
             NullLogger<ServiceCatalogReloadController>.Instance,
             update => update(),
             () => changes.Release());
@@ -74,7 +74,7 @@ public sealed class DashboardServiceCatalogReloadTests
         Assert.True(await changes.WaitAsync(TimeSpan.FromSeconds(5)));
 
         Assert.Equal("Original", Assert.Single(controller.Services).Name);
-        Assert.Equal(
+        Assert.StartsWith(
             ServiceCatalogReloadController.ReloadWarningMessage,
             controller.ReloadWarning);
 
@@ -94,7 +94,7 @@ public sealed class DashboardServiceCatalogReloadTests
         await using var controller = new ServiceCatalogReloadController(
             CreateCatalog(CreateService("one", "Original")),
             monitor,
-            new ServiceCatalogOptionsValidator(),
+            CreateValidator(),
             NullLogger<ServiceCatalogReloadController>.Instance,
             update => update(),
             () => changes.Release());
@@ -103,12 +103,42 @@ public sealed class DashboardServiceCatalogReloadTests
         Assert.True(await changes.WaitAsync(TimeSpan.FromSeconds(5)));
 
         Assert.Equal("Original", Assert.Single(controller.Services).Name);
-        Assert.Equal(
+        Assert.StartsWith(
             ServiceCatalogReloadController.ReloadWarningMessage,
             controller.ReloadWarning);
         Assert.DoesNotContain(
             Path.DirectorySeparatorChar,
             Assert.IsType<string>(controller.ReloadWarning));
+    }
+
+    [Fact]
+    public async Task UnknownNodeOnConfigurationReloadPreservesCatalogAndIdentifiesService()
+    {
+        IConfigurationRoot configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(CreateConfigurationValues("Original")).Build();
+        using var monitor = new ConfigurationServiceCatalogMonitor(configuration,
+            NullLogger<ConfigurationServiceCatalogMonitor>.Instance);
+        using var changes = new SemaphoreSlim(0);
+        await using var controller = new ServiceCatalogReloadController(
+            CreateCatalog(CreateService("one", "Original")), monitor, CreateValidator(),
+            NullLogger<ServiceCatalogReloadController>.Instance, update => update(), () => changes.Release());
+        ServiceDefinition previous = Assert.Single(controller.Services);
+
+        configuration["ServiceCatalog:Services:0:NodeId"] = "unknown-node";
+        configuration.Reload();
+        Assert.True(await changes.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Same(previous, Assert.Single(controller.Services));
+        Assert.Contains("ServiceCatalog:Services", controller.ReloadWarning);
+        Assert.Contains("'one'", controller.ReloadWarning);
+        Assert.Contains("'unknown-node'", controller.ReloadWarning);
+        Assert.Contains("Agents:Nodes", controller.ReloadWarning);
+
+        configuration["ServiceCatalog:Services:0:NodeId"] = "CLANKER";
+        configuration["ServiceCatalog:Services:0:Name"] = "Recovered";
+        configuration.Reload();
+        Assert.True(await changes.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal("Recovered", Assert.Single(controller.Services).Name);
+        Assert.Null(controller.ReloadWarning);
     }
 
     [Fact]
@@ -119,7 +149,7 @@ public sealed class DashboardServiceCatalogReloadTests
         var controller = new ServiceCatalogReloadController(
             CreateCatalog(CreateService("one", "Original")),
             monitor,
-            new ServiceCatalogOptionsValidator(),
+            CreateValidator(),
             NullLogger<ServiceCatalogReloadController>.Instance,
             update => update(),
             () => stateChangeCount++);
@@ -168,7 +198,7 @@ public sealed class DashboardServiceCatalogReloadTests
     [Fact]
     public void ValidatorRejectsUnsafeCatalogShapes()
     {
-        var validator = new ServiceCatalogOptionsValidator();
+        var validator = CreateValidator();
         ServiceDefinition duplicateOne =
             CreateService("duplicate", "One");
         ServiceDefinition duplicateTwo =
@@ -205,7 +235,7 @@ public sealed class DashboardServiceCatalogReloadTests
     public void ValidatorAllowsSameObservationKeysOnDifferentNodes()
     {
         var validator =
-            new ServiceCatalogOptionsValidator();
+            CreateValidator();
 
         ServiceDefinition clanker =
             CreateService(
@@ -242,9 +272,7 @@ public sealed class DashboardServiceCatalogReloadTests
         services
             .AddOptions<ServiceCatalogOptions>()
             .Configure(options => options.Services = []);
-        services.AddSingleton<
-            IValidateOptions<ServiceCatalogOptions>,
-            ServiceCatalogOptionsValidator>();
+        services.AddSingleton<IValidateOptions<ServiceCatalogOptions>>(CreateValidator());
         using ServiceProvider provider =
             services.BuildServiceProvider();
 
@@ -272,7 +300,7 @@ public sealed class DashboardServiceCatalogReloadTests
             CatalogOptions = Options.Create(
                 CreateCatalog(CreateService("one", "Original"))),
             CatalogMonitor = monitor,
-            CatalogValidator = new ServiceCatalogOptionsValidator(),
+            CatalogValidator = CreateValidator(),
             CatalogLogger =
                 NullLogger<ServiceCatalogReloadController>.Instance,
             FilterForTesting = "api"
@@ -311,6 +339,17 @@ public sealed class DashboardServiceCatalogReloadTests
         Assert.Equal("Reloaded", Assert.Single(page.CurrentCatalog).Name);
     }
 
+    private static ServiceCatalogOptionsValidator CreateValidator() =>
+        new(new FleetNodeReferenceValidator(Options.Create(
+            new DashboardApp::MissionControl.Dashboard.Agents.AgentNodesOptions
+            {
+                Nodes =
+                [
+                    new() { NodeId = "clanker" },
+                    new() { NodeId = "scopecreep" },
+                    new() { NodeId = "unused" }
+                ]
+            })));
     private static ServiceCatalogOptions CreateCatalog(
         params ServiceDefinition[] services)
     {

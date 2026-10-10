@@ -35,6 +35,11 @@ public static class DashboardServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         AddDashboardComponents(services);
+        services.AddSingleton<FleetNodeReferenceValidator>();
+        services.AddSingleton<IValidateOptions<GreenCloudOptions>>(
+            provider => provider.GetRequiredService<FleetNodeReferenceValidator>());
+        services.AddSingleton<IValidateOptions<ServitroOptions>>(
+            provider => provider.GetRequiredService<FleetNodeReferenceValidator>());
         AddDashboardAuthentication(services, configuration);
         AddDashboardOptions(services, configuration);
         AddDashboardAuthenticationStorage(services, configuration);
