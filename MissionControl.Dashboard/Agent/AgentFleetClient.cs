@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
 using MissionControl.Client.Agent;
 using MissionControl.Contracts.Agent;
+using System.Text.Json;
 
 namespace MissionControl.Dashboard.Agents;
 
@@ -65,13 +66,23 @@ public sealed class AgentFleetClient(
             when (exception is
                 HttpRequestException or
                 TaskCanceledException or
-                InvalidOperationException)
+                InvalidOperationException or
+                JsonException or
+                IOException)
         {
+            string reason = exception switch
+            {
+                JsonException => "The Agent snapshot response contains invalid or incompatible JSON.",
+                IOException => "The Agent snapshot response could not be read.",
+                TaskCanceledException => "Timed out retrieving the Agent snapshot.",
+                HttpRequestException => "The Agent snapshot request failed.",
+                _ => "The Agent snapshot is unavailable or its response could not be read."
+            };
             return new AgentNodeResult(
                 node.NodeId,
                 node.DisplayName,
                 Snapshot: null,
-                Error: exception.Message);
+                Error: $"Configured node '{FormatIdentity(node.NodeId)}': {reason}");
         }
     }
 

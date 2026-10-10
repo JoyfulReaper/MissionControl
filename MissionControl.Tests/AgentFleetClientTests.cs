@@ -15,6 +15,134 @@ namespace MissionControl.Tests;
 public sealed class AgentFleetClientTests
 {
     [Theory]
+    [InlineData("not JSON private-response-secret")]
+    [InlineData("{\"nodeId\":\"first\",")]
+    [InlineData("{\"nodeId\":\"first\",\"ageSeconds\":\"private-response-secret\"}")]
+    [InlineData("[]")]
+    [InlineData("")]
+    [InlineData("null")]
+    public async Task UnreadableResponseFailsOnlyItsNode(string body)
+    {
+        using var factory = new SnapshotFactory(_ => Snapshot("second"))
+        {
+            Content = host => host == "first.example" ? new StringContent(body) : JsonContent.Create(Snapshot("second"))
+        };
+        IReadOnlyList<AgentNodeResult> nodes = await CreateClient(factory).GetSnapshotsAsync();
+        Assert.Null(nodes[0].Snapshot);
+        Assert.False(nodes[0].Succeeded);
+        Assert.Contains("Configured node 'first'", nodes[0].Error);
+        Assert.DoesNotContain("identity mismatch", nodes[0].Error);
+        Assert.DoesNotContain("private", nodes[0].Error);
+        Assert.DoesNotContain("example", nodes[0].Error);
+        Assert.True(nodes[0].Error!.Length < 200);
+        Assert.True(nodes[1].Succeeded);
+        Assert.Equal("second", nodes[1].Snapshot!.NodeId);
+    }
+
+    [Fact]
+    public async Task AllMalformedNodesProduceIndependentErrors()
+    {
+        using var factory = new SnapshotFactory(_ => Snapshot(null))
+        {
+            Content = _ => new StringContent("{")
+        };
+        var controller = new AgentFleetRefreshController(CreateClient(factory), TimeProvider.System, TimeSpan.FromMinutes(2));
+        await controller.RefreshAsync(CancellationToken.None);
+        Assert.Equal(2, controller.CurrentNodes.Count);
+        Assert.All(controller.CurrentNodes, node =>
+        {
+            Assert.Null(node.Snapshot);
+            Assert.False(node.Succeeded);
+            Assert.Contains($"Configured node '{node.NodeId}'", node.Error);
+            Assert.Contains("invalid or incompatible JSON", node.Error);
+        });
+        Assert.Null(controller.RefreshWarning);
+    }
+
+    [Fact]
+    public async Task MalformedResponseRetainsPreviousSnapshotWhileHealthyNodeUpdates()
+    {
+        int refresh = 0;
+        DateTimeOffset initial = DateTimeOffset.UtcNow.AddMinutes(-10);
+        using var factory = new SnapshotFactory(_ => Snapshot(null))
+        {
+            Content = host => refresh == 1 && host == "first.example"
+                ? new StringContent("{")
+                : JsonContent.Create(Snapshot(host == "first.example" ? "first" : "second") with
+                {
+                    CapturedAt = initial.AddSeconds(refresh)
+                })
+        };
+        var controller = new AgentFleetRefreshController(CreateClient(factory), TimeProvider.System, TimeSpan.FromMinutes(2));
+        await controller.RefreshAsync(CancellationToken.None);
+        refresh = 1;
+        await controller.RefreshAsync(CancellationToken.None);
+        Assert.Equal(initial, controller.CurrentNodes[0].Snapshot!.CapturedAt);
+        Assert.Equal("first", controller.CurrentNodes[0].Snapshot!.NodeId);
+        Assert.True(controller.CurrentNodes[0].Snapshot!.Stale);
+        Assert.Contains("invalid or incompatible JSON", controller.CurrentNodes[0].Error);
+        Assert.Equal(initial.AddSeconds(1), controller.CurrentNodes[1].Snapshot!.CapturedAt);
+        Assert.True(controller.CurrentNodes[1].Succeeded);
+        Assert.Null(controller.RefreshWarning);
+        refresh = 2;
+        await controller.RefreshAsync(CancellationToken.None);
+        Assert.True(controller.CurrentNodes[0].Succeeded);
+        Assert.Equal(initial.AddSeconds(2), controller.CurrentNodes[0].Snapshot!.CapturedAt);
+    }
+
+    [Fact]
+    public async Task CancellationWhileReadingResponsePropagatesThroughRefresh()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var factory = new SnapshotFactory(_ => Snapshot(null))
+        {
+            Content = host => host == "first.example"
+                ? new BlockingContent(started)
+                : JsonContent.Create(Snapshot("second"))
+        };
+        var controller = new AgentFleetRefreshController(CreateClient(factory), TimeProvider.System, TimeSpan.FromMinutes(2));
+        Task refresh = controller.RefreshAsync(cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+        Assert.Null(controller.RefreshWarning);
+        Assert.False(controller.IsRefreshing);
+    }
+
+    private sealed class BlockingContent(TaskCompletionSource started) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+        protected override async Task SerializeToStreamAsync(
+            Stream stream, TransportContext? context, CancellationToken cancellationToken)
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    [Fact]
+    public async Task UnreadableStreamIsIsolatedAndSanitized()
+    {
+        using var factory = new SnapshotFactory(host => host == "first.example"
+            ? throw new IOException("private-response-secret")
+            : Snapshot("second"));
+        IReadOnlyList<AgentNodeResult> nodes = await CreateClient(factory).GetSnapshotsAsync();
+        Assert.Null(nodes[0].Snapshot);
+        Assert.Contains("could not be read", nodes[0].Error);
+        Assert.DoesNotContain("private", nodes[0].Error);
+        Assert.True(nodes[1].Succeeded);
+    }
+
+    [Theory]
     [InlineData("first")]
     [InlineData("FIRST")]
     public async Task MatchingIdentityIsAcceptedWithoutRewriting(string reported)
@@ -138,6 +266,7 @@ public sealed class AgentFleetClientTests
     {
         private readonly List<HttpClient> clients = [];
         public bool OmitFirstIdentity { get; init; }
+        public Func<string, HttpContent>? Content { get; init; }
 
         public HttpClient CreateClient(string name)
         {
@@ -149,6 +278,14 @@ public sealed class AgentFleetClientTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (Content is not null)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = Content(request.RequestUri!.Host)
+                });
+            }
+
             JsonNode body = JsonSerializer.SerializeToNode(snapshot(request.RequestUri!.Host))!;
             if (OmitFirstIdentity && request.RequestUri.Host == "first.example")
             {
