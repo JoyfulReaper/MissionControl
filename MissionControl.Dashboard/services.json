@@ -596,12 +596,12 @@
         ]
       },
       {
-        "Id": "scopecreep-uptime-kuma",
+        "Id": "molasses-uptime-kuma",
         "Name": "Uptime Kuma",
-        "NodeId": "scopecreep",
+        "NodeId": "molasses",
         "Group": "Operations",
         "Summary": "Monitors service availability and endpoint health.",
-        "Description": "Runs Uptime Kuma on ScopeCreep for availability monitoring and operational health checks.",
+        "Description": "Runs Uptime Kuma on Molasses for availability monitoring and operational health checks.",
         "ContainerName": "uptime-kuma",
         "Visibility": "Private",
         "Protocol": "HTTP",
@@ -612,16 +612,16 @@
           "monitoring",
           "uptime",
           "health",
-          "scopecreep"
+          "molasses"
         ]
       },
       {
-        "Id": "scopecreep-thelounge",
+        "Id": "molasses-thelounge",
         "Name": "The Lounge",
-        "NodeId": "scopecreep",
+        "NodeId": "molasses",
         "Group": "Operations",
         "Summary": "Persistent web-based IRC client.",
-        "Description": "Runs The Lounge on ScopeCreep for persistent IRC connectivity and web-based access.",
+        "Description": "Runs The Lounge on Molasses for persistent IRC connectivity and web-based access.",
         "ContainerName": "thelounge",
         "Visibility": "Private",
         "Protocol": "HTTP / IRC client",
@@ -632,16 +632,16 @@
           "irc",
           "chat",
           "libera",
-          "scopecreep"
+          "molasses"
         ]
       },
       {
-        "Id": "scopecreep-scrutiny",
+        "Id": "molasses-scrutiny",
         "Name": "Scrutiny",
-        "NodeId": "scopecreep",
+        "NodeId": "molasses",
         "Group": "Operations",
         "Summary": "Tracks disk SMART health and storage-device status.",
-        "Description": "Runs Scrutiny on ScopeCreep for storage-device health, SMART data, and disk monitoring.",
+        "Description": "Runs Scrutiny on Molasses for storage-device health, SMART data, and disk monitoring.",
         "ContainerName": "scrutiny",
         "Visibility": "Private",
         "Protocol": "HTTP / SMART monitoring",
@@ -653,16 +653,16 @@
           "disk",
           "storage",
           "monitoring",
-          "scopecreep"
+          "molasses"
         ]
       },
       {
-        "Id": "scopecreep-pairdrop",
+        "Id": "molasses-pairdrop",
         "Name": "PairDrop",
-        "NodeId": "scopecreep",
+        "NodeId": "molasses",
         "Group": "Utilities",
         "Summary": "Provides browser-based local and peer-to-peer file sharing.",
-        "Description": "Runs PairDrop on ScopeCreep for convenient browser-based file transfers between devices.",
+        "Description": "Runs PairDrop on Molasses for convenient browser-based file transfers between devices.",
         "ContainerName": "pairdrop",
         "Visibility": "Private",
         "Protocol": "HTTP / WebRTC",
@@ -673,16 +673,16 @@
           "files",
           "sharing",
           "webrtc",
-          "scopecreep"
+          "molasses"
         ]
       },
       {
-        "Id": "scopecreep-netalertx",
+        "Id": "molasses-netalertx",
         "Name": "NetAlertX",
-        "NodeId": "scopecreep",
+        "NodeId": "molasses",
         "Group": "Operations",
         "Summary": "Discovers and monitors devices on the local network.",
-        "Description": "Runs NetAlertX on ScopeCreep for network-device discovery, presence monitoring, and change detection.",
+        "Description": "Runs NetAlertX on Molasses for network-device discovery, presence monitoring, and change detection.",
         "ContainerName": "netalertx",
         "Visibility": "Private",
         "Protocol": "HTTP / Network monitoring",
@@ -694,16 +694,16 @@
           "devices",
           "discovery",
           "monitoring",
-          "scopecreep"
+          "molasses"
         ]
       },
       {
-        "Id": "scopecreep-matrix-synapse",
+        "Id": "molasses-matrix-synapse",
         "Name": "Matrix Synapse",
-        "NodeId": "scopecreep",
+        "NodeId": "molasses",
         "Group": "Communications",
         "Summary": "Matrix homeserver providing messaging and federation services.",
-        "Description": "Runs the Synapse Matrix homeserver on ScopeCreep.",
+        "Description": "Runs the Synapse Matrix homeserver on Molasses.",
         "ContainerName": "matrix-synapse",
         "Visibility": "Internal",
         "Protocol": "Matrix / HTTP",
@@ -714,16 +714,16 @@
           "synapse",
           "chat",
           "federation",
-          "scopecreep"
+          "molasses"
         ]
       },
       {
-        "Id": "scopecreep-matrix-postgres",
+        "Id": "molasses-matrix-postgres",
         "Name": "Matrix PostgreSQL",
-        "NodeId": "scopecreep",
+        "NodeId": "molasses",
         "Group": "Communications",
         "Summary": "PostgreSQL database backing the Matrix Synapse homeserver.",
-        "Description": "Provides persistent PostgreSQL storage for the Matrix Synapse service on ScopeCreep.",
+        "Description": "Provides persistent PostgreSQL storage for the Matrix Synapse service on Molasses.",
         "ContainerName": "matrix-postgres",
         "Visibility": "Internal",
         "Protocol": "PostgreSQL",
@@ -734,7 +734,7 @@
           "postgres",
           "database",
           "synapse",
-          "scopecreep"
+          "molasses"
         ]
       },
       {
@@ -860,6 +860,48 @@
           "small web",
           "smolweb",
           "clanker"
+        ]
+      },
+      {
+        "Id": "molasses-dozzle-agent",
+        "Name": "Dozzle Agent",
+        "NodeId": "molasses",
+        "Group": "Operations",
+        "Summary": "Exposes Molasses Docker logs to the primary Dozzle instance.",
+        "Description": "Runs the Dozzle remote agent on Molasses so the central Dozzle interface can inspect this host's containers and logs.",
+        "ContainerName": "dozzle-agent",
+        "Visibility": "Internal",
+        "Protocol": "Dozzle remote agent / TCP",
+        "Endpoint": "Internal",
+        "Image": "amir20/dozzle:latest",
+        "SearchTerms": [
+          "dozzle",
+          "agent",
+          "docker",
+          "logs",
+          "containers",
+          "molasses"
+        ]
+      },
+      {
+        "Id": "molasses-dockge",
+        "Name": "Dockge",
+        "NodeId": "molasses",
+        "Group": "Operations",
+        "Summary": "Provides a web interface for managing Molasses Docker Compose stacks.",
+        "Description": "Runs Dockge on Molasses for inspecting and managing Docker Compose application stacks.",
+        "ContainerName": "dockge",
+        "Visibility": "Private",
+        "Protocol": "HTTP",
+        "Endpoint": "Internal",
+        "Image": "louislam/dockge:1",
+        "SearchTerms": [
+          "dockge",
+          "docker",
+          "compose",
+          "stacks",
+          "management",
+          "molasses"
         ]
       }
     ]
