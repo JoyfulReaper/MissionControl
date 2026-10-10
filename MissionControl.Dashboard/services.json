@@ -425,26 +425,6 @@
         ]
       },
       {
-        "Id": "beszel-agent",
-        "Name": "Beszel Agent",
-        "Group": "Operations",
-        "Summary": "Collects host and container metrics for Beszel.",
-        "Description": "Reads host and Docker statistics and reports them to the private Beszel monitoring dashboard.",
-        "ContainerName": "beszel-agent",
-        "Visibility": "Internal",
-        "Protocol": "Metrics agent",
-        "Endpoint": "Internal",
-        "Image": "henrygd/beszel-agent:latest",
-        "SearchTerms": [
-          "beszel",
-          "agent",
-          "metrics",
-          "collector",
-          "docker",
-          "host"
-        ]
-      },
-      {
         "Id": "happy-gopher-ygg",
         "Name": "HappyGopher Yggdrasil",
         "NodeId": "clanker",
@@ -574,28 +554,6 @@
         ]
       },
       {
-        "Id": "scopecreep-beszel-agent",
-        "Name": "Beszel Agent",
-        "NodeId": "scopecreep",
-        "Group": "Operations",
-        "Summary": "Collects ScopeCreep host and container metrics for Beszel.",
-        "Description": "Reads host and Docker statistics on ScopeCreep and reports them to the private Beszel monitoring dashboard.",
-        "ContainerName": "beszel-agent",
-        "Visibility": "Internal",
-        "Protocol": "Metrics agent",
-        "Endpoint": "Internal",
-        "Image": "henrygd/beszel-agent:latest",
-        "SearchTerms": [
-          "beszel",
-          "agent",
-          "metrics",
-          "collector",
-          "docker",
-          "host",
-          "scopecreep"
-        ]
-      },
-      {
         "Id": "scopecreep-dozzle-agent",
         "Name": "Dozzle Agent",
         "NodeId": "scopecreep",
@@ -635,6 +593,273 @@
           "stacks",
           "management",
           "scopecreep"
+        ]
+      },
+      {
+        "Id": "scopecreep-uptime-kuma",
+        "Name": "Uptime Kuma",
+        "NodeId": "scopecreep",
+        "Group": "Operations",
+        "Summary": "Monitors service availability and endpoint health.",
+        "Description": "Runs Uptime Kuma on ScopeCreep for availability monitoring and operational health checks.",
+        "ContainerName": "uptime-kuma",
+        "Visibility": "Private",
+        "Protocol": "HTTP",
+        "Endpoint": "Internal",
+        "Image": "louislam/uptime-kuma:2",
+        "SearchTerms": [
+          "uptime kuma",
+          "monitoring",
+          "uptime",
+          "health",
+          "scopecreep"
+        ]
+      },
+      {
+        "Id": "scopecreep-thelounge",
+        "Name": "The Lounge",
+        "NodeId": "scopecreep",
+        "Group": "Operations",
+        "Summary": "Persistent web-based IRC client.",
+        "Description": "Runs The Lounge on ScopeCreep for persistent IRC connectivity and web-based access.",
+        "ContainerName": "thelounge",
+        "Visibility": "Private",
+        "Protocol": "HTTP / IRC client",
+        "Endpoint": "Internal",
+        "Image": "ghcr.io/thelounge/thelounge:latest",
+        "SearchTerms": [
+          "thelounge",
+          "irc",
+          "chat",
+          "libera",
+          "scopecreep"
+        ]
+      },
+      {
+        "Id": "scopecreep-scrutiny",
+        "Name": "Scrutiny",
+        "NodeId": "scopecreep",
+        "Group": "Operations",
+        "Summary": "Tracks disk SMART health and storage-device status.",
+        "Description": "Runs Scrutiny on ScopeCreep for storage-device health, SMART data, and disk monitoring.",
+        "ContainerName": "scrutiny",
+        "Visibility": "Private",
+        "Protocol": "HTTP / SMART monitoring",
+        "Endpoint": "Internal",
+        "Image": "ghcr.io/analogj/scrutiny:v0.9.3-omnibus",
+        "SearchTerms": [
+          "scrutiny",
+          "smart",
+          "disk",
+          "storage",
+          "monitoring",
+          "scopecreep"
+        ]
+      },
+      {
+        "Id": "scopecreep-pairdrop",
+        "Name": "PairDrop",
+        "NodeId": "scopecreep",
+        "Group": "Utilities",
+        "Summary": "Provides browser-based local and peer-to-peer file sharing.",
+        "Description": "Runs PairDrop on ScopeCreep for convenient browser-based file transfers between devices.",
+        "ContainerName": "pairdrop",
+        "Visibility": "Private",
+        "Protocol": "HTTP / WebRTC",
+        "Endpoint": "Internal",
+        "Image": "lscr.io/linuxserver/pairdrop:latest",
+        "SearchTerms": [
+          "pairdrop",
+          "files",
+          "sharing",
+          "webrtc",
+          "scopecreep"
+        ]
+      },
+      {
+        "Id": "scopecreep-netalertx",
+        "Name": "NetAlertX",
+        "NodeId": "scopecreep",
+        "Group": "Operations",
+        "Summary": "Discovers and monitors devices on the local network.",
+        "Description": "Runs NetAlertX on ScopeCreep for network-device discovery, presence monitoring, and change detection.",
+        "ContainerName": "netalertx",
+        "Visibility": "Private",
+        "Protocol": "HTTP / Network monitoring",
+        "Endpoint": "Internal",
+        "Image": "ghcr.io/netalertx/netalertx:latest",
+        "SearchTerms": [
+          "netalertx",
+          "network",
+          "devices",
+          "discovery",
+          "monitoring",
+          "scopecreep"
+        ]
+      },
+      {
+        "Id": "scopecreep-matrix-synapse",
+        "Name": "Matrix Synapse",
+        "NodeId": "scopecreep",
+        "Group": "Communications",
+        "Summary": "Matrix homeserver providing messaging and federation services.",
+        "Description": "Runs the Synapse Matrix homeserver on ScopeCreep.",
+        "ContainerName": "matrix-synapse",
+        "Visibility": "Internal",
+        "Protocol": "Matrix / HTTP",
+        "Endpoint": "Internal",
+        "Image": "matrixdotorg/synapse:latest",
+        "SearchTerms": [
+          "matrix",
+          "synapse",
+          "chat",
+          "federation",
+          "scopecreep"
+        ]
+      },
+      {
+        "Id": "scopecreep-matrix-postgres",
+        "Name": "Matrix PostgreSQL",
+        "NodeId": "scopecreep",
+        "Group": "Communications",
+        "Summary": "PostgreSQL database backing the Matrix Synapse homeserver.",
+        "Description": "Provides persistent PostgreSQL storage for the Matrix Synapse service on ScopeCreep.",
+        "ContainerName": "matrix-postgres",
+        "Visibility": "Internal",
+        "Protocol": "PostgreSQL",
+        "Endpoint": "Internal",
+        "Image": "postgres:16-alpine",
+        "SearchTerms": [
+          "matrix",
+          "postgres",
+          "database",
+          "synapse",
+          "scopecreep"
+        ]
+      },
+      {
+        "Id": "clanker-mystery-web",
+        "Name": "Mystery Web",
+        "NodeId": "clanker",
+        "Group": "Experimental",
+        "Summary": "Serves the Mystery site over the normal web.",
+        "Description": "Runs the clearnet Mystery Web instance on Clanker.",
+        "ContainerName": "joyful-stack-mystery-web-1",
+        "Visibility": "Public",
+        "Protocol": "HTTP / HTTPS",
+        "Endpoint": "Mystery web",
+        "Image": "ghcr.io/joyfulreaper/mystery-web",
+        "SearchTerms": [
+          "mystery",
+          "web",
+          "verymad",
+          "experimental",
+          "clanker"
+        ]
+      },
+      {
+        "Id": "clanker-mystery-web-ygg",
+        "Name": "Mystery Web Yggdrasil",
+        "NodeId": "clanker",
+        "Group": "Experimental",
+        "Summary": "Serves the Mystery site over Yggdrasil.",
+        "Description": "Runs the Yggdrasil-facing Mystery Web instance on Clanker.",
+        "ContainerName": "joyful-stack-mystery-web-ygg-1",
+        "Visibility": "Internal",
+        "Protocol": "HTTP / Yggdrasil",
+        "Endpoint": "Yggdrasil",
+        "Image": "ghcr.io/joyfulreaper/mystery-web",
+        "SearchTerms": [
+          "mystery",
+          "web",
+          "yggdrasil",
+          "verymad",
+          "experimental",
+          "clanker"
+        ]
+      },
+      {
+        "Id": "clanker-mystery-web-dn42",
+        "Name": "Mystery Web DN42",
+        "NodeId": "clanker",
+        "Group": "Experimental",
+        "Summary": "Serves the Mystery site over DN42.",
+        "Description": "Runs the DN42-facing Mystery Web instance on Clanker.",
+        "ContainerName": "joyful-stack-mystery-web-dn42-1",
+        "Visibility": "Internal",
+        "Protocol": "HTTP / DN42",
+        "Endpoint": "DN42",
+        "Image": "ghcr.io/joyfulreaper/mystery-web",
+        "SearchTerms": [
+          "mystery",
+          "web",
+          "dn42",
+          "verymad",
+          "experimental",
+          "clanker"
+        ]
+      },
+      {
+        "Id": "clanker-happygopher-mystery-dn42",
+        "Name": "HappyGopher Mystery DN42",
+        "NodeId": "clanker",
+        "Group": "Experimental",
+        "Summary": "Serves the Mystery Gopher site over DN42.",
+        "Description": "Runs the DN42 Mystery HappyGopher instance on Clanker.",
+        "ContainerName": "joyful-stack-happygopher-mystery-dn42-1",
+        "Visibility": "Internal",
+        "Protocol": "Gopher / TCP :70 / DN42",
+        "Endpoint": "DN42",
+        "Image": "joyful-stack-happygopher",
+        "SourceUrl": "https://github.com/JoyfulReaper/HappyGopher",
+        "SearchTerms": [
+          "gopher",
+          "mystery",
+          "dn42",
+          "verymad",
+          "clanker"
+        ]
+      },
+      {
+        "Id": "clanker-happygopher-mystery-ygg",
+        "Name": "HappyGopher Mystery Yggdrasil",
+        "NodeId": "clanker",
+        "Group": "Experimental",
+        "Summary": "Serves the Mystery Gopher site over Yggdrasil.",
+        "Description": "Runs the Yggdrasil Mystery HappyGopher instance on Clanker.",
+        "ContainerName": "joyful-stack-happygopher-mystery-ygg-1",
+        "Visibility": "Internal",
+        "Protocol": "Gopher / TCP :70 / Yggdrasil",
+        "Endpoint": "Yggdrasil",
+        "Image": "joyful-stack-happygopher",
+        "SourceUrl": "https://github.com/JoyfulReaper/HappyGopher",
+        "SearchTerms": [
+          "gopher",
+          "mystery",
+          "yggdrasil",
+          "verymad",
+          "clanker"
+        ]
+      },
+      {
+        "Id": "clanker-happygopher-dn42",
+        "Name": "HappyGopher DN42",
+        "NodeId": "clanker",
+        "Group": "Public Services",
+        "Summary": "Serves the HappyGopher site over DN42.",
+        "Description": "Runs the DN42-facing HappyGopher instance on Clanker.",
+        "ContainerName": "joyful-stack-happygopher-dn42-1",
+        "Visibility": "Internal",
+        "Protocol": "Gopher / TCP :70 / DN42",
+        "Endpoint": "DN42",
+        "Image": "joyful-stack-happygopher",
+        "SourceUrl": "https://github.com/JoyfulReaper/HappyGopher",
+        "SearchTerms": [
+          "gopher",
+          "dn42",
+          "small web",
+          "smolweb",
+          "clanker"
         ]
       }
     ]
