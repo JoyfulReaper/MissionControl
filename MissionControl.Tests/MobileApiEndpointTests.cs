@@ -502,6 +502,57 @@ public sealed class MobileApiEndpointTests
             response.Headers.Pragma.ToString());
     }
 
+    [Theory]
+    [InlineData(true, 1, HttpStatusCode.OK)]
+    [InlineData(false, 1, HttpStatusCode.BadGateway)]
+    [InlineData(true, 0, HttpStatusCode.BadGateway)]
+    [InlineData(true, 2, HttpStatusCode.BadGateway)]
+    public async Task BandwidthCompatibilityRouteRequiresOneEnabledCanonicalMapping(
+        bool enabled, int serverCount, HttpStatusCode expectedStatus)
+    {
+        using var handler = new GreenCloudBandwidthClientTests.RecordingHandler();
+        using var providerHttp = new HttpClient(handler) { BaseAddress = new Uri("https://greencloud.example/") };
+        var options = new GreenCloudOptions
+        {
+            Enabled = enabled,
+            ApiToken = "test-only-token",
+            Servers = Enumerable.Range(0, serverCount).Select(index =>
+                new DashboardApp::MissionControl.Dashboard.GreenCloud.GreenCloudServerOptions
+                {
+                    NodeId = $"node-{index}",
+                    ServerId = $"provider-{index}"
+                }).ToList()
+        };
+        var bandwidthClient = new DashboardApp::MissionControl.Dashboard.GreenCloud.GreenCloudBandwidthClient(
+            providerHttp, Options.Create(options), new(), TimeProvider.System);
+        await using WebApplication app = CreateApplication(
+            new FailingArchiveEventClient(new HttpRequestException()), bandwidthClient: bandwidthClient);
+        await app.StartAsync();
+        using HttpClient client = app.GetTestClient();
+        using HttpResponseMessage unauthorized = await client.GetAsync("/api/mobile/bandwidth");
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
+        Assert.Empty(handler.Requests);
+
+        using var request = CreateAuthorizedRequest("/api/mobile/bandwidth");
+        using HttpResponseMessage response = await client.SendAsync(request);
+        Assert.Equal(expectedStatus, response.StatusCode);
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString());
+        if (expectedStatus == HttpStatusCode.OK)
+        {
+            BandwidthUsageSnapshot snapshot = (await response.Content.ReadFromJsonAsync<BandwidthUsageSnapshot>())!;
+            Assert.Equal("/api/server/provider-0", snapshot.ServerName);
+            Assert.Single(handler.Requests);
+        }
+        else
+        {
+            Assert.Empty(handler.Requests);
+            string body = await response.Content.ReadAsStringAsync();
+            Assert.Contains("Bandwidth usage could not be retrieved.", body);
+            Assert.DoesNotContain("test-only-token", body);
+            Assert.DoesNotContain("greencloud.example", body);
+        }
+    }
+
     [Fact]
     public async Task BandwidthProxySanitizesDownstreamFailures()
     {

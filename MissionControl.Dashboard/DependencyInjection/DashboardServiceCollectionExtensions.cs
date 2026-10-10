@@ -391,10 +391,8 @@ public static class DashboardServiceCollectionExtensions
             .Validate(
                 options =>
                     !options.Enabled ||
-                    !string.IsNullOrWhiteSpace(
-                        options.ServerId) ||
                     options.Servers.Count > 0,
-                "At least one GreenCloud server is required when enabled.")
+                "At least one explicit GreenCloud Servers mapping is required when enabled.")
             .Validate(
                 options =>
                     options.Servers.All(

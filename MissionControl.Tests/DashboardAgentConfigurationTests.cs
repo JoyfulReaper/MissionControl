@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Json;
 using DashboardApp::MissionControl.Dashboard.Agents;
 using DashboardApp::MissionControl.Dashboard.DependencyInjection;
+using DashboardApp::MissionControl.Dashboard.GreenCloud;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
@@ -63,6 +64,69 @@ public sealed class DashboardAgentConfigurationTests
         OptionsValidationException exception = await Assert.ThrowsAsync<OptionsValidationException>(
             () => app.StartAsync());
         Assert.Contains(error, exception.Message);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("obsolete-server-id")]
+    public async Task GreenCloudEnabledWithoutMappingsFailsStartupValidation(string? legacyServerId)
+    {
+        using var directory = new TestDirectory();
+        WebApplicationBuilder builder = CreateBuilder(directory.Path);
+        builder.Configuration["GreenCloud:Enabled"] = "true";
+        builder.Configuration["GreenCloud:ApiToken"] = "test-only-token";
+        builder.Configuration["GreenCloud:ServerId"] = legacyServerId;
+        builder.Services.AddMissionControlDashboard(builder.Configuration);
+        await using WebApplication app = builder.Build();
+
+        var exception = Assert.Throws<OptionsValidationException>(
+            () => app.Services.GetRequiredService<IStartupValidator>().Validate());
+        Assert.Contains("explicit GreenCloud Servers mapping", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("obsolete-server-id")]
+    public async Task GreenCloudCanonicalMappingsValidateAndLegacyKeyIsNotBound(string? legacyServerId)
+    {
+        using var directory = new TestDirectory();
+        WebApplicationBuilder builder = CreateBuilder(directory.Path);
+        ConfigureGreenCloudMappings(builder.Configuration);
+        builder.Configuration["GreenCloud:ServerId"] = legacyServerId;
+        builder.Services.AddMissionControlDashboard(builder.Configuration);
+        await using WebApplication app = builder.Build();
+        app.Services.GetRequiredService<IStartupValidator>().Validate();
+
+        var options = app.Services.GetRequiredService<IOptions<GreenCloudOptions>>().Value;
+        Assert.Equal(new[] { "first", "second" }, options.Servers.Select(server => server.NodeId));
+        Assert.Equal(new[] { "provider-first", "provider-second" }, options.Servers.Select(server => server.ServerId));
+    }
+
+    [Theory]
+    [InlineData("GreenCloud:Servers:0:NodeId", "")]
+    [InlineData("GreenCloud:Servers:0:ServerId", " ")]
+    [InlineData("GreenCloud:Servers:1:NodeId", "FIRST")]
+    [InlineData("GreenCloud:Servers:1:ServerId", "PROVIDER-FIRST")]
+    public async Task GreenCloudMappingsRequireNonemptyUniqueIds(string key, string value)
+    {
+        using var directory = new TestDirectory();
+        WebApplicationBuilder builder = CreateBuilder(directory.Path);
+        ConfigureGreenCloudMappings(builder.Configuration);
+        builder.Configuration[key] = value;
+        builder.Services.AddMissionControlDashboard(builder.Configuration);
+        await using WebApplication app = builder.Build();
+        Assert.Throws<OptionsValidationException>(
+            () => app.Services.GetRequiredService<IStartupValidator>().Validate());
+    }
+
+    private static void ConfigureGreenCloudMappings(IConfiguration configuration)
+    {
+        configuration["GreenCloud:Enabled"] = "true";
+        configuration["GreenCloud:ApiToken"] = "test-only-token";
+        configuration["GreenCloud:Servers:0:NodeId"] = "first";
+        configuration["GreenCloud:Servers:0:ServerId"] = "provider-first";
+        configuration["GreenCloud:Servers:1:NodeId"] = "second";
+        configuration["GreenCloud:Servers:1:ServerId"] = "provider-second";
     }
 
     private static WebApplicationBuilder CreateBuilder(string directory)

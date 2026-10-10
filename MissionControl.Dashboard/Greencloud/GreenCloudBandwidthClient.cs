@@ -19,8 +19,15 @@ public sealed class GreenCloudBandwidthClient(
     public Task<BandwidthUsageSnapshot> GetAsync(
     CancellationToken cancellationToken = default)
     {
-        GreenCloudServerOptions server =
-            GetLegacyServer();
+        cancellationToken.ThrowIfCancellationRequested();
+        // The retained single-server endpoint has no node selector. Only a sole mapping is unambiguous.
+        if (!_options.Enabled || _options.Servers.Count != 1)
+        {
+            throw new InvalidOperationException(
+                "Single-server bandwidth requires GreenCloud to be enabled with exactly one Servers mapping. Use the host fleet for multiple nodes.");
+        }
+
+        GreenCloudServerOptions server = _options.Servers.Single();
 
         return GetServerAsync(
             server.NodeId,
@@ -79,33 +86,6 @@ public sealed class GreenCloudBandwidthClient(
                 Snapshot: null,
                 Error: exception.Message);
         }
-    }
-
-    private GreenCloudServerOptions GetLegacyServer()
-    {
-        if (!string.IsNullOrWhiteSpace(_options.ServerId))
-        {
-            GreenCloudServerOptions? configured =
-                _options.Servers.FirstOrDefault(
-                    server =>
-                        string.Equals(
-                            server.ServerId,
-                            _options.ServerId,
-                            StringComparison.OrdinalIgnoreCase));
-
-            return configured ??
-                new GreenCloudServerOptions
-                {
-                    NodeId = _options.ServerId,
-                    ServerId = _options.ServerId
-                };
-        }
-
-        GreenCloudServerOptions? first = _options.Servers.FirstOrDefault();
-
-        return first ??
-            throw new InvalidOperationException(
-                "No GreenCloud server is configured.");
     }
 
     private async Task<BandwidthUsageSnapshot> GetServerAsync(

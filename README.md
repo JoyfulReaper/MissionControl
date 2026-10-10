@@ -398,7 +398,7 @@ Dashboard is the server-side integration host. Its main sections are `Archive`, 
 
 Refresh intervals must be between 5 and 3600 seconds; the stale threshold must be between 5 and 86400 seconds. `ServiceCatalog:Services` is supplied by `services.json` and must contain at least one service. Each service's `NodeId` selects its owner node before `ContainerName` and `ProtocolServiceKey` are matched against that node's snapshot. Service IDs are globally unique; container names and protocol keys are unique per node.
 
-When GreenCloud is enabled, `Servers[]` maps provider server IDs to Agent `NodeId` values. Dashboard refreshes the fleet cache at `GreenCloud:PollSeconds`, which must be between 60 and 3600 seconds. Dashboard and Mobile host views read the cache; they do not trigger a provider fleet request. `GreenCloud:ApiToken` is required when enabled and belongs in secrets, not checked-in JSON. `GreenCloud:ServerId` and `GET /api/mobile/bandwidth` remain a single-server compatibility path; current multi-node host presentation uses `Servers[]` and `GET /api/mobile/hosts`.
+When GreenCloud is enabled, at least one explicit `Servers[]` mapping from Agent `NodeId` to provider `ServerId` is required. Node IDs and server IDs must each be unique case-insensitively. Dashboard refreshes the fleet cache at `GreenCloud:PollSeconds`, which must be between 60 and 3600 seconds. Dashboard and Mobile host views read the cache; they do not trigger a provider fleet request. `GreenCloud:ApiToken` is required when enabled and belongs in secrets, not checked-in JSON. Configure mappings with `GreenCloud__Servers__0__NodeId` and `GreenCloud__Servers__0__ServerId` (increment the index for additional servers). The retained `GET /api/mobile/bandwidth` compatibility endpoint makes a direct request only when GreenCloud is enabled with exactly one mapping; otherwise it returns a sanitized 502 without calling the provider. It never chooses the first of several mappings. Current Mobile pages and multi-node host presentation use `GET /api/mobile/hosts`.
 
 `WorkPlanningApi` configures Dashboard's server-side Work Planning client. Its bearer key stays in Dashboard and Mobile uses the authenticated Dashboard proxy.
 
@@ -491,7 +491,7 @@ The API key must contain at least 32 characters. Both allowlists must be non-emp
 | Dashboard Mobile API | `GET /api/mobile/git-activity` | Requires the Mobile API bearer token. Returns a bounded recent feed through Dashboard's private GitActivity client with no-store headers. |
 | Dashboard Mobile API | `GET /api/mobile/hosts` | Requires the Mobile API bearer token. Refreshes configured Agents and combines them with the latest cached GreenCloud fleet state. |
 | Dashboard Mobile API | `GET /api/mobile/work-planning/*` | Requires the Mobile API bearer token. Proxies Work Planning reads and todo creation with Dashboard's server credential. |
-| Dashboard Mobile API | `GET /api/mobile/bandwidth` | Retained authenticated single-server compatibility endpoint; unlike the host-fleet path, it calls GreenCloud directly. |
+| Dashboard Mobile API | `GET /api/mobile/bandwidth` | Retained authenticated compatibility endpoint; calls GreenCloud directly only when enabled with exactly one explicit server mapping, otherwise returns 502. |
 | Agent | `GET /api/snapshot` | Latest sanitized node snapshot; returns 503 until one is stored. |
 | GitActivity | `GET /api/github/activity` | Recent allowed activity; requires `X-Mission-Control-Key`. |
 
@@ -908,7 +908,7 @@ dotnet format MissionControl.slnx --verify-no-changes
 - Agent storage retains only the latest snapshot per node; it is not a historical metrics database.
 - Dashboard depends on direct network access to each configured Agent for live state; archived Agent events are not the live-state source.
 - Agent refresh state is page/request driven rather than a single process-wide fleet cache, so multiple Mobile clients can create additional Agent reads.
-- The GreenCloud fleet cache is process-local and starts empty after a Dashboard restart. The retained single-server `/api/mobile/bandwidth` compatibility route still calls the provider directly.
+- The GreenCloud fleet cache is process-local and starts empty after a Dashboard restart. The retained single-server `/api/mobile/bandwidth` compatibility route calls the provider directly only when GreenCloud is enabled with exactly one explicit server mapping.
 - Dashboard reloads `services.json` at runtime, while Mobile receives its catalog at build time.
 - Linux `/proc` supplies the implemented host CPU, load-average, and memory metrics, and Docker collection currently targets a Unix socket.
 - Host uptime is not collected by the Agent.

@@ -266,7 +266,7 @@ Per-node refresh failures retain the previous snapshot when available and attach
 
 The cache is in memory. A Dashboard restart begins with placeholders until the startup refresh completes. It is latest-state presentation, not bandwidth history.
 
-`GreenCloud:ServerId` and authenticated `GET /api/mobile/bandwidth` are retained single-server compatibility surfaces. That endpoint still invokes the provider directly. The active multi-node host presentation uses `GreenCloud:Servers[]` and the cached `/api/mobile/hosts` path.
+GreenCloud requires explicit `GreenCloud:Servers[]` mappings when enabled, with unique NodeId and ServerId values. The authenticated `GET /api/mobile/bandwidth` route remains a single-server compatibility surface: it invokes the provider directly only when GreenCloud is enabled with exactly one mapping. Disabled, missing, or ambiguous selection returns a sanitized 502 without a provider request. It never selects the first of multiple mappings. Current Mobile pages and multi-node host presentation use the cached `/api/mobile/hosts` path.
 
 ## Work Planning integration
 
@@ -311,7 +311,7 @@ These are current boundaries, not promises of a redesign:
 - Dashboard live fleet state depends on direct network reachability to every configured Agent.
 - Dashboard Agent refresh state is per page/request path rather than one process-wide Agent cache. Multiple Mobile clients can produce additional Agent reads.
 - The GreenCloud fleet cache is process-local and loses last-known values on Dashboard restart.
-- The retained single-server Mobile bandwidth compatibility endpoint bypasses the fleet cache and calls GreenCloud directly.
+- The retained single-server Mobile bandwidth compatibility endpoint bypasses the fleet cache and calls GreenCloud directly only when enabled with exactly one explicit server mapping.
 - Dashboard service catalog reloads at runtime, while Mobile receives its catalog only at build time.
 - Archive and Agent query endpoints do not add their own application authentication; deployment network controls are part of their security boundary.
 - JetStream retention is bounded, and SQLite services are single-service local stores rather than a shared relational platform.
