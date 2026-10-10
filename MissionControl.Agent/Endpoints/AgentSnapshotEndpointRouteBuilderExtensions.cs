@@ -193,7 +193,8 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                 ? storedSnapshot.Snapshot.Node
                 : storedSnapshot.Snapshot.NodeId.Trim(),
 
-            HostCapturedAt = hostCapturedAt
+            HostCapturedAt = hostCapturedAt,
+            MissionControlPublicationEnabled = storedSnapshot.Snapshot.MissionControlPublicationEnabled
         };
     }
 }

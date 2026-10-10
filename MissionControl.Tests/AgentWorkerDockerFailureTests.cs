@@ -105,7 +105,8 @@ public sealed class AgentWorkerDockerFailureTests
             new ProtocolProbeRunner([protocolProbe]),
             fixture.SnapshotStore,
             new SnapshotPublicationGate(TimeSpan.FromHours(1)),
-            Options.Create(CreateOptions()));
+            Options.Create(CreateOptions()),
+            Options.Create(new MissionControlClientOptions { Enabled = true }));
 
         await worker.ExecuteIterationAsync(
             CreateOptions(),
@@ -266,7 +267,8 @@ public sealed class AgentWorkerDockerFailureTests
             new ProtocolProbeRunner([new SuccessfulProtocolProbe()]),
             fixture.SnapshotStore,
             new SnapshotPublicationGate(TimeSpan.FromHours(1)),
-            Options.Create(CreateOptions()));
+            Options.Create(CreateOptions()),
+            Options.Create(new MissionControlClientOptions { Enabled = true }));
 
         await worker.ExecuteIterationAsync(
             CreateOptions(),
@@ -366,7 +368,8 @@ public sealed class AgentWorkerDockerFailureTests
             new ProtocolProbeRunner([new SuccessfulProtocolProbe()]),
             store,
             new SnapshotPublicationGate(TimeSpan.FromHours(1)),
-            Options.Create(CreateOptions()));
+            Options.Create(CreateOptions()),
+            Options.Create(new MissionControlClientOptions { Enabled = true }));
     }
 
     private static AgentOptions CreateOptions()

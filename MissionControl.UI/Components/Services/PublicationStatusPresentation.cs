@@ -5,8 +5,13 @@ public static class PublicationStatusPresentation
     public const string AttemptTimestampLabel =
         "Last publish attempt";
 
-    public static string GetLabel(bool? succeeded)
+    public static string GetLabel(bool? succeeded, bool? enabled = null)
     {
+        if (enabled == false)
+        {
+            return "DISABLED";
+        }
+
         return succeeded switch
         {
             true => "LAST ATTEMPT SUCCEEDED",
@@ -15,8 +20,13 @@ public static class PublicationStatusPresentation
         };
     }
 
-    public static string GetCssClass(bool? succeeded)
+    public static string GetCssClass(bool? succeeded, bool? enabled = null)
     {
+        if (enabled == false)
+        {
+            return "status-unknown";
+        }
+
         return succeeded switch
         {
             true => "status-running",

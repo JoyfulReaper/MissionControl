@@ -10,4 +10,7 @@ public sealed record NodeSnapshotEvent(
     string? DockerError = null)
 {
     public string? NodeId { get; init; }
+
+    // Null identifies older snapshots that did not record publication configuration.
+    public bool? MissionControlPublicationEnabled { get; init; }
 }
