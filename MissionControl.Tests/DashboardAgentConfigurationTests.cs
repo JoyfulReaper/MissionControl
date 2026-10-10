@@ -20,6 +20,36 @@ namespace MissionControl.Tests;
 
 public sealed class DashboardAgentConfigurationTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WorkConfigurationIsRequiredOnlyWhenEnabled(bool enabled)
+    {
+        using var directory = new TestDirectory();
+        WebApplicationBuilder builder = CreateBuilder(directory.Path);
+        builder.Configuration["WorkPlanningApi:Enabled"] = enabled.ToString();
+        builder.Configuration["WorkPlanningApi:BaseUrl"] = null;
+        builder.Configuration["WorkPlanningApi:ApiKey"] = null;
+        builder.Services.AddMissionControlDashboard(builder.Configuration);
+        await using WebApplication app = builder.Build();
+        if (enabled)
+        {
+            var exception = Assert.Throws<OptionsValidationException>(() => app.Services.GetRequiredService<IStartupValidator>().Validate());
+            Assert.Contains("BaseUrl", exception.Message);
+            Assert.Contains("key is required", exception.Message);
+        }
+        else
+        {
+            await app.StartAsync();
+            var client = app.Services.GetRequiredService<MissionControl.Client.WorkPlanning.IWorkPlanningClient>();
+            Assert.IsType<DashboardApp::MissionControl.Dashboard.WorkPlanning.DisabledWorkPlanningClient>(client);
+            Assert.DoesNotContain(builder.Services, descriptor => descriptor.ServiceType == typeof(DashboardApp::MissionControl.Dashboard.WorkPlanning.WorkPlanningApiKeyHandler));
+            Assert.False((await app.Services.GetRequiredService<MissionControl.Client.WorkPlanning.IWorkPlanningAvailabilityClient>().GetAsync()).Enabled);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetWorkItemsAsync());
+            await app.StopAsync();
+        }
+    }
+
     [Fact]
     public async Task DashboardStartsWithoutLegacyUrlAndUsesEachConfiguredFleetNode()
     {

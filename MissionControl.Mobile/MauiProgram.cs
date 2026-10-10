@@ -38,6 +38,8 @@ public static class MauiProgram
 
         builder.Services.AddHttpClient<IWorkPlanningClient, WorkPlanningClient>(ConfigureMobileApiClient)
             .AddHttpMessageHandler<MobileApiAuthorizationHandler>();
+        builder.Services.AddHttpClient<IWorkPlanningAvailabilityClient, WorkPlanningAvailabilityClient>(ConfigureMobileApiClient)
+            .AddHttpMessageHandler<MobileApiAuthorizationHandler>();
 
         builder.Services.AddHttpClient<IBandwidthUsageClient, BandwidthUsageClient>(ConfigureMobileApiClient)
             .AddHttpMessageHandler<MobileApiAuthorizationHandler>();

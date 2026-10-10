@@ -36,6 +36,64 @@ namespace MissionControl.Tests;
 
 public sealed class MobileApiEndpointTests
 {
+    [Theory]
+    [InlineData("daily-pick", false)]
+    [InlineData("random-pick", false)]
+    [InlineData("work-items", false)]
+    [InlineData("work-items/1/todos", true)]
+    public async Task DisabledWorkRoutesRemainAuthenticatedAndNeverCallUpstream(string path, bool post)
+    {
+        await using WebApplication app = CreateApplication(new FailingArchiveEventClient(new HttpRequestException()), workEnabled: false);
+        await app.StartAsync();
+        using HttpClient client = app.GetTestClient();
+        using var request = CreateAuthorizedRequest("/api/mobile/work-planning/" + path);
+        if (post)
+        {
+            request.Method = HttpMethod.Post;
+            request.Content = JsonContent.Create(new CreateWorkPlanningTodoRequest("Test"));
+        }
+        using HttpResponseMessage response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        string body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("work_planning_disabled", body);
+        Assert.Contains("disabled", body);
+        Assert.Contains("no-store", response.Headers.CacheControl!.ToString());
+        Assert.Equal(0, ((StubWorkPlanningClient)app.Services.GetRequiredService<IWorkPlanningClient>()).Calls);
+        using var unauthorized = new HttpRequestMessage(post ? HttpMethod.Post : HttpMethod.Get, "/api/mobile/work-planning/" + path);
+        if (post) unauthorized.Content = JsonContent.Create(new CreateWorkPlanningTodoRequest("Test"));
+        using HttpResponseMessage denied = await client.SendAsync(unauthorized);
+        Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WorkStatusReportsFeatureWithoutCallingUpstream(bool enabled)
+    {
+        await using WebApplication app = CreateApplication(new FailingArchiveEventClient(new HttpRequestException()), workEnabled: enabled);
+        await app.StartAsync();
+        using HttpClient client = app.GetTestClient();
+        using var request = CreateAuthorizedRequest("/api/mobile/work-planning/status");
+        using HttpResponseMessage response = await client.SendAsync(request);
+        Assert.Equal(enabled, (await response.Content.ReadFromJsonAsync<WorkPlanningAvailability>())!.Enabled);
+        Assert.Equal(0, ((StubWorkPlanningClient)app.Services.GetRequiredService<IWorkPlanningClient>()).Calls);
+        using HttpResponseMessage denied = await client.GetAsync("/api/mobile/work-planning/status");
+        Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+        if (enabled)
+        {
+            using var work = CreateAuthorizedRequest("/api/mobile/work-planning/work-items");
+            using HttpResponseMessage result = await client.SendAsync(work);
+            Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+            Assert.Equal(1, ((StubWorkPlanningClient)app.Services.GetRequiredService<IWorkPlanningClient>()).Calls);
+            using var failing = CreateAuthorizedRequest("/api/mobile/work-planning/work-items/1/todos");
+            failing.Method = HttpMethod.Post;
+            failing.Content = JsonContent.Create(new CreateWorkPlanningTodoRequest("Test"));
+            using HttpResponseMessage unavailable = await client.SendAsync(failing);
+            Assert.Equal(HttpStatusCode.BadGateway, unavailable.StatusCode);
+            Assert.DoesNotContain("work_planning_disabled", await unavailable.Content.ReadAsStringAsync());
+        }
+    }
+
     [Fact]
     public async Task HostsApiRetainsSnapshotsAndProjectsConfiguredFreshness()
     {
@@ -670,7 +728,8 @@ public sealed class MobileApiEndpointTests
         DashboardApp::MissionControl.Dashboard.Bandwidth.BandwidthFleetRefreshController?
             additionalBandwidthState = null,
         TimeProvider? timeProvider = null,
-        int staleAfterSeconds = 120)
+        int staleAfterSeconds = 120,
+        bool workEnabled = true)
     {
         WebApplicationBuilder builder =
             WebApplication.CreateBuilder();
@@ -744,6 +803,8 @@ public sealed class MobileApiEndpointTests
 
         builder.Services.AddSingleton<IWorkPlanningClient>(
             new StubWorkPlanningClient());
+        builder.Services.AddSingleton(Microsoft.Extensions.Options.Options.Create(
+            new DashboardApp::MissionControl.Dashboard.WorkPlanning.WorkPlanningApiOptions { Enabled = workEnabled }));
 
         WebApplication app =
             builder.Build();
@@ -1032,9 +1093,11 @@ public sealed class MobileApiEndpointTests
     private sealed class StubWorkPlanningClient
         : IWorkPlanningClient
     {
+        public int Calls { get; private set; }
         public Task<DailyWorkPick?> GetDailyPickAsync(
             CancellationToken cancellationToken = default)
         {
+            Calls++;
             return Task.FromResult<DailyWorkPick?>(null);
         }
 
@@ -1042,6 +1105,7 @@ public sealed class MobileApiEndpointTests
             bool favorPriority = false,
             CancellationToken cancellationToken = default)
         {
+            Calls++;
             return Task.FromResult<RandomWorkPick?>(null);
         }
 
@@ -1049,6 +1113,7 @@ public sealed class MobileApiEndpointTests
             GetWorkItemsAsync(
                 CancellationToken cancellationToken = default)
         {
+            Calls++;
             return Task.FromResult<IReadOnlyList<WorkPlanningWorkItem>>(
                 []);
         }
@@ -1058,6 +1123,7 @@ public sealed class MobileApiEndpointTests
             CreateWorkPlanningTodoRequest request,
             CancellationToken cancellationToken = default)
         {
+            Calls++;
             return Task.FromException<WorkPlanningTodo>(
                 new InvalidOperationException(
                     "Todo creation is not configured for this test."));

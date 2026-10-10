@@ -347,6 +347,7 @@ Dashboard is the server-side integration host. Its main sections are `Archive`, 
     "ApiKey": "replace-with-the-private-service-key"
   },
   "WorkPlanningApi": {
+    "Enabled": true,
     "BaseUrl": "http://localhost:5095/",
     "ApiKey": "replace-with-the-private-work-planning-key"
   },
@@ -401,6 +402,8 @@ Refresh intervals must be between 5 and 3600 seconds; the stale threshold must b
 When GreenCloud is enabled, at least one explicit `Servers[]` mapping from Agent `NodeId` to provider `ServerId` is required. Node IDs and server IDs must each be unique case-insensitively. Dashboard refreshes the fleet cache at `GreenCloud:PollSeconds`, which must be between 60 and 3600 seconds. Dashboard and Mobile host views read the cache; they do not trigger a provider fleet request. `GreenCloud:ApiToken` is required when enabled and belongs in secrets, not checked-in JSON. Configure mappings with `GreenCloud__Servers__0__NodeId` and `GreenCloud__Servers__0__ServerId` (increment the index for additional servers). The retained `GET /api/mobile/bandwidth` compatibility endpoint makes a direct request only when GreenCloud is enabled with exactly one mapping; otherwise it returns a sanitized 502 without calling the provider. It never chooses the first of several mappings. Current Mobile pages and multi-node host presentation use `GET /api/mobile/hosts`.
 
 `WorkPlanningApi` configures Dashboard's server-side Work Planning client. Its bearer key stays in Dashboard and Mobile uses the authenticated Dashboard proxy.
+
+`WorkPlanningApi:Enabled` defaults to `true` for existing deployments. Set it to `false` (environment variable `WorkPlanningApi__Enabled=false`) and restart Dashboard to disable WSIWOT/Work integration. Disabled deployments need neither `WorkPlanningApi:BaseUrl` nor `WorkPlanningApi:ApiKey`; no upstream Work HTTP client or Work polling is started. Dashboard and updated Mobile hide Work navigation and Overview widgets, and direct Work pages explain that the integration is disabled. Mobile discovers this through the authenticated `/api/mobile/work-planning/status` endpoint. Existing authenticated Work API routes remain available but return HTTP 503 with problem code `work_planning_disabled`; enabled upstream failures remain HTTP 502. Older Mobile builds receive this safe disabled response; rebuild Mobile for feature-aware navigation. Re-enabling requires the existing URL and secret bearer key configuration. Work has no independent background poller; component loading and user actions only run when enabled.
 
 `Dashboard:MobileApi:Enabled` controls the bearer-authenticated Mobile API used
 by installed Windows and Android clients. `Dashboard:MobileApi:TokenHash` is the

@@ -65,18 +65,25 @@ public static class DashboardServiceCollectionExtensions
             .Bind(configuration.GetSection(WorkPlanningApiOptions.SectionName))
             .Validate(
                 options =>
-                    Uri.TryCreate(
+                    !options.Enabled || (Uri.TryCreate(
                         options.BaseUrl,
                         UriKind.Absolute,
                         out var uri) &&
                     (uri.Scheme == Uri.UriSchemeHttp ||
-                     uri.Scheme == Uri.UriSchemeHttps),
+                     uri.Scheme == Uri.UriSchemeHttps)),
                 "Work Planning API BaseUrl must be an absolute HTTP or HTTPS URL.")
             .Validate(
                 options =>
-                    !string.IsNullOrWhiteSpace(options.ApiKey),
+                    !options.Enabled || !string.IsNullOrWhiteSpace(options.ApiKey),
                 "Work Planning API key is required.")
             .ValidateOnStart();
+
+        services.AddSingleton<IWorkPlanningAvailabilityClient, DashboardWorkPlanningAvailabilityClient>();
+        if (!configuration.GetValue("WorkPlanningApi:Enabled", true))
+        {
+            services.AddSingleton<IWorkPlanningClient, DisabledWorkPlanningClient>();
+            return;
+        }
 
         services.AddTransient<WorkPlanningApiKeyHandler>();
         services.AddSingleton(new WorkPlanningClientOptions("api/"));

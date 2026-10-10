@@ -272,7 +272,9 @@ GreenCloud requires explicit `GreenCloud:Servers[]` mappings when enabled, with 
 
 Work Planning is an external HTTP integration, not a JetStream consumer.
 
-- Dashboard configures a server-side `IWorkPlanningClient` with `WorkPlanningApi:BaseUrl` and a bearer API key.
+- Dashboard configures a server-side `IWorkPlanningClient` with `WorkPlanningApi:BaseUrl` and a bearer API key when `WorkPlanningApi:Enabled` is true (the default).
+- With `WorkPlanningApi:Enabled=false`, URL/key validation and upstream HTTP client registration are skipped. The shared Work feature gate hides Dashboard and Mobile navigation and Overview widgets, and direct Work pages show a disabled message before constructing their content. No Work polling or hosted service exists.
+- Mobile discovers the setting through authenticated `GET /api/mobile/work-planning/status`. Existing Work routes keep their authentication and return HTTP 503 with problem code `work_planning_disabled` when disabled; enabled upstream failures remain HTTP 502. Configuration changes require a Dashboard restart. Older Mobile builds still receive a safe disabled response; updated builds hide Work UI.
 - Dashboard shared components/pages can use that client server-side.
 - Mobile calls authenticated `/api/mobile/work-planning/*` routes.
 - Dashboard forwards daily/random pick, work-item, and todo operations to the external service and converts expected upstream failures to `502` responses.

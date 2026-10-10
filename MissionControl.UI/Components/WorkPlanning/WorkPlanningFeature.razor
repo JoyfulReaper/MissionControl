@@ -1,0 +1,38 @@
+@implements IDisposable
+@inject IWorkPlanningAvailabilityClient AvailabilityClient
+
+@if (_enabled == true)
+{
+    @ChildContent
+}
+else if (ShowUnavailable)
+{
+    <p role="status">@(_enabled == false ? "Work Planning is disabled on this Dashboard." : _error ?? "Checking Work availability…")</p>
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public bool ShowUnavailable { get; set; }
+    private readonly CancellationTokenSource _dispose = new();
+    private bool? _enabled;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _enabled = (await AvailabilityClient.GetAsync(_dispose.Token)).Enabled;
+        }
+        catch (OperationCanceledException) when (_dispose.IsCancellationRequested) { }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidOperationException or System.Text.Json.JsonException)
+        {
+            _error = "Work availability could not be retrieved. Check the Dashboard connection and Mobile API token.";
+        }
+    }
+
+    public void Dispose()
+    {
+        _dispose.Cancel();
+        _dispose.Dispose();
+    }
+}

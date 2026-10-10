@@ -173,9 +173,11 @@
 
     @if (_hasMobileApiToken)
     {
-        <DailyWorkPickPanel TimestampFormatter="FormatTimestamp" />
+        <WorkPlanningFeature>
+            <DailyWorkPickPanel TimestampFormatter="FormatTimestamp" />
 
-        <QuickAddTodoPanel />
+            <QuickAddTodoPanel />
+        </WorkPlanningFeature>
     }
 </div>
 
