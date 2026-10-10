@@ -37,6 +37,47 @@ namespace MissionControl.Tests;
 public sealed class MobileApiEndpointTests
 {
     [Fact]
+    public async Task HostsApiRetainsSnapshotsAndProjectsConfiguredFreshness()
+    {
+        PublicNodeSnapshot snapshot = CreateAgentSnapshot("clanker");
+        var time = new HostTestTimeProvider(snapshot.CapturedAt);
+        var agent = new RecordingAgentFleetClient([new("clanker", "Clanker", snapshot, null)]);
+        var bandwidth = new RecordingGreenCloudBandwidthFleetClient([]);
+        await using WebApplication app = CreateApplication(new FailingArchiveEventClient(new HttpRequestException()),
+            agentFleetClient: agent, bandwidthFleetClient: bandwidth, timeProvider: time, staleAfterSeconds: 60);
+        await app.StartAsync();
+        using HttpClient client = app.GetTestClient();
+
+        async Task<HostNodeSnapshot> ReadAsync()
+        {
+            using var request = CreateAuthorizedRequest("/api/mobile/hosts");
+            using HttpResponseMessage response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return Assert.Single((await response.Content.ReadFromJsonAsync<HostNodeSnapshot[]>())!);
+        }
+
+        Assert.False((await ReadAsync()).AgentSnapshot!.Stale);
+        agent.Nodes = [new("clanker", "Clanker", null, "private failure")];
+        time.Now = snapshot.CapturedAt.AddSeconds(30);
+        HostNodeSnapshot fresh = await ReadAsync();
+        Assert.False(fresh.AgentSnapshot!.Stale);
+        Assert.Equal(30, fresh.AgentSnapshot.AgeSeconds);
+        Assert.Equal("Agent snapshot could not be retrieved.", fresh.AgentError);
+        time.Now = snapshot.CapturedAt.AddSeconds(61);
+        HostNodeSnapshot stale = await ReadAsync();
+        Assert.True(stale.AgentSnapshot!.Stale);
+        Assert.Equal(61, stale.AgentSnapshot.AgeSeconds);
+        Assert.Equal(snapshot.CapturedAt, stale.AgentSnapshot.CapturedAt);
+        Assert.Equal(60, stale.SnapshotStaleAfterSeconds);
+        Assert.Equal(1, bandwidth.CallCount);
+        agent.Nodes = [new("clanker", "Clanker", snapshot with { CapturedAt = time.Now }, null)];
+        HostNodeSnapshot recovered = await ReadAsync();
+        Assert.False(recovered.AgentSnapshot!.Stale);
+        Assert.Equal(0, recovered.AgentSnapshot.AgeSeconds);
+        Assert.Null(recovered.AgentError);
+    }
+
+    [Fact]
     public async Task ArchiveProxyDoesNotExposeInternalArchiveFailureDetails()
     {
         await using WebApplication app = CreateApplication(
@@ -627,7 +668,9 @@ public sealed class MobileApiEndpointTests
         GreenCloudBandwidthFleetRefreshController?
             bandwidthState = null,
         DashboardApp::MissionControl.Dashboard.Bandwidth.BandwidthFleetRefreshController?
-            additionalBandwidthState = null)
+            additionalBandwidthState = null,
+        TimeProvider? timeProvider = null,
+        int staleAfterSeconds = 120)
     {
         WebApplicationBuilder builder =
             WebApplication.CreateBuilder();
@@ -670,6 +713,14 @@ public sealed class MobileApiEndpointTests
         builder.Services.AddSingleton<IAgentFleetClient>(
             agentFleetClient ??
             new RecordingAgentFleetClient([]));
+        builder.Services.AddSingleton(Options.Create(new DashboardApp::MissionControl.Dashboard.Configuration.DashboardRefreshOptions
+        {
+            SnapshotStaleAfterSeconds = staleAfterSeconds
+        }));
+        builder.Services.AddSingleton(provider => new DashboardApp::MissionControl.Dashboard.Refresh.AgentFleetRefreshController(
+            provider.GetRequiredService<IAgentFleetClient>(),
+            timeProvider ?? new HostTestTimeProvider(DateTimeOffset.Parse("2026-09-23T20:00:05Z")),
+            TimeSpan.FromSeconds(staleAfterSeconds)));
 
         if (bandwidthState is null)
         {
@@ -899,11 +950,18 @@ public sealed class MobileApiEndpointTests
         }
     }
 
+    private sealed class HostTestTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     private sealed class RecordingAgentFleetClient(
         IReadOnlyList<AgentNodeResult> nodes)
         : IAgentFleetClient
     {
         public bool WasCalled { get; private set; }
+        public IReadOnlyList<AgentNodeResult> Nodes { get; set; } = nodes;
 
         public Task<IReadOnlyList<AgentNodeResult>>
             GetSnapshotsAsync(
@@ -911,7 +969,7 @@ public sealed class MobileApiEndpointTests
         {
             WasCalled = true;
 
-            return Task.FromResult(nodes);
+            return Task.FromResult(Nodes);
         }
     }
 

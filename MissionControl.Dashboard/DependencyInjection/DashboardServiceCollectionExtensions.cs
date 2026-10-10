@@ -326,6 +326,10 @@ public static class DashboardServiceCollectionExtensions
             });
 
         services.AddSingleton<IAgentFleetClient, AgentFleetClient>();
+        services.AddSingleton(provider => new AgentFleetRefreshController(
+            provider.GetRequiredService<IAgentFleetClient>(),
+            provider.GetRequiredService<TimeProvider>(),
+            TimeSpan.FromSeconds(provider.GetRequiredService<IOptions<DashboardRefreshOptions>>().Value.SnapshotStaleAfterSeconds)));
     }
 
     private static void AddDashboardFormatting(IServiceCollection services)

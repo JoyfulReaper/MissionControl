@@ -1,6 +1,9 @@
 using MissionControl.Client.Infrastructure;
 using MissionControl.Dashboard.Agents;
 using MissionControl.Dashboard.Bandwidth;
+using MissionControl.Dashboard.Refresh;
+using MissionControl.Dashboard.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace MissionControl.Dashboard.MobileApi;
 
@@ -29,7 +32,8 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
     }
 
     private static async Task<IResult> HandleGetHostsAsync(
-        IAgentFleetClient agentFleetClient,
+        AgentFleetRefreshController agentState,
+        IOptions<DashboardRefreshOptions> refreshOptions,
         BandwidthFleetState bandwidthState,
         HttpResponse response,
         CancellationToken cancellationToken)
@@ -38,9 +42,14 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
 
         try
         {
-            IReadOnlyList<AgentNodeResult> agentNodes =
-                await agentFleetClient.GetSnapshotsAsync(
-                    cancellationToken);
+            await agentState.RefreshAsync(cancellationToken);
+            IReadOnlyList<AgentNodeResult> agentNodes = agentState.CurrentNodes;
+            if (agentState.RefreshWarning is not null && agentNodes.Count == 0)
+            {
+                return Results.Problem(title: "Host fleet unavailable.",
+                    detail: "Mission Control host telemetry could not be retrieved.",
+                    statusCode: StatusCodes.Status502BadGateway);
+            }
 
             IReadOnlyList<BandwidthNodeResult>
                 bandwidthNodes =
@@ -67,11 +76,14 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
                                 node.NodeId,
                                 node.DisplayName,
                                 node.Snapshot,
-                                SanitizeAgentError(node.Error),
+                                SanitizeAgentError(node.Error ?? agentState.RefreshWarning),
                                 bandwidthConfigured,
                                 bandwidth?.Snapshot,
                                 SanitizeBandwidthError(
-                                    bandwidth?.Error));
+                                    bandwidth?.Error))
+                            {
+                                SnapshotStaleAfterSeconds = refreshOptions.Value.SnapshotStaleAfterSeconds
+                            };
                         })
                     .ToArray();
 

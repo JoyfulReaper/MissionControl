@@ -48,6 +48,7 @@ public static class MauiProgram
 
         builder.Services.AddSingleton<MobileServiceCatalog>();
         builder.Services.AddSingleton<MobileHostFleetState>();
+        builder.Services.AddSingleton(TimeProvider.System);
 
 #if DEBUG
         builder.Services.AddBlazorWebViewDeveloperTools();

@@ -9,4 +9,8 @@ public sealed record HostNodeSnapshot(
     string? AgentError,
     bool BandwidthConfigured,
     BandwidthUsageSnapshot? Bandwidth,
-    string? BandwidthError);
+    string? BandwidthError)
+{
+    // Defaults to the existing Dashboard threshold when reading an older server response.
+    public int SnapshotStaleAfterSeconds { get; init; } = 120;
+}
