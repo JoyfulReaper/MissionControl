@@ -327,9 +327,6 @@ Dashboard is the server-side integration host. Its main sections are `Archive`, 
   "Archive": {
     "BaseUrl": "http://localhost:5191/"
   },
-  "Agent": {
-    "BaseUrl": "http://localhost:5194/"
-  },
   "Agents": {
     "Nodes": [
       {
@@ -397,7 +394,7 @@ Dashboard is the server-side integration host. Its main sections are `Archive`, 
 }
 ```
 
-`Agents:Nodes` defines the active fleet. Node IDs must be unique case-insensitively, and each node needs an absolute HTTP(S) Agent URL. The retained `Agent:BaseUrl` setting supports the older single-Agent client registration; Home, Hosts, Services, and Mobile fleet telemetry use `Agents:Nodes`.
+`Agents:Nodes` defines the active fleet. Node IDs must be unique case-insensitively, and each node needs an absolute HTTP(S) Agent URL. Home, Hosts, Services, and Mobile fleet telemetry use `Agents:Nodes`. Dashboard no longer reads `Agent:BaseUrl`; remove that obsolete setting (or `Agent__BaseUrl`) from Dashboard deployment configuration.
 
 Refresh intervals must be between 5 and 3600 seconds; the stale threshold must be between 5 and 86400 seconds. `ServiceCatalog:Services` is supplied by `services.json` and must contain at least one service. Each service's `NodeId` selects its owner node before `ContainerName` and `ProtocolServiceKey` are matched against that node's snapshot. Service IDs are globally unique; container names and protocol keys are unique per node.
 

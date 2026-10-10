@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
-using MissionControl.Client.Agent;
 using MissionControl.Client.Archive;
 using MissionControl.Client.GitActivity;
 using MissionControl.Client.Infrastructure;
@@ -40,7 +39,6 @@ public static class DashboardServiceCollectionExtensions
         AddDashboardOptions(services, configuration);
         AddDashboardAuthenticationStorage(services, configuration);
         AddArchiveClient(services, configuration);
-        AddAgentClient(services, configuration);
         AddAgentFleetClient(services, configuration);
         AddGitActivityClient(services, configuration);
         AddWorkPlanningClient(services, configuration);
@@ -297,24 +295,6 @@ public static class DashboardServiceCollectionExtensions
             ArchiveEventClient>(httpClient =>
             {
                 httpClient.BaseAddress = new Uri(archiveBaseUrl);
-                httpClient.Timeout = TimeSpan.FromSeconds(10);
-            });
-    }
-
-    private static void AddAgentClient(
-        IServiceCollection services,
-        IConfiguration configuration)
-    {
-        string agentBaseUrl =
-            configuration["Agent:BaseUrl"]
-            ?? throw new InvalidOperationException(
-                "Agent:BaseUrl is not configured.");
-
-        services.AddHttpClient<
-            IAgentSnapshotClient,
-            AgentSnapshotClient>(httpClient =>
-            {
-                httpClient.BaseAddress = new Uri(agentBaseUrl);
                 httpClient.Timeout = TimeSpan.FromSeconds(10);
             });
     }
