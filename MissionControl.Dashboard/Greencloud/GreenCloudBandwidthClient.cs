@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Options;
+using MissionControl.Dashboard.Bandwidth;
+using Microsoft.Extensions.Options;
 using MissionControl.Client.Infrastructure;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -27,7 +28,7 @@ public sealed class GreenCloudBandwidthClient(
             cancellationToken);
     }
 
-    public async Task<IReadOnlyList<GreenCloudBandwidthNodeResult>>
+    public async Task<IReadOnlyList<BandwidthNodeResult>>
         GetAllAsync(CancellationToken cancellationToken = default)
     {
         if (!_options.Enabled)
@@ -35,7 +36,7 @@ public sealed class GreenCloudBandwidthClient(
             return [];
         }
 
-        Task<GreenCloudBandwidthNodeResult>[] tasks =
+        Task<BandwidthNodeResult>[] tasks =
             _options.Servers
                 .Select(server => GetNodeAsync(server, cancellationToken))
                 .ToArray();
@@ -43,7 +44,7 @@ public sealed class GreenCloudBandwidthClient(
         return await Task.WhenAll(tasks);
     }
 
-    private async Task<GreenCloudBandwidthNodeResult>
+    private async Task<BandwidthNodeResult>
         GetNodeAsync(
             GreenCloudServerOptions server,
             CancellationToken cancellationToken)
@@ -56,7 +57,7 @@ public sealed class GreenCloudBandwidthClient(
                     server.ServerId,
                     cancellationToken);
 
-            return new GreenCloudBandwidthNodeResult(
+            return new BandwidthNodeResult(
                 server.NodeId,
                 snapshot,
                 Error: null);
@@ -73,7 +74,7 @@ public sealed class GreenCloudBandwidthClient(
                 InvalidOperationException or
                 System.Text.Json.JsonException)
         {
-            return new GreenCloudBandwidthNodeResult(
+            return new BandwidthNodeResult(
                 server.NodeId,
                 Snapshot: null,
                 Error: exception.Message);

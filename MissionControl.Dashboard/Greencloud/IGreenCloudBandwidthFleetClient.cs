@@ -1,7 +1,5 @@
-﻿namespace MissionControl.Dashboard.GreenCloud;
+using MissionControl.Dashboard.Bandwidth;
 
-public interface IGreenCloudBandwidthFleetClient
-{
-    Task<IReadOnlyList<GreenCloudBandwidthNodeResult>>
-        GetAllAsync(CancellationToken cancellationToken = default);
-}
+namespace MissionControl.Dashboard.GreenCloud;
+
+public interface IGreenCloudBandwidthFleetClient : IBandwidthFleetClient;

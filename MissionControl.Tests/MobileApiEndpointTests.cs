@@ -21,8 +21,8 @@ using System.Text.Encodings.Web;
 using Xunit;
 using AgentNodeResult =
     DashboardApp::MissionControl.Dashboard.Agents.AgentNodeResult;
-using GreenCloudBandwidthNodeResult =
-    DashboardApp::MissionControl.Dashboard.GreenCloud.GreenCloudBandwidthNodeResult;
+using BandwidthNodeResult =
+    DashboardApp::MissionControl.Dashboard.Bandwidth.BandwidthNodeResult;
 using GreenCloudBandwidthFleetRefreshController =
     DashboardApp::MissionControl.Dashboard.GreenCloud.GreenCloudBandwidthFleetRefreshController;
 using GreenCloudOptions =
@@ -197,7 +197,7 @@ public sealed class MobileApiEndpointTests
         var bandwidthFleetClient =
             new RecordingGreenCloudBandwidthFleetClient(
                 [
-                    new GreenCloudBandwidthNodeResult(
+                    new BandwidthNodeResult(
                         "clanker",
                         bandwidthSnapshot,
                         Error: null)
@@ -327,7 +327,7 @@ public sealed class MobileApiEndpointTests
         var bandwidthClient =
             new BlockingAfterSuccessGreenCloudFleetClient(
                 [
-                    new GreenCloudBandwidthNodeResult(
+                    new BandwidthNodeResult(
                         "clanker",
                         bandwidthSnapshot,
                         Error: null)
@@ -408,7 +408,7 @@ public sealed class MobileApiEndpointTests
         var bandwidthFleetClient =
             new RecordingGreenCloudBandwidthFleetClient(
                 [
-                    new GreenCloudBandwidthNodeResult(
+                    new BandwidthNodeResult(
                         "scopecreep",
                         Snapshot: null,
                         Error:
@@ -457,7 +457,7 @@ public sealed class MobileApiEndpointTests
             host.AgentError);
         Assert.True(host.BandwidthConfigured);
         Assert.Equal(
-            "GreenCloud bandwidth could not be retrieved.",
+            "Provider bandwidth could not be retrieved.",
             host.BandwidthError);
         Assert.DoesNotContain(
             secret,
@@ -530,6 +530,42 @@ public sealed class MobileApiEndpointTests
         Assert.DoesNotContain("greencloud:8080", body);
     }
 
+    [Fact]
+    public async Task HostsCombinesProviderCachesWithoutRefreshingEitherProvider()
+    {
+        var servitroSnapshot = CreateBandwidthSnapshot() with
+        {
+            RxBytes = 5000,
+            TxBytes = 1000,
+            UsedBytes = 1000
+        };
+        var servitroClient = new RecordingGreenCloudBandwidthFleetClient(
+            [new BandwidthNodeResult("wurstcase", servitroSnapshot, null)]);
+        var servitroState = new DashboardApp::MissionControl.Dashboard.Bandwidth.BandwidthFleetRefreshController(
+            servitroClient, ["wurstcase"], "Servitro");
+        await servitroState.RefreshAsync(CancellationToken.None);
+        var greenClient = new RecordingGreenCloudBandwidthFleetClient(
+            [new BandwidthNodeResult("clanker", CreateBandwidthSnapshot(), null)]);
+        await using WebApplication app = CreateApplication(
+            new FailingArchiveEventClient(new HttpRequestException()),
+            agentFleetClient: new RecordingAgentFleetClient(
+                [new("clanker", "Clanker", CreateAgentSnapshot("clanker"), null),
+                 new("WURSTCASE", "Wurstcase", CreateAgentSnapshot("wurstcase"), null)]),
+            bandwidthFleetClient: greenClient,
+            additionalBandwidthState: servitroState);
+        await app.StartAsync();
+        using HttpClient client = app.GetTestClient();
+        using var request = CreateAuthorizedRequest("/api/mobile/hosts");
+        using HttpResponseMessage response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        HostNodeSnapshot[] hosts = (await response.Content.ReadFromJsonAsync<HostNodeSnapshot[]>())!;
+        Assert.Equal(2, hosts.Length);
+        var wurstcase = Assert.Single(hosts, host => host.NodeId == "WURSTCASE");
+        Assert.Equal(servitroSnapshot, wurstcase.Bandwidth);
+        Assert.Equal(1, servitroClient.CallCount);
+        Assert.Equal(1, greenClient.CallCount);
+    }
+
     private static WebApplication CreateApplication(
         IArchiveEventClient archiveClient,
         IGitActivityClient? gitActivityClient = null,
@@ -538,7 +574,9 @@ public sealed class MobileApiEndpointTests
         IGreenCloudBandwidthFleetClient?
             bandwidthFleetClient = null,
         GreenCloudBandwidthFleetRefreshController?
-            bandwidthState = null)
+            bandwidthState = null,
+        DashboardApp::MissionControl.Dashboard.Bandwidth.BandwidthFleetRefreshController?
+            additionalBandwidthState = null)
     {
         WebApplicationBuilder builder =
             WebApplication.CreateBuilder();
@@ -599,7 +637,8 @@ public sealed class MobileApiEndpointTests
                 .GetResult();
         }
 
-        builder.Services.AddSingleton(bandwidthState);
+        builder.Services.AddSingleton(new DashboardApp::MissionControl.Dashboard.Bandwidth.BandwidthFleetState(
+            additionalBandwidthState is null ? [bandwidthState] : [bandwidthState, additionalBandwidthState]));
 
         builder.Services.AddSingleton<IWorkPlanningClient>(
             new StubWorkPlanningClient());
@@ -826,12 +865,12 @@ public sealed class MobileApiEndpointTests
     }
 
     private sealed class RecordingGreenCloudBandwidthFleetClient(
-        IReadOnlyList<GreenCloudBandwidthNodeResult> nodes)
+        IReadOnlyList<BandwidthNodeResult> nodes)
         : IGreenCloudBandwidthFleetClient
     {
         public int CallCount { get; private set; }
 
-        public Task<IReadOnlyList<GreenCloudBandwidthNodeResult>>
+        public Task<IReadOnlyList<BandwidthNodeResult>>
             GetAllAsync(
                 CancellationToken cancellationToken = default)
         {
@@ -842,7 +881,7 @@ public sealed class MobileApiEndpointTests
     }
 
     private sealed class BlockingAfterSuccessGreenCloudFleetClient(
-        IReadOnlyList<GreenCloudBandwidthNodeResult> nodes)
+        IReadOnlyList<BandwidthNodeResult> nodes)
         : IGreenCloudBandwidthFleetClient
     {
         private readonly TaskCompletionSource secondRequestStarted =
@@ -857,7 +896,7 @@ public sealed class MobileApiEndpointTests
         public int CallCount { get; private set; }
 
         public async Task<
-            IReadOnlyList<GreenCloudBandwidthNodeResult>>
+            IReadOnlyList<BandwidthNodeResult>>
             GetAllAsync(
                 CancellationToken cancellationToken = default)
         {

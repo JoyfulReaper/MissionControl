@@ -1,12 +1,12 @@
-﻿@page "/hosts"
+@page "/hosts"
 
 @implements IAsyncDisposable
 
 @inject IAgentFleetClient AgentFleetClient
-@inject GreenCloudBandwidthFleetRefreshController BandwidthState
+@inject BandwidthFleetState BandwidthState
 @inject IDashboardDateTimeFormatter DateTimeFormatter
 @inject IOptions<DashboardRefreshOptions> RefreshOptions
-@inject IOptions<GreenCloudOptions> GreenCloudOptions
+@using MissionControl.Dashboard.Bandwidth
 @inject TimeProvider TimeProvider
 @inject IDashboardPollingLoop PollingLoop
 
@@ -79,23 +79,20 @@
                                    IsLoading="false"
                                    ErrorMessage="@GetResourceError(node)" />
 
-                @if (IsGreenCloudNode(node.NodeId))
+                @if (GetBandwidth(node.NodeId) is BandwidthNodeResult bandwidth)
                 {
-                    GreenCloudBandwidthNodeResult? bandwidth =
-                        GetBandwidth(node.NodeId);
-
                     <section class="host-bandwidth">
                         <div>
                             <div class="page-eyebrow">
-                                GreenCloud VPS
+                                Provider bandwidth
                             </div>
 
                             <h3>Bandwidth usage</h3>
                         </div>
 
-                        <BandwidthUsageCard Snapshot="bandwidth?.Snapshot"
-                                            IsLoading="@BandwidthState.IsInitialLoading"
-                                            ErrorMessage="@GetBandwidthError(bandwidth)" />
+                        <BandwidthUsageCard Snapshot="bandwidth.Snapshot"
+                                            IsLoading="@BandwidthState.IsInitialLoading(node.NodeId)"
+                                            ErrorMessage="@bandwidth.Error" />
                     </section>
                 }
             </section>
@@ -172,34 +169,13 @@
         }
     }
 
-    private GreenCloudBandwidthNodeResult? GetBandwidth(
+    private BandwidthNodeResult? GetBandwidth(
         string nodeId)
     {
         return BandwidthState.CurrentNodes
             .FirstOrDefault(
                 node =>
                     string.Equals(node.NodeId, nodeId, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private bool IsGreenCloudNode(
-        string nodeId)
-    {
-        return GreenCloudOptions.Value.Enabled &&
-            GreenCloudOptions.Value.Servers.Any(
-                server =>
-                    string.Equals(server.NodeId, nodeId, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private string? GetBandwidthError(
-        GreenCloudBandwidthNodeResult? bandwidth)
-    {
-        if (bandwidth is not null)
-        {
-            return bandwidth.Error;
-        }
-
-        return BandwidthState.RefreshWarning ??
-            "GreenCloud bandwidth data is unavailable.";
     }
 
     private static string GetNodeStatus(

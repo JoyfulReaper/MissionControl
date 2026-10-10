@@ -1,6 +1,6 @@
 using MissionControl.Client.Infrastructure;
 using MissionControl.Dashboard.Agents;
-using MissionControl.Dashboard.GreenCloud;
+using MissionControl.Dashboard.Bandwidth;
 
 namespace MissionControl.Dashboard.MobileApi;
 
@@ -30,7 +30,7 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
 
     private static async Task<IResult> HandleGetHostsAsync(
         IAgentFleetClient agentFleetClient,
-        GreenCloudBandwidthFleetRefreshController bandwidthState,
+        BandwidthFleetState bandwidthState,
         HttpResponse response,
         CancellationToken cancellationToken)
     {
@@ -42,11 +42,11 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
                 await agentFleetClient.GetSnapshotsAsync(
                     cancellationToken);
 
-            IReadOnlyList<GreenCloudBandwidthNodeResult>
+            IReadOnlyList<BandwidthNodeResult>
                 bandwidthNodes =
                     bandwidthState.CurrentNodes;
 
-            Dictionary<string, GreenCloudBandwidthNodeResult>
+            Dictionary<string, BandwidthNodeResult>
                 bandwidthByNode =
                     bandwidthNodes.ToDictionary(
                         node => node.NodeId,
@@ -60,7 +60,7 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
                             bool bandwidthConfigured =
                                 bandwidthByNode.TryGetValue(
                                     node.NodeId,
-                                    out GreenCloudBandwidthNodeResult?
+                                    out BandwidthNodeResult?
                                         bandwidth);
 
                             return new HostNodeSnapshot(
@@ -111,7 +111,7 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
     {
         return string.IsNullOrWhiteSpace(error)
             ? null
-            : "GreenCloud bandwidth could not be retrieved.";
+            : "Provider bandwidth could not be retrieved.";
     }
 
     private static void DisableResponseCaching(

@@ -11,6 +11,7 @@ using MissionControl.Client.Infrastructure;
 using MissionControl.Client.WorkPlanning;
 using MissionControl.Dashboard.Agents;
 using MissionControl.Dashboard.Authentication;
+using MissionControl.Dashboard.Bandwidth;
 using MissionControl.Dashboard.Configuration;
 using MissionControl.Dashboard.Events;
 using MissionControl.Dashboard.Formatting;
@@ -20,6 +21,7 @@ using MissionControl.Dashboard.MobileApi;
 using MissionControl.Dashboard.Refresh;
 using MissionControl.Dashboard.Security;
 using MissionControl.Dashboard.Services;
+using MissionControl.Dashboard.Servitro;
 using MissionControl.Dashboard.WorkPlanning;
 
 namespace MissionControl.Dashboard.DependencyInjection;
@@ -43,6 +45,8 @@ public static class DashboardServiceCollectionExtensions
         AddGitActivityClient(services, configuration);
         AddWorkPlanningClient(services, configuration);
         AddGreenCloudClient(services, configuration);
+        AddServitroClient(services, configuration);
+        services.AddSingleton<BandwidthFleetState>();
         AddDashboardFormatting(services);
         AddMissionControlEventPublishing(services, configuration);
 
@@ -475,7 +479,55 @@ public static class DashboardServiceCollectionExtensions
                 serviceProvider.GetRequiredService<GreenCloudBandwidthClient>());
 
         services.AddSingleton<GreenCloudBandwidthFleetRefreshController>();
+        services.AddSingleton<BandwidthFleetRefreshController>(
+            provider => provider.GetRequiredService<GreenCloudBandwidthFleetRefreshController>());
         services.AddHostedService<GreenCloudBandwidthPollingService>();
+    }
+
+    private static void AddServitroClient(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<ServitroOptions>()
+            .Bind(configuration.GetSection(ServitroOptions.SectionName))
+            .Validate(options => options.PollSeconds is >= 60 and <= 3600,
+                "Servitro PollSeconds must be between 60 and 3600.")
+            .Validate(options => !options.Enabled ||
+                Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var uri) &&
+                uri.Scheme == Uri.UriSchemeHttps && string.IsNullOrEmpty(uri.UserInfo) &&
+                string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment),
+                "Servitro BaseUrl must be an absolute HTTPS URL without credentials, query, or fragment.")
+            .Validate(options => !options.Enabled || !string.IsNullOrWhiteSpace(options.Token),
+                "Servitro Token is required when enabled.")
+            .Validate(options => !options.Enabled || options.Servers.Count > 0,
+                "At least one Servitro server is required when enabled.")
+            .Validate(options => options.Servers.All(server =>
+                !string.IsNullOrWhiteSpace(server.NodeId) && !string.IsNullOrWhiteSpace(server.ServerId)),
+                "Every Servitro server must have a NodeId and ServerId.")
+            .Validate(options => options.Servers.Select(server => server.NodeId)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() == options.Servers.Count,
+                "Servitro NodeIds must be unique.")
+            .Validate(options => options.Servers.Select(server => server.ServerId)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Count() == options.Servers.Count,
+                "Servitro ServerIds must be unique.")
+            .Validate<IOptions<GreenCloudOptions>>((options, greenCloud) =>
+                !options.Enabled || !greenCloud.Value.Enabled ||
+                !options.Servers.Select(server => server.NodeId).Intersect(
+                    greenCloud.Value.Servers.Select(server => server.NodeId),
+                    StringComparer.OrdinalIgnoreCase).Any(),
+                "A node can only have one bandwidth provider configured.")
+            .ValidateOnStart();
+
+        services.AddSingleton<ServitroBandwidthRateState>();
+        services.AddHttpClient<ServitroBandwidthClient>((provider, client) =>
+            {
+                var options = provider.GetRequiredService<IOptions<ServitroOptions>>().Value;
+                client.BaseAddress = CreateBaseUri(options.BaseUrl);
+                client.Timeout = TimeSpan.FromSeconds(15);
+            })
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddSingleton<ServitroBandwidthFleetRefreshController>();
+        services.AddSingleton<BandwidthFleetRefreshController>(
+            provider => provider.GetRequiredService<ServitroBandwidthFleetRefreshController>());
+        services.AddHostedService<ServitroBandwidthPollingService>();
     }
 
     private static Uri CreateBaseUri(string value)

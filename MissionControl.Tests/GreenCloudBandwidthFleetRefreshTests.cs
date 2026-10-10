@@ -1,6 +1,7 @@
-﻿extern alias DashboardApp;
+extern alias DashboardApp;
 
 using DashboardApp::MissionControl.Dashboard.GreenCloud;
+using DashboardApp::MissionControl.Dashboard.Bandwidth;
 using Microsoft.Extensions.Options;
 using MissionControl.Client.Infrastructure;
 using Xunit;
@@ -67,12 +68,12 @@ public sealed class GreenCloudBandwidthFleetRefreshTests
         await controller.RefreshAsync(
             CancellationToken.None);
 
-        GreenCloudBandwidthNodeResult clanker =
+        BandwidthNodeResult clanker =
             Assert.Single(
                 controller.CurrentNodes,
                 node => node.NodeId == "clanker");
 
-        GreenCloudBandwidthNodeResult scopeCreep =
+        BandwidthNodeResult scopeCreep =
             Assert.Single(
                 controller.CurrentNodes,
                 node => node.NodeId == "scopecreep");
@@ -104,7 +105,7 @@ public sealed class GreenCloudBandwidthFleetRefreshTests
         var client =
             new FailAfterSuccessGreenCloudFleetClient(
                 [
-                    new GreenCloudBandwidthNodeResult(
+                    new BandwidthNodeResult(
                         "clanker",
                         initial,
                         Error: null)
@@ -118,7 +119,7 @@ public sealed class GreenCloudBandwidthFleetRefreshTests
         await controller.RefreshAsync(CancellationToken.None);
         await controller.RefreshAsync(CancellationToken.None);
 
-        GreenCloudBandwidthNodeResult node =
+        BandwidthNodeResult node =
             Assert.Single(controller.CurrentNodes);
 
         Assert.Same(initial, node.Snapshot);
@@ -235,19 +236,19 @@ public sealed class GreenCloudBandwidthFleetRefreshTests
     private sealed class QueueGreenCloudFleetClient(
         IEnumerable<
             IReadOnlyList<
-                GreenCloudBandwidthNodeResult>> responses)
+                BandwidthNodeResult>> responses)
         : IGreenCloudBandwidthFleetClient
     {
         private readonly Queue<
             IReadOnlyList<
-                GreenCloudBandwidthNodeResult>>
+                BandwidthNodeResult>>
             responses = new(responses);
 
         public int CallCount { get; private set; }
 
         public Task<
             IReadOnlyList<
-                GreenCloudBandwidthNodeResult>>
+                BandwidthNodeResult>>
             GetAllAsync(
                 CancellationToken cancellationToken = default)
         {
@@ -259,12 +260,12 @@ public sealed class GreenCloudBandwidthFleetRefreshTests
     }
 
     private sealed class FailAfterSuccessGreenCloudFleetClient(
-        IReadOnlyList<GreenCloudBandwidthNodeResult> initial)
+        IReadOnlyList<BandwidthNodeResult> initial)
         : IGreenCloudBandwidthFleetClient
     {
         private int callCount;
 
-        public Task<IReadOnlyList<GreenCloudBandwidthNodeResult>>
+        public Task<IReadOnlyList<BandwidthNodeResult>>
             GetAllAsync(
                 CancellationToken cancellationToken = default)
         {
@@ -273,7 +274,7 @@ public sealed class GreenCloudBandwidthFleetRefreshTests
             return callCount == 1
                 ? Task.FromResult(initial)
                 : Task.FromException<
-                    IReadOnlyList<GreenCloudBandwidthNodeResult>>(
+                    IReadOnlyList<BandwidthNodeResult>>(
                         new HttpRequestException("provider unavailable"));
         }
     }
@@ -292,7 +293,7 @@ public sealed class GreenCloudBandwidthFleetRefreshTests
         public int CallCount { get; private set; }
 
         public async Task<
-            IReadOnlyList<GreenCloudBandwidthNodeResult>>
+            IReadOnlyList<BandwidthNodeResult>>
             GetAllAsync(
                 CancellationToken cancellationToken = default)
         {
