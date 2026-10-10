@@ -179,7 +179,9 @@ public static class AgentSnapshotEndpointRouteBuilderExtensions
                     {
                         LoadAverage1Minute = publicHost.LoadAverage1Minute,
                         LoadAverage5Minutes = publicHost.LoadAverage5Minutes,
-                        LoadAverage15Minutes = publicHost.LoadAverage15Minutes
+                        LoadAverage15Minutes = publicHost.LoadAverage15Minutes,
+                        Disks = publicHost.Disks,
+                        DiskError = string.IsNullOrWhiteSpace(publicHost.DiskError) ? null : "Disk usage could not be collected for one or more filesystems."
                     },
             MissionControlPublishSucceeded: storedSnapshot.PublishSucceeded,
             LastMissionControlPublishAttemptAt: storedSnapshot.LastPublishAttemptAt,

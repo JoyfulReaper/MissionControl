@@ -36,6 +36,26 @@ namespace MissionControl.Tests;
 
 public sealed class MobileApiEndpointTests
 {
+    [Fact]
+    public async Task HostsApiIncludesDiskMetricsWithoutAdditionalRequests()
+    {
+        var disk = new PublicDiskUsage("/data", 1000, 600, 400, 350, 60, "ext4");
+        PublicNodeSnapshot snapshot = CreateAgentSnapshot("clanker");
+        snapshot = snapshot with { Host = snapshot.Host! with { Disks = [disk], DiskError = "Disk usage could not be collected." } };
+        var agent = new RecordingAgentFleetClient([new("clanker", "Clanker", snapshot, null)]);
+        var bandwidth = new RecordingGreenCloudBandwidthFleetClient([]);
+        await using WebApplication app = CreateApplication(new FailingArchiveEventClient(new HttpRequestException()),
+            agentFleetClient: agent, bandwidthFleetClient: bandwidth);
+        await app.StartAsync();
+        using HttpClient client = app.GetTestClient();
+        using var request = CreateAuthorizedRequest("/api/mobile/hosts");
+        using HttpResponseMessage response = await client.SendAsync(request);
+        HostNodeSnapshot host = Assert.Single((await response.Content.ReadFromJsonAsync<HostNodeSnapshot[]>())!);
+        Assert.Equal(disk, Assert.Single(host.AgentSnapshot!.Host!.Disks!));
+        Assert.Equal(snapshot.Host.DiskError, host.AgentSnapshot.Host.DiskError);
+        Assert.Equal(1, bandwidth.CallCount);
+    }
+
     [Theory]
     [InlineData("daily-pick", false)]
     [InlineData("random-pick", false)]

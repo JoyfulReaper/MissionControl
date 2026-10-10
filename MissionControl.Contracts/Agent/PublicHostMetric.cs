@@ -11,4 +11,6 @@ public sealed record PublicHostMetric(
     public double? LoadAverage5Minutes { get; init; }
 
     public double? LoadAverage15Minutes { get; init; }
+    public IReadOnlyList<PublicDiskUsage>? Disks { get; init; }
+    public string? DiskError { get; init; }
 }

@@ -27,6 +27,13 @@ public sealed class AgentOptions
     public int DockerTimeoutSeconds { get; init; } = 5;
 
     public ProbeOptions[] Probes { get; init; } = [];
+    public DiskOptions Disks { get; init; } = new();
+}
+
+public sealed class DiskOptions
+{
+    public string MountInfoPath { get; init; } = "/proc/self/mountinfo";
+    public string? HostRootPath { get; init; }
 }
 
 public sealed class ProbeOptions
