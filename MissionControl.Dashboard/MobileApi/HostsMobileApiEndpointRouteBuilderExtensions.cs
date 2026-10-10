@@ -1,6 +1,9 @@
 using MissionControl.Client.Infrastructure;
 using MissionControl.Dashboard.Agents;
-using MissionControl.Dashboard.GreenCloud;
+using MissionControl.Dashboard.Bandwidth;
+using MissionControl.Dashboard.Refresh;
+using MissionControl.Dashboard.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace MissionControl.Dashboard.MobileApi;
 
@@ -29,8 +32,9 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
     }
 
     private static async Task<IResult> HandleGetHostsAsync(
-        IAgentFleetClient agentFleetClient,
-        GreenCloudBandwidthFleetRefreshController bandwidthState,
+        AgentFleetRefreshController agentState,
+        IOptions<DashboardRefreshOptions> refreshOptions,
+        BandwidthFleetState bandwidthState,
         HttpResponse response,
         CancellationToken cancellationToken)
     {
@@ -38,15 +42,20 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
 
         try
         {
-            IReadOnlyList<AgentNodeResult> agentNodes =
-                await agentFleetClient.GetSnapshotsAsync(
-                    cancellationToken);
+            await agentState.RefreshAsync(cancellationToken);
+            IReadOnlyList<AgentNodeResult> agentNodes = agentState.CurrentNodes;
+            if (agentState.RefreshWarning is not null && agentNodes.Count == 0)
+            {
+                return Results.Problem(title: "Host fleet unavailable.",
+                    detail: "Mission Control host telemetry could not be retrieved.",
+                    statusCode: StatusCodes.Status502BadGateway);
+            }
 
-            IReadOnlyList<GreenCloudBandwidthNodeResult>
+            IReadOnlyList<BandwidthNodeResult>
                 bandwidthNodes =
                     bandwidthState.CurrentNodes;
 
-            Dictionary<string, GreenCloudBandwidthNodeResult>
+            Dictionary<string, BandwidthNodeResult>
                 bandwidthByNode =
                     bandwidthNodes.ToDictionary(
                         node => node.NodeId,
@@ -60,18 +69,21 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
                             bool bandwidthConfigured =
                                 bandwidthByNode.TryGetValue(
                                     node.NodeId,
-                                    out GreenCloudBandwidthNodeResult?
+                                    out BandwidthNodeResult?
                                         bandwidth);
 
                             return new HostNodeSnapshot(
                                 node.NodeId,
                                 node.DisplayName,
                                 node.Snapshot,
-                                SanitizeAgentError(node.Error),
+                                SanitizeAgentError(node.Error ?? agentState.RefreshWarning),
                                 bandwidthConfigured,
                                 bandwidth?.Snapshot,
                                 SanitizeBandwidthError(
-                                    bandwidth?.Error));
+                                    bandwidth?.Error))
+                            {
+                                SnapshotStaleAfterSeconds = refreshOptions.Value.SnapshotStaleAfterSeconds
+                            };
                         })
                     .ToArray();
 
@@ -111,7 +123,7 @@ public static class HostsMobileApiEndpointRouteBuilderExtensions
     {
         return string.IsNullOrWhiteSpace(error)
             ? null
-            : "GreenCloud bandwidth could not be retrieved.";
+            : "Provider bandwidth could not be retrieved.";
     }
 
     private static void DisableResponseCaching(

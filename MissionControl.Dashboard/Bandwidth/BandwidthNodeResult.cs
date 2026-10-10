@@ -1,8 +1,8 @@
-﻿using MissionControl.Client.Infrastructure;
+using MissionControl.Client.Infrastructure;
 
-namespace MissionControl.Dashboard.GreenCloud;
+namespace MissionControl.Dashboard.Bandwidth;
 
-public sealed record GreenCloudBandwidthNodeResult(
+public sealed record BandwidthNodeResult(
     string NodeId,
     BandwidthUsageSnapshot? Snapshot,
     string? Error)

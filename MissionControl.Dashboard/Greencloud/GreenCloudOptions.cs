@@ -8,10 +8,6 @@ public sealed class GreenCloudOptions
 
     public string BaseUrl { get; set; } = "https://cp.green.cloud/";
 
-    // Temporary backwards-compatible single-server setting.
-    // Mobile /api/mobile/bandwidth can continue using this.
-    public string ServerId { get; set; } = string.Empty;
-
     public List<GreenCloudServerOptions> Servers { get; set; } = [];
 
     public string ApiToken { get; set; } = string.Empty;

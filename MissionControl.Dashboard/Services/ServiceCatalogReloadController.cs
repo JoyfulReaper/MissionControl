@@ -98,7 +98,9 @@ internal sealed class ServiceCatalogReloadController : IAsyncDisposable
                         }
                         else
                         {
-                            ReloadWarning = ReloadWarningMessage;
+                            ReloadWarning = candidate.BindingSucceeded
+                                ? ReloadWarningMessage + " " + string.Join(" ", validation.Failures ?? [])
+                                : ReloadWarningMessage;
                         }
                     }
 

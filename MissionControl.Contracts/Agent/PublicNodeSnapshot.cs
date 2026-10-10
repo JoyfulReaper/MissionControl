@@ -15,5 +15,8 @@ public sealed record PublicNodeSnapshot(
 {
     public string? NodeId { get; init; }
 
+    // Independent of the last attempt result; null means the Agent did not report this setting.
+    public bool? MissionControlPublicationEnabled { get; init; }
+
     public DateTimeOffset? HostCapturedAt { get; init; }
 }

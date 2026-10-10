@@ -2,7 +2,6 @@ extern alias DashboardApp;
 using DashboardApp::MissionControl.Dashboard.Agents;
 using DashboardApp::MissionControl.Dashboard.Configuration;
 using DashboardApp::MissionControl.Dashboard.Refresh;
-using MissionControl.Client.Agent;
 using MissionControl.Client.Archive;
 using MissionControl.Contracts.Agent;
 using MissionControl.Contracts.Archive;
@@ -192,7 +191,7 @@ public sealed class DashboardRefreshTests
         DateTimeOffset now =
             new(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
         var timeProvider = new ManualTimeProvider(now);
-        var client = new QueueAgentSnapshotClient(
+        var client = new QueueSingleNodeFleetClient(
         [
             CreateSnapshot(now, 20),
             CreateSnapshot(
@@ -207,7 +206,7 @@ public sealed class DashboardRefreshTests
                 protocolEndpoint: "api.internal:17",
                 protocolError: "Connection refused")
         ]);
-        var controller = new AgentSnapshotRefreshController(
+        var controller = new AgentFleetRefreshController(
             client,
             timeProvider,
             TimeSpan.FromSeconds(120));
@@ -216,7 +215,7 @@ public sealed class DashboardRefreshTests
         Assert.True(
             await controller.RefreshAsync(CancellationToken.None));
         Assert.False(controller.IsInitialLoading);
-        Assert.Equal(20, controller.CurrentSnapshot?.Host?.CpuPercent);
+        Assert.Equal(20, Assert.Single(controller.CurrentNodes).Snapshot?.Host?.CpuPercent);
 
         var pollingLoop = new DashboardPollingLoop(timeProvider);
         using var cancellationSource = new CancellationTokenSource();
@@ -236,7 +235,7 @@ public sealed class DashboardRefreshTests
         await refreshed.Task;
 
         AgentSnapshotItem current =
-            Assert.IsType<AgentSnapshotItem>(controller.CurrentSnapshot);
+            Assert.IsType<AgentSnapshotItem>(Assert.Single(controller.CurrentNodes).Snapshot);
         Assert.Equal(45, current.Host?.CpuPercent);
         Assert.Equal(
             4_000_000_000,
@@ -260,8 +259,8 @@ public sealed class DashboardRefreshTests
         Assert.False(current.Stale);
 
         timeProvider.Advance(TimeSpan.FromSeconds(121));
-        Assert.Equal(121, controller.CurrentSnapshot?.AgeSeconds);
-        Assert.True(controller.CurrentSnapshot?.Stale);
+        Assert.Equal(121, Assert.Single(controller.CurrentNodes).Snapshot?.AgeSeconds);
+        Assert.True(Assert.Single(controller.CurrentNodes).Snapshot?.Stale);
 
         cancellationSource.Cancel();
         await polling;
@@ -273,13 +272,13 @@ public sealed class DashboardRefreshTests
         DateTimeOffset now =
             new(2026, 7, 18, 12, 0, 0, TimeSpan.Zero);
         var timeProvider = new ManualTimeProvider(now);
-        var client = new QueueAgentSnapshotClient(
+        var client = new QueueSingleNodeFleetClient(
         [
             CreateSnapshot(now, 20),
             new HttpRequestException("offline"),
             CreateSnapshot(now.AddMinutes(3), 55)
         ]);
-        var controller = new AgentSnapshotRefreshController(
+        var controller = new AgentFleetRefreshController(
             client,
             timeProvider,
             TimeSpan.FromSeconds(120));
@@ -290,16 +289,16 @@ public sealed class DashboardRefreshTests
         timeProvider.Advance(TimeSpan.FromSeconds(121));
         await controller.RefreshAsync(CancellationToken.None);
 
-        Assert.Equal(20, controller.CurrentSnapshot?.Host?.CpuPercent);
-        Assert.True(controller.CurrentSnapshot?.Stale);
+        Assert.Equal(20, Assert.Single(controller.CurrentNodes).Snapshot?.Host?.CpuPercent);
+        Assert.True(Assert.Single(controller.CurrentNodes).Snapshot?.Stale);
         Assert.Contains("offline", controller.RefreshWarning);
 
         timeProvider.Advance(TimeSpan.FromSeconds(59));
         await controller.RefreshAsync(CancellationToken.None);
 
-        Assert.Equal(55, controller.CurrentSnapshot?.Host?.CpuPercent);
+        Assert.Equal(55, Assert.Single(controller.CurrentNodes).Snapshot?.Host?.CpuPercent);
         Assert.Null(controller.RefreshWarning);
-        Assert.False(controller.CurrentSnapshot?.Stale);
+        Assert.False(Assert.Single(controller.CurrentNodes).Snapshot?.Stale);
     }
 
     [Fact]
@@ -307,9 +306,9 @@ public sealed class DashboardRefreshTests
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
         var client =
-            new BlockingAgentSnapshotClient(
+            new BlockingAgentFleetClient(
                 CreateSnapshot(now, 25));
-        var controller = new AgentSnapshotRefreshController(
+        var controller = new AgentFleetRefreshController(
             client,
             new ManualTimeProvider(now),
             TimeSpan.FromMinutes(2));
@@ -329,8 +328,8 @@ public sealed class DashboardRefreshTests
     [Fact]
     public async Task AgentDisposalCancellationDoesNotCreateWarning()
     {
-        var client = new CancelledAgentSnapshotClient();
-        var controller = new AgentSnapshotRefreshController(
+        var client = new CancelledAgentFleetClient();
+        var controller = new AgentFleetRefreshController(
             client,
             new ManualTimeProvider(DateTimeOffset.UtcNow),
             TimeSpan.FromMinutes(2));
@@ -642,26 +641,26 @@ public sealed class DashboardRefreshTests
         return new Guid(bytes);
     }
 
-    private sealed class QueueAgentSnapshotClient(
+    private sealed class QueueSingleNodeFleetClient(
         IEnumerable<object> responses) :
-        IAgentSnapshotClient
+        IAgentFleetClient
     {
         private readonly Queue<object> responses = new(responses);
 
-        public Task<AgentSnapshotItem> GetSnapshotAsync(
+        public Task<IReadOnlyList<AgentNodeResult>> GetSnapshotsAsync(
             CancellationToken cancellationToken = default)
         {
             object response = responses.Dequeue();
 
             return response is Exception exception
-                ? Task.FromException<AgentSnapshotItem>(exception)
-                : Task.FromResult((AgentSnapshotItem)response);
+                ? Task.FromException<IReadOnlyList<AgentNodeResult>>(exception)
+                : Task.FromResult<IReadOnlyList<AgentNodeResult>>([new("node", "Node", (AgentSnapshotItem)response, null)]);
         }
     }
 
-    private sealed class BlockingAgentSnapshotClient(
+    private sealed class BlockingAgentFleetClient(
         AgentSnapshotItem response) :
-        IAgentSnapshotClient
+        IAgentFleetClient
     {
         private readonly TaskCompletionSource started =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -672,13 +671,13 @@ public sealed class DashboardRefreshTests
 
         public int CallCount { get; private set; }
 
-        public async Task<AgentSnapshotItem> GetSnapshotAsync(
+        public async Task<IReadOnlyList<AgentNodeResult>> GetSnapshotsAsync(
             CancellationToken cancellationToken = default)
         {
             CallCount++;
             started.TrySetResult();
             await released.Task.WaitAsync(cancellationToken);
-            return response;
+            return [new AgentNodeResult("node", "Node", response, null)];
         }
 
         public void Release()
@@ -687,15 +686,15 @@ public sealed class DashboardRefreshTests
         }
     }
 
-    private sealed class CancelledAgentSnapshotClient :
-        IAgentSnapshotClient
+    private sealed class CancelledAgentFleetClient :
+        IAgentFleetClient
     {
         private readonly TaskCompletionSource started =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public Task Started => started.Task;
 
-        public async Task<AgentSnapshotItem> GetSnapshotAsync(
+        public async Task<IReadOnlyList<AgentNodeResult>> GetSnapshotsAsync(
             CancellationToken cancellationToken = default)
         {
             started.TrySetResult();

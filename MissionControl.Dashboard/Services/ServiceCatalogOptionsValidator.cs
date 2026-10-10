@@ -1,9 +1,10 @@
 using Microsoft.Extensions.Options;
 using MissionControl.Contracts.Services;
+using MissionControl.Dashboard.Configuration;
 
 namespace MissionControl.Dashboard.Services;
 
-internal sealed class ServiceCatalogOptionsValidator
+internal sealed class ServiceCatalogOptionsValidator(FleetNodeReferenceValidator nodeReferences)
     : IValidateOptions<ServiceCatalogOptions>
 {
     public ValidateOptionsResult Validate(
@@ -27,6 +28,9 @@ internal sealed class ServiceCatalogOptionsValidator
         ServiceDefinition[] services = options.Services
             .Where(service => service is not null)
             .ToArray();
+
+        failures.AddRange(nodeReferences.GetErrors(services.Select(service =>
+            (service.NodeId, $"ServiceCatalog:Services service '{service.Id}'"))));
 
         if (services.Any(service =>
             string.IsNullOrWhiteSpace(service.Id) ||

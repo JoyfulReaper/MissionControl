@@ -29,7 +29,9 @@ public static class NodeResourceCalculations
     {
         return GetCpuPercent(host) is not null ||
                HasMemoryMetrics(host) ||
-               HasLoadAverageMetrics(host);
+               HasLoadAverageMetrics(host) ||
+               host?.Disks?.Count > 0 ||
+               !string.IsNullOrWhiteSpace(host?.DiskError);
     }
 
     public static long GetMemoryUsedBytes(PublicHostMetric? host)

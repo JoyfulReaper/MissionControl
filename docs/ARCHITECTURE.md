@@ -89,6 +89,8 @@ Dashboard holds the GitActivity service URL and key. Mobile receives neither; it
 - Host, Docker, and configured protocol probes are collected concurrently. Expected failure in one collector becomes partial/degraded snapshot data rather than discarding healthy collectors.
 - Every completed snapshot is stored in the Agent's local SQLite database. The store retains latest node state, not a metrics time series.
 - `GET /api/snapshot` serves a sanitized public snapshot. It returns `503` until a snapshot exists, applies staleness, CORS, and rate limiting, and can overlay freshly collected host metrics on the stored container/protocol snapshot.
+- Linux host metrics include optional `Disks` and `DiskError`. Disk collection reads mount metadata and local capacity through `DriveInfo`; it filters pseudo/RAM/network/image mounts and duplicate/bind mounts, and isolates failed disks from other telemetry. Stored and public host metrics carry additive disk fields, so old snapshots remain readable. Dashboard and Mobile use the same resource-card disk presentation.
+- Native Agents default to `/proc/self/mountinfo`. Container disk collection requires an explicit recursive read-only host-root bind (`Agent:Disks:HostRootPath`) and a read-only host `/proc/1/mountinfo` bind (`Agent:Disks:MountInfoPath`). Unconfigured containers and overlay roots report disk unavailability instead of container-layer usage. See README for mounts and environment variables. Non-Linux disk collection is not implemented.
 - The optional Gateway client publishes selected snapshot events without making local persistence depend on publication success.
 
 Docker collection targets a Unix socket by default and is disabled by default on Windows. Host CPU/memory detail is primarily Linux `/proc` based.
@@ -266,13 +268,15 @@ Per-node refresh failures retain the previous snapshot when available and attach
 
 The cache is in memory. A Dashboard restart begins with placeholders until the startup refresh completes. It is latest-state presentation, not bandwidth history.
 
-`GreenCloud:ServerId` and authenticated `GET /api/mobile/bandwidth` are retained single-server compatibility surfaces. That endpoint still invokes the provider directly. The active multi-node host presentation uses `GreenCloud:Servers[]` and the cached `/api/mobile/hosts` path.
+GreenCloud requires explicit `GreenCloud:Servers[]` mappings when enabled, with unique NodeId and ServerId values. The authenticated `GET /api/mobile/bandwidth` route remains a single-server compatibility surface: it invokes the provider directly only when GreenCloud is enabled with exactly one mapping. Disabled, missing, or ambiguous selection returns a sanitized 502 without a provider request. It never selects the first of multiple mappings. Current Mobile pages and multi-node host presentation use the cached `/api/mobile/hosts` path.
 
 ## Work Planning integration
 
 Work Planning is an external HTTP integration, not a JetStream consumer.
 
-- Dashboard configures a server-side `IWorkPlanningClient` with `WorkPlanningApi:BaseUrl` and a bearer API key.
+- Dashboard configures a server-side `IWorkPlanningClient` with `WorkPlanningApi:BaseUrl` and a bearer API key when `WorkPlanningApi:Enabled` is true (the default).
+- With `WorkPlanningApi:Enabled=false`, URL/key validation and upstream HTTP client registration are skipped. The shared Work feature gate hides Dashboard and Mobile navigation and Overview widgets, and direct Work pages show a disabled message before constructing their content. No Work polling or hosted service exists.
+- Mobile discovers the setting through authenticated `GET /api/mobile/work-planning/status`. Existing Work routes keep their authentication and return HTTP 503 with problem code `work_planning_disabled` when disabled; enabled upstream failures remain HTTP 502. Configuration changes require a Dashboard restart. Older Mobile builds still receive a safe disabled response; updated builds hide Work UI.
 - Dashboard shared components/pages can use that client server-side.
 - Mobile calls authenticated `/api/mobile/work-planning/*` routes.
 - Dashboard forwards daily/random pick, work-item, and todo operations to the external service and converts expected upstream failures to `502` responses.
@@ -311,7 +315,7 @@ These are current boundaries, not promises of a redesign:
 - Dashboard live fleet state depends on direct network reachability to every configured Agent.
 - Dashboard Agent refresh state is per page/request path rather than one process-wide Agent cache. Multiple Mobile clients can produce additional Agent reads.
 - The GreenCloud fleet cache is process-local and loses last-known values on Dashboard restart.
-- The retained single-server Mobile bandwidth compatibility endpoint bypasses the fleet cache and calls GreenCloud directly.
+- The retained single-server Mobile bandwidth compatibility endpoint bypasses the fleet cache and calls GreenCloud directly only when enabled with exactly one explicit server mapping.
 - Dashboard service catalog reloads at runtime, while Mobile receives its catalog only at build time.
 - Archive and Agent query endpoints do not add their own application authentication; deployment network controls are part of their security boundary.
 - JetStream retention is bounded, and SQLite services are single-service local stores rather than a shared relational platform.

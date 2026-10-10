@@ -3,7 +3,7 @@ using MissionControl.Agent.Models;
 
 namespace MissionControl.Agent.Host;
 
-internal sealed class HostMetricsCollector : IHostMetricsCollector
+internal sealed class HostMetricsCollector(IDiskUsageCollector diskUsageCollector) : IHostMetricsCollector
 {
     private static readonly TimeSpan CpuSampleDuration =
         TimeSpan.FromMilliseconds(250);
@@ -54,7 +54,7 @@ internal sealed class HostMetricsCollector : IHostMetricsCollector
         (double oneMinute, double fiveMinutes, double fifteenMinutes) =
             ParseLoadAverage(await loadAverageTask);
 
-        return new HostMetric(
+        return await AttachDiskUsageAsync(new HostMetric(
             LogicalProcessorCount:
                 CountLogicalProcessors(await statTask),
             CpuPercent:
@@ -67,7 +67,21 @@ internal sealed class HostMetricsCollector : IHostMetricsCollector
             LoadAverage1Minute = oneMinute,
             LoadAverage5Minutes = fiveMinutes,
             LoadAverage15Minutes = fifteenMinutes
-        };
+        }, cancellationToken);
+    }
+
+    internal async Task<HostMetric> AttachDiskUsageAsync(HostMetric host, CancellationToken cancellationToken)
+    {
+        try
+        {
+            DiskCollectionResult result = await diskUsageCollector.CollectAsync(cancellationToken);
+            return host with { Disks = result.Disks, DiskError = result.Error };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception) when (DiskUsageCollector.IsReadFailure(exception))
+        {
+            return host with { Disks = [], DiskError = DiskUsageCollector.ReadError };
+        }
     }
 
     internal static CpuSample ParseCpuSample(string contents)

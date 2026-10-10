@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
 using MissionControl.Client.Agent;
 using MissionControl.Contracts.Agent;
+using System.Text.Json;
 
 namespace MissionControl.Dashboard.Agents;
 
@@ -37,6 +38,19 @@ public sealed class AgentFleetClient(
 
             PublicNodeSnapshot snapshot = await client.GetSnapshotAsync(cancellationToken);
 
+            if (string.IsNullOrWhiteSpace(snapshot.NodeId) ||
+                !string.Equals(node.NodeId, snapshot.NodeId, StringComparison.OrdinalIgnoreCase))
+            {
+                string reported = string.IsNullOrWhiteSpace(snapshot.NodeId)
+                    ? "a missing or blank NodeId"
+                    : $"NodeId '{FormatIdentity(snapshot.NodeId)}'";
+                return new AgentNodeResult(
+                    node.NodeId,
+                    node.DisplayName,
+                    Snapshot: null,
+                    Error: $"Agent identity mismatch for configured node '{FormatIdentity(node.NodeId)}': reported {reported}.");
+            }
+
             return new AgentNodeResult(
                 node.NodeId,
                 node.DisplayName,
@@ -52,14 +66,31 @@ public sealed class AgentFleetClient(
             when (exception is
                 HttpRequestException or
                 TaskCanceledException or
-                InvalidOperationException)
+                InvalidOperationException or
+                JsonException or
+                IOException)
         {
+            string reason = exception switch
+            {
+                JsonException => "The Agent snapshot response contains invalid or incompatible JSON.",
+                IOException => "The Agent snapshot response could not be read.",
+                TaskCanceledException => "Timed out retrieving the Agent snapshot.",
+                HttpRequestException => "The Agent snapshot request failed.",
+                _ => "The Agent snapshot is unavailable or its response could not be read."
+            };
             return new AgentNodeResult(
                 node.NodeId,
                 node.DisplayName,
                 Snapshot: null,
-                Error: exception.Message);
+                Error: $"Configured node '{FormatIdentity(node.NodeId)}': {reason}");
         }
+    }
+
+    private static string FormatIdentity(string value)
+    {
+        // Keep upstream identity diagnostics bounded and on one line.
+        string bounded = new(value.Take(128).Select(character => char.IsControl(character) ? '?' : character).ToArray());
+        return value.Length > 128 ? bounded + "…" : bounded;
     }
 
     private static Uri CreateBaseUri(string value)

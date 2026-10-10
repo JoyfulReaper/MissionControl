@@ -103,6 +103,37 @@ else if (Host is not null && HasResourceMetrics)
                 </div>
             </article>
         }
+        @if (Host.Disks?.Count > 0 || !string.IsNullOrWhiteSpace(Host.DiskError))
+        {
+            <article class="resource-card disk-resource-card">
+                <div class="resource-card-heading">
+                    <h3>Disk usage</h3>
+                </div>
+                <div class="disk-mounts">
+                    @foreach (PublicDiskUsage disk in Host.Disks ?? [])
+                    {
+                        <div class="disk-mount">
+                            <div class="disk-mount-heading">
+                                <strong title="@disk.MountPoint">@disk.MountPoint</strong>
+                                <span>@($"{disk.UsagePercent:0.#}%")</span>
+                            </div>
+                            <div class="resource-progress" role="progressbar" aria-label="@($"Disk usage for {disk.MountPoint}")"
+                                 aria-valuemin="0" aria-valuemax="100" aria-valuenow="@($"{disk.UsagePercent:0.#}")">
+                                <div class="resource-progress-value" style="@GetProgressStyle(disk.UsagePercent)"></div>
+                            </div>
+                            <div class="resource-card-meta">
+                                <span>@FormatBytes(disk.UsedBytes) / @FormatBytes(disk.TotalBytes) used</span>
+                                <span>@FormatBytes(disk.AvailableBytes) available</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Host.DiskError))
+                {
+                    <p class="disk-error" role="status">Disk usage is unavailable for one or more filesystems.</p>
+                }
+            </article>
+        }
     </div>
 }
 else if (Host is not null)

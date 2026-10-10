@@ -1,4 +1,4 @@
-﻿@implements IAsyncDisposable
+@implements IAsyncDisposable
 @inject IBandwidthUsageClient BandwidthClient
 
 <section class="bandwidth-panel"
@@ -6,7 +6,7 @@
     <div class="bandwidth-heading">
         <div>
             <div class="bandwidth-eyebrow">
-                GreenCloud VPS
+                Provider bandwidth
             </div>
 
             <h2 id="bandwidth-title">
@@ -85,13 +85,13 @@
         {
             _error = exception.StatusCode ==
                 System.Net.HttpStatusCode.Unauthorized
-                    ? "GreenCloud rejected the API token."
-                    : "GreenCloud could not be reached: " +
+                    ? "The bandwidth provider rejected the API credentials."
+                    : "The bandwidth provider could not be reached: " +
                       exception.Message;
         }
         catch (TaskCanceledException)
         {
-            _error = "The GreenCloud request timed out.";
+            _error = "The bandwidth request timed out.";
         }
         catch (Exception exception)
             when (exception is

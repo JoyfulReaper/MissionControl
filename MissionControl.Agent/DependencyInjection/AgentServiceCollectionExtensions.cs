@@ -62,6 +62,8 @@ public static class AgentServiceCollectionExtensions
 
         services.AddSingleton<IDockerMetricsCollector, DockerMetricsCollector>();
         services.AddSingleton<IHostMetricsCollector, HostMetricsCollector>();
+        services.AddSingleton<IDiskMetricsSource, DiskMetricsSource>();
+        services.AddSingleton<IDiskUsageCollector, DiskUsageCollector>();
 
         services.AddSingleton<IProtocolProbe, EchoProbe>();
         services.AddSingleton<IProtocolProbe, QotdProbe>();

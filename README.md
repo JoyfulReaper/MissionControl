@@ -134,6 +134,22 @@ The Agent currently collects:
 
 Docker collection uses a Unix domain socket, normally `/var/run/docker.sock`. Docker is disabled by default on Windows. On non-Linux hosts the Agent reports logical processor count, but CPU and memory values are unavailable. A Docker outage or an individual container-statistics failure does not discard host and protocol results.
 
+Linux Agents also collect current disk capacity from `/proc/self/mountinfo` and filesystem space statistics. Each disk reports its mount point, filesystem type, total/used/free/available bytes, and used percentage. Used bytes are total minus all free bytes; available bytes exclude space reserved by the filesystem. Dashboard and Mobile show a compact disk list in host resource cards using the existing binary size formatting. Disk failures keep CPU, memory, protocols, containers, and any readable disks, with a scoped warning. Older snapshots without disks remain readable. Disk collection on other platforms is currently unavailable; no disk history or alerts are added.
+
+Disk selection includes common local capacity filesystems (ext2/3/4, XFS, Btrfs, ZFS, F2FS, JFS, ReiserFS, bcachefs, FAT/exFAT, NTFS, and UFS). Kernel/pseudo filesystems, RAM-backed tmpfs/devtmpfs, cgroups, overlay, squashfs images, and network filesystems are excluded. Repeated mounts of the same filesystem are reported once; bind-mounted files/subdirectories are excluded, with Btrfs subvolumes supported as one capacity pool.
+
+Native Linux deployments need no disk configuration changes. A containerized Agent deliberately leaves disk usage unavailable unless host visibility is configured. Bind the host root recursively and read-only at `/host`, including the host filesystems you want to report (for Docker, `/:/host:ro,rslave`), and bind the host mount table `/proc/1/mountinfo` read-only at `/run/missioncontrol-host-mountinfo`. Set `Agent__Disks__HostRootPath=/host` and `Agent__Disks__MountInfoPath=/run/missioncontrol-host-mountinfo`. Mount points retain their host names; space queries use their paths beneath `/host`. Both mounts are required; the Agent compares filesystem device IDs with the visible container mount table and rejects missing submounts, overlay roots, and filesystem-type mismatches instead of reporting container-layer or parent-filesystem capacity. The root bind grants read access to host files, so restrict container access accordingly. CPU/memory collection retains its existing deployment assumptions; these settings configure disk visibility only. `Dockerfile.agent` remains a build aid, and production Compose is maintained externally.
+
+For a host-installed Linux Agent, the service account must be able to open the
+Docker socket. On systems where `/var/run/docker.sock` is owned by
+`root:docker`, add the Agent account to that group:
+
+```bash
+sudo usermod -aG docker missioncontrol-agent
+```
+
+Treat Docker-socket membership as privileged host access.
+
 The Agent stores one latest snapshot per node rather than a metrics history. `GET /api/snapshot` returns that snapshot with age, staleness, Docker availability, publication status, and sanitized protocol diagnostics. The endpoint applies configured CORS origins and a fixed request rate limit. Raw exception details and local Docker socket paths are not exposed through protocol diagnostics.
 
 ## Web Dashboard behavior
@@ -171,7 +187,7 @@ The mobile app currently provides:
 - **Events**: source and event-type filters, cursor-based older-event loading,
   manual refresh, new-event detection, event cards, modal details, and a
   full-page details route;
-- **Git Activity**: the same shared bounded commit feed, loaded through the
+- **Git Activity**: the same shared bounded recent-commit feed, loaded through the
   authenticated Dashboard Mobile API rather than the private service;
 - **Work**: Work Planning picks, work-item summaries, and todo creation;
 - **Settings**: entry, testing, storage, and removal of the raw Mobile API
@@ -317,9 +333,6 @@ Dashboard is the server-side integration host. Its main sections are `Archive`, 
   "Archive": {
     "BaseUrl": "http://localhost:5191/"
   },
-  "Agent": {
-    "BaseUrl": "http://localhost:5194/"
-  },
   "Agents": {
     "Nodes": [
       {
@@ -340,6 +353,7 @@ Dashboard is the server-side integration host. Its main sections are `Archive`, 
     "ApiKey": "replace-with-the-private-service-key"
   },
   "WorkPlanningApi": {
+    "Enabled": true,
     "BaseUrl": "http://localhost:5095/",
     "ApiKey": "replace-with-the-private-work-planning-key"
   },
@@ -387,13 +401,15 @@ Dashboard is the server-side integration host. Its main sections are `Archive`, 
 }
 ```
 
-`Agents:Nodes` defines the active fleet. Node IDs must be unique case-insensitively, and each node needs an absolute HTTP(S) Agent URL. The retained `Agent:BaseUrl` setting supports the older single-Agent client registration; Home, Hosts, Services, and Mobile fleet telemetry use `Agents:Nodes`.
+`Agents:Nodes` defines the active fleet. Node IDs must be unique case-insensitively, and each node needs an absolute HTTP(S) Agent URL. Home, Hosts, Services, and Mobile fleet telemetry use `Agents:Nodes`. Dashboard no longer reads `Agent:BaseUrl`; remove that obsolete setting (or `Agent__BaseUrl`) from Dashboard deployment configuration.
 
 Refresh intervals must be between 5 and 3600 seconds; the stale threshold must be between 5 and 86400 seconds. `ServiceCatalog:Services` is supplied by `services.json` and must contain at least one service. Each service's `NodeId` selects its owner node before `ContainerName` and `ProtocolServiceKey` are matched against that node's snapshot. Service IDs are globally unique; container names and protocol keys are unique per node.
 
-When GreenCloud is enabled, `Servers[]` maps provider server IDs to Agent `NodeId` values. Dashboard refreshes the fleet cache at `GreenCloud:PollSeconds`, which must be between 60 and 3600 seconds. Dashboard and Mobile host views read the cache; they do not trigger a provider fleet request. `GreenCloud:ApiToken` is required when enabled and belongs in secrets, not checked-in JSON. `GreenCloud:ServerId` and `GET /api/mobile/bandwidth` remain a single-server compatibility path; current multi-node host presentation uses `Servers[]` and `GET /api/mobile/hosts`.
+When GreenCloud is enabled, at least one explicit `Servers[]` mapping from Agent `NodeId` to provider `ServerId` is required. Node IDs and server IDs must each be unique case-insensitively. Dashboard refreshes the fleet cache at `GreenCloud:PollSeconds`, which must be between 60 and 3600 seconds. Dashboard and Mobile host views read the cache; they do not trigger a provider fleet request. `GreenCloud:ApiToken` is required when enabled and belongs in secrets, not checked-in JSON. Configure mappings with `GreenCloud__Servers__0__NodeId` and `GreenCloud__Servers__0__ServerId` (increment the index for additional servers). The retained `GET /api/mobile/bandwidth` compatibility endpoint makes a direct request only when GreenCloud is enabled with exactly one mapping; otherwise it returns a sanitized 502 without calling the provider. It never chooses the first of several mappings. Current Mobile pages and multi-node host presentation use `GET /api/mobile/hosts`.
 
 `WorkPlanningApi` configures Dashboard's server-side Work Planning client. Its bearer key stays in Dashboard and Mobile uses the authenticated Dashboard proxy.
+
+`WorkPlanningApi:Enabled` defaults to `true` for existing deployments. Set it to `false` (environment variable `WorkPlanningApi__Enabled=false`) and restart Dashboard to disable WSIWOT/Work integration. Disabled deployments need neither `WorkPlanningApi:BaseUrl` nor `WorkPlanningApi:ApiKey`; no upstream Work HTTP client or Work polling is started. Dashboard and updated Mobile hide Work navigation and Overview widgets, and direct Work pages explain that the integration is disabled. Mobile discovers this through the authenticated `/api/mobile/work-planning/status` endpoint. Existing authenticated Work API routes remain available but return HTTP 503 with problem code `work_planning_disabled`; enabled upstream failures remain HTTP 502. Older Mobile builds receive this safe disabled response; rebuild Mobile for feature-aware navigation. Re-enabling requires the existing URL and secret bearer key configuration. Work has no independent background poller; component loading and user actions only run when enabled.
 
 `Dashboard:MobileApi:Enabled` controls the bearer-authenticated Mobile API used
 by installed Windows and Android clients. `Dashboard:MobileApi:TokenHash` is the
@@ -484,7 +500,7 @@ The API key must contain at least 32 characters. Both allowlists must be non-emp
 | Dashboard Mobile API | `GET /api/mobile/git-activity` | Requires the Mobile API bearer token. Returns a bounded recent feed through Dashboard's private GitActivity client with no-store headers. |
 | Dashboard Mobile API | `GET /api/mobile/hosts` | Requires the Mobile API bearer token. Refreshes configured Agents and combines them with the latest cached GreenCloud fleet state. |
 | Dashboard Mobile API | `GET /api/mobile/work-planning/*` | Requires the Mobile API bearer token. Proxies Work Planning reads and todo creation with Dashboard's server credential. |
-| Dashboard Mobile API | `GET /api/mobile/bandwidth` | Retained authenticated single-server compatibility endpoint; unlike the host-fleet path, it calls GreenCloud directly. |
+| Dashboard Mobile API | `GET /api/mobile/bandwidth` | Retained authenticated compatibility endpoint; calls GreenCloud directly only when enabled with exactly one explicit server mapping, otherwise returns 502. |
 | Agent | `GET /api/snapshot` | Latest sanitized node snapshot; returns 503 until one is stored. |
 | GitActivity | `GET /api/github/activity` | Recent allowed activity; requires `X-Mission-Control-Key`. |
 
@@ -672,6 +688,160 @@ For releases, `ApplicationDisplayVersion` is the user-facing version,
 `ApplicationVersion` must increase, and `ApplicationId` must remain stable.
 Android updates must be signed with the same signing key.
 
+## Installing a Linux Agent on a host
+
+Current production-style Linux Agent deployments run the published
+`MissionControl.Agent` directly under systemd so host metrics come from the
+host and Docker can be inspected through the local Unix socket.
+
+The recommended Linux deployment is a **self-contained `linux-x64` publish**.
+The build itself can run inside the .NET SDK container, so the target host does
+not need the .NET runtime or SDK installed. Do not use the framework-dependent
+publish command for hosts without .NET; the apphost will start and immediately
+fail with `You must install .NET to run this application`.
+
+Build a writable source copy and publish the Agent:
+
+```bash
+rm -rf /tmp/missioncontrol-build /tmp/missioncontrol-agent-publish
+mkdir -p /tmp/missioncontrol-build /tmp/missioncontrol-agent-publish
+cp -a . /tmp/missioncontrol-build/src
+
+docker run --rm \
+  -v /tmp/missioncontrol-build/src:/src \
+  -v /tmp/missioncontrol-agent-publish:/out \
+  -w /src \
+  mcr.microsoft.com/dotnet/sdk:10.0 \
+  dotnet publish MissionControl.Agent/MissionControl.Agent.csproj \
+    -c Release \
+    -r linux-x64 \
+    --self-contained true \
+    -o /out
+```
+
+The source copy is intentionally writable because `dotnet publish` writes
+restore/build intermediates under the source tree. A read-only `/src` bind
+causes the container build to fail while writing `obj` files.
+
+A self-contained publish is much larger than a framework-dependent publish
+(roughly 100+ MiB for the current Agent) because it carries the .NET runtime.
+It can still depend on native libraries supplied by the operating system. On
+Debian 13, install ICU before starting the Agent:
+
+```bash
+sudo apt update
+sudo apt install -y libicu76
+```
+
+If startup logs report `Couldn't find a valid ICU package installed on the
+system`, install the distribution's `libicu` package rather than enabling
+globalization-invariant mode unless invariant globalization is specifically
+desired.
+
+Copy the publish output to the target host, then create a dedicated service
+account and persistent state directory:
+
+```bash
+sudo useradd --system \
+  --home /opt/missioncontrol-agent \
+  --shell /usr/sbin/nologin \
+  missioncontrol-agent 2>/dev/null || true
+
+sudo mkdir -p /opt/missioncontrol-agent
+sudo mkdir -p /var/lib/missioncontrol-agent
+sudo cp -a /tmp/missioncontrol-agent-publish/. /opt/missioncontrol-agent/
+sudo chown -R missioncontrol-agent:missioncontrol-agent \
+  /opt/missioncontrol-agent \
+  /var/lib/missioncontrol-agent
+```
+
+Store deployment-specific configuration in
+`/etc/missioncontrol-agent.env`. At minimum, give every fleet member an
+explicit stable `Agent__NodeId`; `Agent__NodeName` is only its display name.
+The NodeId must match the corresponding Dashboard `Agents:Nodes[].NodeId`.
+A typical Linux fleet node looks like:
+
+```ini
+DOTNET_ENVIRONMENT=Production
+DOTNET_EnableDiagnostics=0
+
+ASPNETCORE_URLS=http://10.99.0.10:5194
+
+Agent__NodeId=molasses
+Agent__NodeName=Molasses
+Agent__DockerEnabled=true
+Agent__DockerSocketPath=/var/run/docker.sock
+Agent__DockerTimeoutSeconds=5
+Agent__IntervalSeconds=60
+Agent__PublicationHeartbeatMinutes=15
+
+AgentStorage__DatabaseFileName=mission-control-agent.db
+AgentStorage__BasePath=/var/lib/missioncontrol-agent
+
+AgentApi__StaleAfterSeconds=180
+
+MissionControl__Enabled=true
+MissionControl__BaseUrl=http://10.99.0.1:5190
+MissionControl__ApiKey=<secret>
+MissionControl__TimeoutMilliseconds=2000
+```
+
+Bind the Agent API only to an address that the Dashboard should reach. The
+example above uses WireGuard rather than exposing the Agent publicly. Configure
+CORS origins only when a browser client needs direct Agent access.
+
+Install a systemd unit such as:
+
+```ini
+[Unit]
+Description=Mission Control Agent
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=simple
+User=missioncontrol-agent
+Group=missioncontrol-agent
+WorkingDirectory=/opt/missioncontrol-agent
+ExecStart=/opt/missioncontrol-agent/MissionControl.Agent
+EnvironmentFile=/etc/missioncontrol-agent.env
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+SyslogIdentifier=missioncontrol-agent
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0027
+
+StateDirectory=missioncontrol-agent
+StateDirectoryMode=0750
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then enable and verify the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now missioncontrol-agent
+sudo systemctl status missioncontrol-agent --no-pager
+sudo journalctl -u missioncontrol-agent -n 50 --no-pager
+```
+
+A healthy Agent should expose `GET /health/live`, produce a snapshot at
+`GET /api/snapshot`, report the configured NodeId, and publish successfully
+when `MissionControl__Enabled=true`. The Agent SQLite database intentionally
+stores only the latest snapshot for each node; historical snapshot events are
+kept by the Mission Control event pipeline according to its retention policy.
+
 ## Containers
 
 The repository contains build/deployment Dockerfiles for Gateway, Archive,
@@ -747,7 +917,7 @@ dotnet format MissionControl.slnx --verify-no-changes
 - Agent storage retains only the latest snapshot per node; it is not a historical metrics database.
 - Dashboard depends on direct network access to each configured Agent for live state; archived Agent events are not the live-state source.
 - Agent refresh state is page/request driven rather than a single process-wide fleet cache, so multiple Mobile clients can create additional Agent reads.
-- The GreenCloud fleet cache is process-local and starts empty after a Dashboard restart. The retained single-server `/api/mobile/bandwidth` compatibility route still calls the provider directly.
+- The GreenCloud fleet cache is process-local and starts empty after a Dashboard restart. The retained single-server `/api/mobile/bandwidth` compatibility route calls the provider directly only when GreenCloud is enabled with exactly one explicit server mapping.
 - Dashboard reloads `services.json` at runtime, while Mobile receives its catalog at build time.
 - Linux `/proc` supplies the implemented host CPU, load-average, and memory metrics, and Docker collection currently targets a Unix socket.
 - Host uptime is not collected by the Agent.

@@ -17,7 +17,8 @@ internal sealed class AgentWorker(
     ProtocolProbeRunner protocolProbeRunner,
     INodeSnapshotStore snapshotStore,
     SnapshotPublicationGate publicationGate,
-    IOptions<AgentOptions> options) : BackgroundService
+    IOptions<AgentOptions> options,
+    IOptions<MissionControlClientOptions> publicationOptions) : BackgroundService
 {
     private const string SnapshotEventType = "missioncontrol.agent.node.snapshot";
 
@@ -105,12 +106,19 @@ internal sealed class AgentWorker(
             DockerAvailable: docker.Succeeded,
             DockerError: docker.Error)
         {
-            NodeId = agentOptions.EffectiveNodeId
+            NodeId = agentOptions.EffectiveNodeId,
+            MissionControlPublicationEnabled = publicationOptions.Value.Enabled
         };
 
         await snapshotStore.SaveAsync(
             snapshot,
             cancellationToken);
+
+        // Disabled publication is configuration, not a failed attempt. Keep real attempt history intact.
+        if (snapshot.MissionControlPublicationEnabled == false)
+        {
+            return;
+        }
 
         DateTimeOffset publicationTime =
             DateTimeOffset.UtcNow;

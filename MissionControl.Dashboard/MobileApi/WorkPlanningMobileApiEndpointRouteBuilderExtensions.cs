@@ -1,5 +1,8 @@
 ﻿using MissionControl.Client.WorkPlanning;
 
+using Microsoft.Extensions.Options;
+using MissionControl.Dashboard.WorkPlanning;
+
 namespace MissionControl.Dashboard.MobileApi;
 
 public static class
@@ -19,22 +22,43 @@ public static class
                     "Work Planning")
                 .RequireAuthorization(MobileApiAuthenticationDefaults.Policy);
 
-        api.MapGet(
+        api.MapGet("/status", (IOptions<WorkPlanningApiOptions> options, HttpResponse response) =>
+        {
+            DisableResponseCaching(response);
+            return Results.Ok(new WorkPlanningAvailability(options.Value.Enabled));
+        });
+
+        RouteGroupBuilder actions = api.MapGroup("").AddEndpointFilter(async (context, next) =>
+        {
+            var options = context.HttpContext.RequestServices.GetRequiredService<IOptions<WorkPlanningApiOptions>>();
+            if (!options.Value.Enabled)
+            {
+                DisableResponseCaching(context.HttpContext.Response);
+                return Results.Problem(title: "Work Planning disabled.",
+                    detail: "Work Planning is disabled on this Dashboard.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable,
+                    extensions: new Dictionary<string, object?> { ["code"] = "work_planning_disabled" });
+            }
+
+            return await next(context);
+        });
+
+        actions.MapGet(
                 "/daily-pick",
                 GetDailyPickAsync)
             .WithName("GetMobileWorkPlanningDailyPick");
 
-        api.MapGet(
+        actions.MapGet(
             "/random-pick",
             GetRandomPickAsync)
         .WithName("GetMobileWorkPlanningRandomPick");
 
-        api.MapGet(
+        actions.MapGet(
                 "/work-items",
                 GetWorkItemsAsync)
             .WithName("GetMobileWorkPlanningWorkItems");
 
-        api.MapPost(
+        actions.MapPost(
                 "/work-items/{workItemId:int}/todos",
                 CreateTodoAsync)
             .WithName("CreateMobileWorkPlanningTodo");

@@ -142,13 +142,15 @@
     private string GetPublishState()
     {
         return PublicationStatusPresentation.GetLabel(
-            Snapshot?.MissionControlPublishSucceeded);
+            Snapshot?.MissionControlPublishSucceeded,
+            Snapshot?.MissionControlPublicationEnabled);
     }
 
     private string GetPublishStateClass()
     {
         return PublicationStatusPresentation.GetCssClass(
-            Snapshot?.MissionControlPublishSucceeded);
+            Snapshot?.MissionControlPublishSucceeded,
+            Snapshot?.MissionControlPublicationEnabled);
     }
 
     private string GetDockerState()

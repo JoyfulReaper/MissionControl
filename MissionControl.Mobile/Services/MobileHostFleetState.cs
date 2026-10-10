@@ -3,14 +3,28 @@
 namespace MissionControl.Mobile.Services;
 
 public sealed class MobileHostFleetState(
-    IHostFleetClient hostFleetClient) : IDisposable
+    IHostFleetClient hostFleetClient,
+    TimeProvider timeProvider) : IDisposable
 {
     private readonly SemaphoreSlim _refreshGate =
         new(initialCount: 1, maxCount: 1);
 
     public event Action? Changed;
 
-    public IReadOnlyList<HostNodeSnapshot> Hosts { get; private set; } = [];
+    private IReadOnlyList<HostNodeSnapshot> hosts = [];
+
+    public IReadOnlyList<HostNodeSnapshot> Hosts
+    {
+        get
+        {
+            DateTimeOffset now = timeProvider.GetUtcNow();
+            return hosts.Select(host => host.AgentSnapshot is null ? host : host with
+            {
+                AgentSnapshot = MissionControl.Client.Agent.AgentSnapshotFreshness.Apply(
+                    host.AgentSnapshot, now, TimeSpan.FromSeconds(host.SnapshotStaleAfterSeconds))
+            }).ToArray();
+        }
+    }
 
     public bool IsInitialLoading { get; private set; } = true;
 
@@ -48,7 +62,7 @@ public sealed class MobileHostFleetState(
 
         try
         {
-            Hosts = await hostFleetClient.GetAsync(cancellationToken);
+            hosts = await hostFleetClient.GetAsync(cancellationToken);
 
             ErrorMessage = null;
         }

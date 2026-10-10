@@ -85,6 +85,34 @@
     margin: 0;
 }
 
+.disk-resource-card {
+    grid-column: 1 / -1;
+    min-height: auto;
+}
+
+.disk-mounts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+    gap: 1rem 1.5rem;
+}
+
+.disk-mount-heading {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.disk-mount-heading strong {
+    overflow-wrap: anywhere;
+}
+
+.disk-error {
+    color: var(--mc-text-muted);
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+}
+
 .resource-card-loading span,
 .resource-card-loading strong,
 .resource-card-loading div {
