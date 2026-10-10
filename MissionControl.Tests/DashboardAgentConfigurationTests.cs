@@ -61,9 +61,16 @@ public sealed class DashboardAgentConfigurationTests
         builder.Services.AddMissionControlDashboard(builder.Configuration);
         await using WebApplication app = builder.Build();
 
-        OptionsValidationException exception = await Assert.ThrowsAsync<OptionsValidationException>(
-            () => app.StartAsync());
-        Assert.Contains(error, exception.Message);
+        Exception? exception = await Record.ExceptionAsync(() => app.StartAsync());
+        Assert.NotNull(exception);
+        IEnumerable<Exception> failures = exception is AggregateException aggregate
+            ? aggregate.Flatten().InnerExceptions
+            : [exception];
+        Assert.All(failures, failure =>
+        {
+            Assert.IsType<OptionsValidationException>(failure);
+            Assert.Contains(error, failure.Message);
+        });
     }
 
     [Theory]
@@ -236,7 +243,10 @@ public sealed class DashboardAgentConfigurationTests
             {
                 Content = JsonContent.Create(new PublicNodeSnapshot(
                     request.RequestUri!.Host, DateTimeOffset.UtcNow, 0, false,
-                    null, null, null, [], []))
+                    null, null, null, [], [])
+                {
+                    NodeId = request.RequestUri.Host == "first.example" ? "first" : "second"
+                })
             });
         }
     }

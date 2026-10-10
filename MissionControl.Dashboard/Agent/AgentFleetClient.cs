@@ -37,6 +37,19 @@ public sealed class AgentFleetClient(
 
             PublicNodeSnapshot snapshot = await client.GetSnapshotAsync(cancellationToken);
 
+            if (string.IsNullOrWhiteSpace(snapshot.NodeId) ||
+                !string.Equals(node.NodeId, snapshot.NodeId, StringComparison.OrdinalIgnoreCase))
+            {
+                string reported = string.IsNullOrWhiteSpace(snapshot.NodeId)
+                    ? "a missing or blank NodeId"
+                    : $"NodeId '{FormatIdentity(snapshot.NodeId)}'";
+                return new AgentNodeResult(
+                    node.NodeId,
+                    node.DisplayName,
+                    Snapshot: null,
+                    Error: $"Agent identity mismatch for configured node '{FormatIdentity(node.NodeId)}': reported {reported}.");
+            }
+
             return new AgentNodeResult(
                 node.NodeId,
                 node.DisplayName,
@@ -60,6 +73,13 @@ public sealed class AgentFleetClient(
                 Snapshot: null,
                 Error: exception.Message);
         }
+    }
+
+    private static string FormatIdentity(string value)
+    {
+        // Keep upstream identity diagnostics bounded and on one line.
+        string bounded = new(value.Take(128).Select(character => char.IsControl(character) ? '?' : character).ToArray());
+        return value.Length > 128 ? bounded + "…" : bounded;
     }
 
     private static Uri CreateBaseUri(string value)
