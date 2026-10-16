@@ -61,14 +61,23 @@ public static class MissionControlTools
 
     [McpServerTool]
     [Description(
-        "Returns aggregate Mission Control Archive statistics for the last 24 hours, " +
+        "Returns aggregate Mission Control Archive statistics for a recent time window, " +
         "including the busiest event types and sources. Use this before loading " +
         "individual events when you want an overview of recent activity.")]
     public static Task<JsonElement> GetEventStatisticsAsync(
-    ArchiveClient archiveClient,
-    CancellationToken cancellationToken = default)
+        ArchiveClient archiveClient,
+        [Description(
+        "Number of recent hours to include. Defaults to 24 and is limited to 1-168.")]
+    int hours = 24,
+        [Description(
+        "Maximum number of top event types and sources to return. " +
+        "Defaults to 5 and is limited to 1-20.")]
+    int top = 5,
+        CancellationToken cancellationToken = default)
     {
         return archiveClient.GetEventStatisticsAsync(
+            hours,
+            top,
             cancellationToken);
     }
 }

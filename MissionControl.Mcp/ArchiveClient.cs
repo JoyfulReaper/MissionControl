@@ -67,17 +67,26 @@ public sealed class ArchiveClient(HttpClient httpClient)
     }
 
     public async Task<JsonElement> GetEventStatisticsAsync(
-    CancellationToken cancellationToken = default)
+        int hours = 24,
+        int top = 5,
+        CancellationToken cancellationToken = default)
     {
+        hours = Math.Clamp(hours, 1, 168);
+        top = Math.Clamp(top, 1, 20);
+
         using HttpResponseMessage response =
-            await httpClient.GetAsync("/api/events/statistics", cancellationToken);
+            await httpClient.GetAsync(
+                $"/api/events/statistics?hours={hours}&top={top}",
+                cancellationToken);
 
         response.EnsureSuccessStatusCode();
 
         JsonElement? result =
-            await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
+            await response.Content.ReadFromJsonAsync<JsonElement>(
+                cancellationToken: cancellationToken);
 
         return result
-            ?? throw new InvalidOperationException("Archive returned an empty statistics response.");
+            ?? throw new InvalidOperationException(
+                "Archive returned an empty statistics response.");
     }
 }
