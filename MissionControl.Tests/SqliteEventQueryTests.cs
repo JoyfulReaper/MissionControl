@@ -6,9 +6,17 @@
 
 extern alias ArchiveApp;
 using ArchiveApp::MissionControl.Archive.Contracts;
+using ArchiveApp::MissionControl.Archive.Endpoints;
+using ArchiveApp::MissionControl.Archive.Storage;
 using ArchiveApp::MissionControl.Archive.Storage.Sqlite;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using MissionControl.Client.Archive;
 using MissionControl.Contracts;
+using MissionControl.Contracts.Archive;
+using System.Net.Http.Json;
 using System.Reflection;
 using System.Text.Json;
 using Xunit;
@@ -20,6 +28,69 @@ public sealed class SqliteEventQueryTests
     static SqliteEventQueryTests()
     {
         SQLitePCL.Batteries_V2.Init();
+    }
+
+    [Fact]
+    public async Task StatisticsEndpointDeserializesIntoClientContractForDefaultAndCustomWindows()
+    {
+        await WithArchiveDatabaseAsync(
+            async (archive, query) =>
+            {
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                foreach (int hoursAgo in new[] { 2, 30 })
+                {
+                    await archive.StoreAsync(
+                        CreateEnvelope(
+                            Guid.NewGuid(),
+                            "test.event",
+                            "test-source",
+                            now.AddHours(-hoursAgo),
+                            now.AddHours(-hoursAgo)));
+                }
+
+                WebApplicationBuilder builder = WebApplication.CreateBuilder();
+                builder.WebHost.UseTestServer();
+                builder.Services.AddSingleton<IIntegrationEventQuery>(query);
+                await using WebApplication app = builder.Build();
+                app.MapArchiveEndpoints();
+
+                string? requestPath = null;
+                string? requestQuery = null;
+                app.Use(async (context, next) =>
+                {
+                    requestPath = context.Request.Path.Value;
+                    requestQuery = context.Request.QueryString.Value;
+                    await next(context);
+                });
+                await app.StartAsync();
+                using HttpClient httpClient = app.GetTestClient();
+                var client = new ArchiveEventClient(httpClient);
+
+                ArchiveStatisticsItem statistics = await client.GetStatisticsAsync();
+
+                Assert.Equal("/api/events/statistics", requestPath);
+                Assert.True(string.IsNullOrEmpty(requestQuery));
+                Assert.Equal(2, statistics.TotalEvents);
+                Assert.Equal(1, statistics.EventsReceivedInWindow);
+                Assert.Equal(1, statistics.UniqueSources);
+                Assert.Equal(1, statistics.UniqueEventTypes);
+                Assert.Equal(now.AddHours(-2), statistics.LatestReceivedAt);
+                Assert.Equal(
+                    new ArchiveCategoryCountItem("test-source", 1),
+                    Assert.Single(statistics.TopSources));
+                Assert.Equal(
+                    new ArchiveCategoryCountItem("test.event", 1),
+                    Assert.Single(statistics.TopEventTypes));
+
+                ArchiveStatisticsItem? widerWindow =
+                    await httpClient.GetFromJsonAsync<ArchiveStatisticsItem>(
+                        "/api/events/statistics?hours=48&top=1");
+
+                Assert.NotNull(widerWindow);
+                Assert.Equal(2, widerWindow.EventsReceivedInWindow);
+                Assert.Equal(2, Assert.Single(widerWindow.TopSources).Count);
+                Assert.Equal(2, Assert.Single(widerWindow.TopEventTypes).Count);
+            });
     }
 
     [Fact]

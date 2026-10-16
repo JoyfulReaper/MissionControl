@@ -2,7 +2,7 @@
 
 public sealed record ArchiveStatisticsItem(
     long TotalEvents,
-    long EventsReceivedLast24Hours,
+    long EventsReceivedInWindow,
     long UniqueSources,
     long UniqueEventTypes,
     DateTimeOffset? LatestReceivedAt,
