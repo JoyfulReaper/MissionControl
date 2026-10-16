@@ -23,4 +23,52 @@ public static class MissionControlTools
             limit,
             cancellationToken);
     }
+
+    [McpServerTool]
+    [Description(
+        "Returns lightweight summaries of the most recent archived " +
+        "Mission Control events without their payloads. Use this first " +
+        "when surveying recent activity.")]
+    public static Task<JsonElement> GetRecentEventSummariesAsync(
+        ArchiveClient archiveClient,
+        [Description(
+            "Maximum number of recent event summaries to return. " +
+            "Defaults to 50 and is limited to 100.")]
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        return archiveClient.GetRecentEventSummariesAsync(
+            limit,
+            cancellationToken);
+    }
+
+    [McpServerTool]
+    [Description(
+        "Returns one archived Mission Control event by its event ID, " +
+        "including the full payload. Use this after identifying an " +
+        "interesting event from the event summary tool.")]
+    public static Task<JsonElement?> GetEventByIdAsync(
+    ArchiveClient archiveClient,
+    [Description(
+        "The Mission Control event ID to retrieve.")]
+    Guid eventId,
+    CancellationToken cancellationToken = default)
+    {
+        return archiveClient.GetEventByIdAsync(
+            eventId,
+            cancellationToken);
+    }
+
+    [McpServerTool]
+    [Description(
+        "Returns aggregate Mission Control Archive statistics for the last 24 hours, " +
+        "including the busiest event types and sources. Use this before loading " +
+        "individual events when you want an overview of recent activity.")]
+    public static Task<JsonElement> GetEventStatisticsAsync(
+    ArchiveClient archiveClient,
+    CancellationToken cancellationToken = default)
+    {
+        return archiveClient.GetEventStatisticsAsync(
+            cancellationToken);
+    }
 }

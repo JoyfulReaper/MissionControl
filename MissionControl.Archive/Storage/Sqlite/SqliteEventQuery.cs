@@ -89,6 +89,7 @@ public sealed class SqliteEventQuery(
             await GetTopCategoriesAsync(
                 connection,
                 columnName: "Source",
+                receivedSince,
                 topCategoryLimit,
                 cancellationToken);
 
@@ -96,6 +97,7 @@ public sealed class SqliteEventQuery(
             await GetTopCategoriesAsync(
                 connection,
                 columnName: "EventType",
+                receivedSince,
                 topCategoryLimit,
                 cancellationToken);
 
@@ -389,6 +391,7 @@ public sealed class SqliteEventQuery(
     GetTopCategoriesAsync(
         SqliteConnection connection,
         string columnName,
+        DateTimeOffset receivedSince,
         int limit,
         CancellationToken cancellationToken)
     {
@@ -403,16 +406,23 @@ public sealed class SqliteEventQuery(
 
         command.CommandText =
             $"""
-        SELECT
-            {columnName},
-            COUNT(*) AS EventCount
-        FROM IntegrationEvents
-        GROUP BY {columnName}
-        ORDER BY
-            EventCount DESC,
-            {columnName} ASC
-        LIMIT $limit;
-        """;
+            SELECT
+                {columnName},
+                COUNT(*) AS EventCount
+            FROM IntegrationEvents
+            WHERE ReceivedAt >= $receivedSince
+            GROUP BY {columnName}
+            ORDER BY
+                EventCount DESC,
+                {columnName} ASC
+            LIMIT $limit;
+            """;
+
+        command.Parameters.AddWithValue(
+            "$receivedSince",
+            receivedSince
+                .ToUniversalTime()
+                .ToString("O"));
 
         command.Parameters.AddWithValue("$limit", limit);
 
