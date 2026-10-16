@@ -85,7 +85,7 @@ public sealed class SqliteEventQueryTests
                 Assert.Equal(13, statistics.TotalEvents);
                 Assert.Equal(
                     3,
-                    statistics.EventsReceivedLast24Hours);
+                    statistics.EventsReceivedInWindow);
 
                 Assert.Collection(
                     statistics.TopSources,
@@ -165,7 +165,7 @@ public sealed class SqliteEventQueryTests
                 Assert.Equal(0, statistics.TotalEvents);
                 Assert.Equal(
                     0,
-                    statistics.EventsReceivedLast24Hours);
+                    statistics.EventsReceivedInWindow);
                 Assert.Equal(0, statistics.UniqueSources);
                 Assert.Equal(0, statistics.UniqueEventTypes);
                 Assert.Null(statistics.LatestReceivedAt);
@@ -221,7 +221,7 @@ public sealed class SqliteEventQueryTests
                 Assert.Equal(3, statistics.TotalEvents);
                 Assert.Equal(
                     2,
-                    statistics.EventsReceivedLast24Hours);
+                    statistics.EventsReceivedInWindow);
                 Assert.Equal(2, statistics.UniqueSources);
                 Assert.Equal(3, statistics.UniqueEventTypes);
                 Assert.Equal(

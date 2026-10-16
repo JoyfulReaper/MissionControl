@@ -8,7 +8,7 @@ namespace MissionControl.Archive.Contracts;
 
 public sealed record EventArchiveStatistics(
     long TotalEvents,
-    long EventsReceivedLast24Hours,
+    long EventsReceivedInWindow,
     long UniqueSources,
     long UniqueEventTypes,
     DateTimeOffset? LatestReceivedAt,

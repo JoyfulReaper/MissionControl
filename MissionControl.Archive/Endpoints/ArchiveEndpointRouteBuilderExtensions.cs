@@ -46,17 +46,21 @@ public static class ArchiveEndpointRouteBuilderExtensions
     }
 
     private static async Task<IResult>
-            HandleGetEventStatisticsAsync(
-                IIntegrationEventQuery query,
-                CancellationToken cancellationToken)
+        HandleGetEventStatisticsAsync(
+            int? hours,
+            int? top,
+            IIntegrationEventQuery query,
+            CancellationToken cancellationToken)
     {
-        DateTimeOffset receivedSince =
-            DateTimeOffset.UtcNow.AddHours(-24);
+        int effectiveHours = Math.Clamp(hours ?? 24, 1, 168);
+        int effectiveTop = Math.Clamp(top ?? 5, 1, 20);
+
+        DateTimeOffset receivedSince = DateTimeOffset.UtcNow.AddHours(-effectiveHours);
 
         EventArchiveStatistics statistics =
             await query.GetStatisticsAsync(
                 receivedSince: receivedSince,
-                topCategoryLimit: 5,
+                topCategoryLimit: effectiveTop,
                 cancellationToken: cancellationToken);
 
         return Results.Ok(statistics);

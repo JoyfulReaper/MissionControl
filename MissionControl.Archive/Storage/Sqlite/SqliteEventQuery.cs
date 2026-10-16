@@ -103,7 +103,7 @@ public sealed class SqliteEventQuery(
 
         return new EventArchiveStatistics(
             TotalEvents: totalEvents,
-            EventsReceivedLast24Hours: recentlyReceivedEvents,
+            EventsReceivedInWindow: recentlyReceivedEvents,
             UniqueSources: uniqueSources,
             UniqueEventTypes: uniqueEventTypes,
             LatestReceivedAt: latestReceivedAt,
