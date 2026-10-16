@@ -23,6 +23,128 @@ public sealed class SqliteEventQueryTests
     }
 
     [Fact]
+    public async Task GetStatisticsAsyncTopCategoriesRespectReceivedSince()
+    {
+        await WithArchiveDatabaseAsync(
+            async (archive, query) =>
+            {
+                DateTimeOffset now =
+                    new(
+                        2026,
+                        7,
+                        16,
+                        12,
+                        0,
+                        0,
+                        TimeSpan.Zero);
+
+                DateTimeOffset receivedSince =
+                    now.AddHours(-24);
+
+                // Old noisy category: should not influence recent top categories.
+                for (int index = 0; index < 10; index++)
+                {
+                    await archive.StoreAsync(
+                        CreateEnvelope(
+                            Guid.NewGuid(),
+                            "old.noisy.event",
+                            "old-noisy-source",
+                            now.AddDays(-3).AddMinutes(index),
+                            now.AddDays(-3).AddMinutes(index)));
+                }
+
+                // Recent activity.
+                await archive.StoreAsync(
+                    CreateEnvelope(
+                        Guid.NewGuid(),
+                        "recent.event",
+                        "recent-source",
+                        now.AddHours(-2),
+                        now.AddHours(-2)));
+
+                await archive.StoreAsync(
+                    CreateEnvelope(
+                        Guid.NewGuid(),
+                        "recent.event",
+                        "recent-source",
+                        now.AddHours(-1),
+                        now.AddHours(-1)));
+
+                await archive.StoreAsync(
+                    CreateEnvelope(
+                        Guid.NewGuid(),
+                        "other.recent.event",
+                        "other-recent-source",
+                        now.AddMinutes(-30),
+                        now.AddMinutes(-30)));
+
+                EventArchiveStatistics statistics =
+                    await query.GetStatisticsAsync(
+                        receivedSince: receivedSince);
+
+                Assert.Equal(13, statistics.TotalEvents);
+                Assert.Equal(
+                    3,
+                    statistics.EventsReceivedLast24Hours);
+
+                Assert.Collection(
+                    statistics.TopSources,
+                    first =>
+                    {
+                        Assert.Equal(
+                            "recent-source",
+                            first.Name);
+
+                        Assert.Equal(
+                            2,
+                            first.Count);
+                    },
+                    second =>
+                    {
+                        Assert.Equal(
+                            "other-recent-source",
+                            second.Name);
+
+                        Assert.Equal(
+                            1,
+                            second.Count);
+                    });
+
+                Assert.Collection(
+                    statistics.TopEventTypes,
+                    first =>
+                    {
+                        Assert.Equal(
+                            "recent.event",
+                            first.Name);
+
+                        Assert.Equal(
+                            2,
+                            first.Count);
+                    },
+                    second =>
+                    {
+                        Assert.Equal(
+                            "other.recent.event",
+                            second.Name);
+
+                        Assert.Equal(
+                            1,
+                            second.Count);
+                    });
+
+                Assert.DoesNotContain(
+                    statistics.TopSources,
+                    item => item.Name == "old-noisy-source");
+
+                Assert.DoesNotContain(
+                    statistics.TopEventTypes,
+                    item => item.Name == "old.noisy.event");
+            });
+    }
+
+
+    [Fact]
     public async Task GetStatisticsAsyncReturnsZerosForEmptyArchive()
     {
         await WithArchiveDatabaseAsync(
