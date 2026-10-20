@@ -80,4 +80,24 @@ public static class MissionControlTools
             top,
             cancellationToken);
     }
+
+    [McpServerTool]
+    [Description(
+        "Returns the most recent archived Mission Control events " +
+        "matching a specific event type, including their payloads.")]
+    public static Task<JsonElement> GetRecentEventsByTypeAsync(
+    ArchiveClient archiveClient,
+    [Description("Exact event type to filter by.")]
+    string eventType,
+    [Description(
+        "Maximum number of events to return. " +
+        "Defaults to 50 and is limited to 100.")]
+    int limit = 50,
+    CancellationToken cancellationToken = default)
+    {
+        return archiveClient.GetRecentEventsByTypeAsync(
+            eventType,
+            limit,
+            cancellationToken);
+    }
 }

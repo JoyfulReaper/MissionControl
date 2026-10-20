@@ -89,4 +89,28 @@ public sealed class ArchiveClient(HttpClient httpClient)
             ?? throw new InvalidOperationException(
                 "Archive returned an empty statistics response.");
     }
+
+    public async Task<JsonElement> GetRecentEventsByTypeAsync(
+        string eventType,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(eventType);
+
+        limit = Math.Clamp(limit, 1, 100);
+
+        string encodedEventType = Uri.EscapeDataString(eventType.Trim());
+        using HttpResponseMessage response =
+            await httpClient.GetAsync(
+                $"/api/events?limit={limit}&eventType={encodedEventType}",
+                cancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        JsonElement? result =
+            await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
+
+        return result
+            ?? throw new InvalidOperationException("Archive returned an empty response.");
+    }
 }

@@ -29,6 +29,7 @@
 	<ProjectReference Include="..\MissionControl.GitActivity\MissionControl.GitActivity.csproj" Aliases="GitActivityApp" />
     <ProjectReference Include="..\MissionControl.Observability\MissionControl.Observability.csproj" />
     <ProjectReference Include="..\MissionControl.UI\MissionControl.UI.csproj" />
+	<ProjectReference Include="..\MissionControl.Mcp\MissionControl.Mcp.csproj" />
   </ItemGroup>
 
 </Project>
