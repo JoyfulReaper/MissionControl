@@ -44,6 +44,7 @@ public static class ArchiveServiceCollectionExtensions
             .AddSingleton<IIntegrationEventArchive, SqliteEventArchive>()
             .AddSingleton<IIntegrationEventProcessor, ArchivingIntegrationEventProcessor>()
             .AddSingleton<IIntegrationEventQuery, SqliteEventQuery>()
+            .AddSingleton<SqliteRandomSteamAnalyticsQuery>()
             .AddNatsEventConsumer(configuration);
 
         services

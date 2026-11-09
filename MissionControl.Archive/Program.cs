@@ -10,6 +10,7 @@ var app = builder.Build();
 
 app.MapGet("/", () => "Mission Control Archive");
 app.MapArchiveEndpoints();
+app.MapRandomSteamAnalyticsEndpoints();
 app.MapMissionControlHealthChecks();
 
 app.Run();
