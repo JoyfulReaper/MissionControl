@@ -149,6 +149,8 @@
         _disposeSource = new();
 
     private Task? _pollingTask;
+    private Task? _archivePollingTask;
+    private bool _archiveRequestInProgress;
     private bool _disposed;
 
     private IReadOnlyList<PublicNodeSnapshot> CurrentSnapshots =>
@@ -181,6 +183,11 @@
                         .AgentSnapshotRefreshSeconds),
                 RefreshFleetAsync,
                 _disposeSource.Token);
+
+        _archivePollingTask = PollingLoop.RunAsync(
+            TimeSpan.FromSeconds(RefreshOptions.Value.EventRefreshSeconds),
+            RefreshArchiveFromPollingAsync,
+            _disposeSource.Token);
     }
 
     private Task RefreshArchiveStatisticsAsync()
@@ -192,16 +199,14 @@
     private async Task LoadArchiveStatisticsAsync(
         bool isManualRefresh)
     {
-        if (_archiveIsLoading || _archiveIsRefreshing)
+        if (_archiveRequestInProgress)
         {
             return;
         }
 
-        _archiveIsLoading =
-            _statistics is null;
-
-        _archiveIsRefreshing =
-            isManualRefresh;
+        _archiveRequestInProgress = true;
+        _archiveIsLoading = _statistics is null;
+        _archiveIsRefreshing = isManualRefresh;
 
         try
         {
@@ -230,6 +235,7 @@
         {
             _archiveIsLoading = false;
             _archiveIsRefreshing = false;
+            _archiveRequestInProgress = false;
         }
     }
 
@@ -313,6 +319,32 @@
             }
         }
 
+        if (_archivePollingTask is not null)
+        {
+            try
+            {
+                await _archivePollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
         _disposeSource.Dispose();
+    }
+
+    private async Task RefreshArchiveFromPollingAsync(CancellationToken cancellationToken)
+    {
+        if (_disposed || cancellationToken.IsCancellationRequested)
+            return;
+
+        await InvokeAsync(async () =>
+        {
+            if (_disposed || cancellationToken.IsCancellationRequested)
+                return;
+
+            await LoadArchiveStatisticsAsync(isManualRefresh: false);
+            StateHasChanged();
+        });
     }
 }

@@ -90,6 +90,18 @@ public sealed class SqliteEventQueryTests
                 Assert.Equal(2, widerWindow.EventsReceivedInWindow);
                 Assert.Equal(2, Assert.Single(widerWindow.TopSources).Count);
                 Assert.Equal(2, Assert.Single(widerWindow.TopEventTypes).Count);
+
+                JsonElement rawStatistics =
+                    await httpClient.GetFromJsonAsync<JsonElement>(
+                        "/api/events/statistics");
+
+                Assert.Equal(
+                    1,
+                    rawStatistics.GetProperty("eventsReceivedInWindow").GetInt64());
+
+                Assert.Equal(
+                    1,
+                    rawStatistics.GetProperty("eventsReceivedLast24Hours").GetInt64());
             });
     }
 

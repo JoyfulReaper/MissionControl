@@ -13,4 +13,8 @@ public sealed record EventArchiveStatistics(
     long UniqueEventTypes,
     DateTimeOffset? LatestReceivedAt,
     IReadOnlyList<EventCategoryCount> TopSources,
-    IReadOnlyList<EventCategoryCount> TopEventTypes);
+    IReadOnlyList<EventCategoryCount> TopEventTypes)
+{
+    // Compatibility with older Dashboard deployments.
+    public long EventsReceivedLast24Hours => EventsReceivedInWindow;
+}

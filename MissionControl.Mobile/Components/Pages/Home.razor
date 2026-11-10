@@ -193,6 +193,8 @@
     private bool _hasMobileApiToken;
 
     private Task? _fleetPollingTask;
+    private Task? _archivePollingTask;
+    private bool _archiveRequestInProgress;
 
     private IReadOnlyList<PublicNodeSnapshot> CurrentSnapshots =>
         HostFleetState.Hosts
@@ -221,10 +223,8 @@
                     HostFleetState.EnsureLoadedAsync(
                         _disposeSource.Token));
 
-                _fleetPollingTask =
-                    HostFleetState.RunPollingAsync(
-                        PollingInterval,
-                        _disposeSource.Token);
+                _fleetPollingTask = HostFleetState.RunPollingAsync(PollingInterval,_disposeSource.Token);
+                _archivePollingTask = PollArchiveAsync(_disposeSource.Token);
             }
         }
         catch (Exception exception)
@@ -237,6 +237,30 @@
         }
     }
 
+    private async Task PollArchiveAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(PollingInterval);
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        return;
+
+                    await LoadArchiveStatisticsAsync(isManualRefresh: false);
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
+
     private Task RefreshArchiveStatisticsAsync()
     {
         return LoadArchiveStatisticsAsync(
@@ -246,11 +270,12 @@
     private async Task LoadArchiveStatisticsAsync(
         bool isManualRefresh)
     {
-        if (_archiveIsLoading ||
-            _archiveIsRefreshing)
+        if (_archiveRequestInProgress)
         {
             return;
         }
+
+        _archiveRequestInProgress = true;
 
         _archiveIsLoading = _archiveStatistics is null;
         _archiveIsRefreshing = isManualRefresh;
@@ -281,6 +306,7 @@
         {
             _archiveIsLoading = false;
             _archiveIsRefreshing = false;
+            _archiveRequestInProgress = false;
         }
     }
 
@@ -391,6 +417,17 @@
             try
             {
                 await _fleetPollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        if (_archivePollingTask is not null)
+        {
+            try
+            {
+                await _archivePollingTask;
             }
             catch (OperationCanceledException)
             {
